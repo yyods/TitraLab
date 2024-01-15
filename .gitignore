@@ -1,5 +1,0 @@
-*.cfg
-*.json
-*.svd
-.gitignore
-./MicroPython/Show/main.py
