@@ -47,8 +47,8 @@ The primary objective of TitraLab is to introduce students to the practical appl
 
 <h3>Week 3: Advanced Titration Practice</h3>
 <ul>
-    <li>Application: Using senior project code for acid-base titration</li>
-    <li>Objective: Conducting titration between HCl and NaOH using TitraLab</li>
+    <li>Application: Employing the titration code developed by Miss Hemmawan Saon for acid-base titration exercises</li>
+    <li>Objective: Performing titration between HCl and NaOH using TitraLab</li>
     <li>Analysis: Constructing a titration curve to find the equivalence point, compared to phenolphthalein indicator color change</li>
 </ul>
 
