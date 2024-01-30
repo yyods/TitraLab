@@ -1,11 +1,13 @@
 import machine 
 from time import ticks_ms, sleep_ms, sleep_us
 from ili9341 import Display, color565
-from machine import Pin, ADC, PWM, SPI, Timer
+from machine import Pin, ADC, PWM, SPI, Timer, SoftSPI
 from xglcd_font import XglcdFont
 from onewire import OneWire
 from ds18x20 import DS18X20
-import uos
+import os
+
+
 
 timer_0 = Timer(0) # Between 0-3 for ESP32
 timer_count = 0 # global variable
@@ -14,8 +16,8 @@ timer_secs = 0
 ONE_WIRE_BUS = 16
 ow = OneWire(Pin(ONE_WIRE_BUS))
 ds = DS18X20(ow)
-csv_filename1 = "data.csv"
-csv_filename2 = "data2.csv"
+csv_filename1 = "Mode1.csv"
+csv_filename2 = "Mode2.csv"
 
 SPI_BUS = 1
 SCK_PIN = 14
@@ -38,9 +40,13 @@ button3_pin = machine.Pin(39, machine.Pin.IN)
 buzzer = PWM(machine.Pin(26, machine.Pin.OUT), freq=1000, duty=0)
 
 
-POT1_PIN = 32
+POT1_PIN = 25
 POT2_PIN = 33
-pH_pin = 25
+pH_pin = 32
+potentiometer2 = ADC(Pin(POT2_PIN))
+potentiometer2.atten(ADC.ATTN_11DB)
+light2_pwm = PWM(machine.Pin(22, machine.Pin.OUT), freq=4000, duty=0)
+
 phValue = 0.00
 voltage = 0.00
 r_squared = 0.00
@@ -59,9 +65,9 @@ mins=0
 sec=0
 Timerun=0
 
-four=4.01
-seven=7.01
-ten=10.01
+four=4.00
+seven=7.00
+ten=10.00
 
 slope_m=-5.7901
 intercept_b=16.769
@@ -78,14 +84,8 @@ y3=0.0
 
 secTmr = Timer(0)
 
-
-potentiometer2 = ADC(Pin(POT2_PIN))
-potentiometer2.atten(ADC.ATTN_11DB)
-light2_pwm = PWM(machine.Pin(22, machine.Pin.OUT), freq=4000, duty=0)
-
 Offset = 0.00
 avgValue = 0
-
     
 pH = ADC(Pin(pH_pin))
 pH.atten(ADC.ATTN_11DB)
@@ -95,12 +95,10 @@ roms = ds.scan()
 last_temp_update = 0
 
 def motors():
-    
     pot2_value = potentiometer2.read()
     pot2_value = 4095 - pot2_value
     light2_duty = int((pot2_value / 4095) * 1023)
     light2_percentage = int((pot2_value / 4095) * 100)
-    
     
     return light2_percentage,light2_duty
 
@@ -172,6 +170,7 @@ def Homedisplays():
     display.draw_text(50, 90, 'Mode 2', arcadepix, color565(255, 255, 255))
     display.draw_text(50, 120, 'Calibrate pH sensor', arcadepix, color565(255, 255, 255))
     display.draw_text(50, 150, 'Calibrate Flow Rate', arcadepix, color565(255, 255, 255))
+    display.draw_text(50, 180, 'Test PUMP', arcadepix, color565(255, 255, 255))
     display.draw_text(30, 60, '>', arcadepix, color565(0, 255, 0))
     
 def dynamicHomedisplays():
@@ -212,7 +211,7 @@ def calFlowRatedisplays():
 
 def Mode1displays():
     display.draw_text(120, 10, 'Mode 1', arcadepix, color565(255, 255, 255))
-    display.draw_text(60, 45, 'Flow Rate 100% only', arcadepix, color565(255, 255, 255))
+    display.draw_text(60, 45, 'Flow Rate 100% ONLY', arcadepix, color565(255, 255, 255))
     display.draw_text(10, 70, "FlowRate:", arcadepix, color565(255, 255, 255))
     display.draw_text(185, 70, "sec/0.2mL", arcadepix, color565(255, 255, 255))
     display.draw_text(185, 95, "sec", arcadepix, color565(255, 255, 255))
@@ -236,6 +235,13 @@ def Mode2displays():
     display.draw_text(135, 145, "0 : 0 ", arcadepix, color565(255, 255, 255))
     display.draw_text(150, 95, "0.0 " .format(amount),  arcadepix, color565(255, 193, 34))
     display.draw_text(50, 195, "Last pH  = ", arcadepix, color565(255, 255, 255))
+
+def testpumpDisplay():
+    display.draw_text(120, 10, 'Test PUMP', arcadepix, color565(255, 255, 255))
+    display.draw_text(20, 45, 'StatusPump :', arcadepix, color565(255, 255, 255))
+    display.draw_text(210, 45, 'OFF', arcadepix, color565(255, 193, 34))
+    display.draw_text(20, 75, 'TIME :', arcadepix, color565(255, 255, 255))
+    display.draw_text(210, 75, '2 : 00', arcadepix, color565(255, 193, 34))
     
 def soundIn():
     buzzer.freq(1000)
@@ -303,7 +309,32 @@ def T1(pin):
     global timer_secs
     timer_count += 1
     timer_secs += 1
-
+    
+ii=0 
+def make_headM1():
+    try:
+        with open(csv_filename1, "r") as f:
+            f.read()
+        ii=1
+        
+    except Exception as ENOENT:
+        try:
+            with open(csv_filename1, "w") as file:
+                file.write("\nmL(x),pH(y)\n")
+            print("สร้างไฟล์สำเร็จ")
+        except Exception as e:
+            print("ข้อผิดพลาดในการเปิดไฟล์ CSV:", e)
+        ii=0
+        
+    if ii == 1:
+        try:
+            with open(csv_filename1, "a") as file:
+                file.write("\nmL(x),pH(y)\n")
+            print("เพิ่มไฟล์สำเร็จ")
+        except Exception as e:
+            print("ข้อผิดพลาดในการเปิดไฟล์ CSV:", e)
+        sleep_ms(10)
+    
 def write_data_to_csvM1(pH, mL,):
     try:
         with open(csv_filename1, "a") as file:
@@ -311,13 +342,31 @@ def write_data_to_csvM1(pH, mL,):
         print("บันทึกข้อมูลลงใน CSV สำเร็จ")
     except Exception as e:
         print("ข้อผิดพลาดในการเขียนลงใน CSV:", e)
-try:
-    with open(csv_filename1, "w") as file:
-        file.write("mL(x),pH(y)\n")
-except Exception as e:
-    print("ข้อผิดพลาดในการเปิดไฟล์ CSV:", e)
-    
 
+
+def make_headM2():
+    try:
+        with open(csv_filename2, "r") as f:
+            f.read()
+        ii=1
+        print(ii)
+    except Exception as ENOENT:
+        try:
+            with open(csv_filename2, "w") as file:
+                file.write("\nmL(x),pH(y)\n")
+            print("สร้างไฟล์สำเร็จ")
+        except Exception as e:
+            print("ข้อผิดพลาดในการเปิดไฟล์ CSV:", e)   
+        ii=0
+    if ii == 1:
+        try:
+            with open(csv_filename2, "a") as file:
+                file.write("\nmL(x),pH(y)\n")
+            print("เพิ่มไฟล์สำเร็จ")
+        except Exception as e:
+            print("ข้อผิดพลาดในการเปิดไฟล์ CSV:", e)
+        sleep_ms(10)    
+            
 def write_data_to_csvM2(pH, mL,):
     try:
         with open(csv_filename2, "a") as file:
@@ -325,18 +374,13 @@ def write_data_to_csvM2(pH, mL,):
         print("บันทึกข้อมูลลงใน CSV สำเร็จ")
     except Exception as e:
         print("ข้อผิดพลาดในการเขียนลงใน CSV:", e)
-try:
-    with open(csv_filename2, "w") as file:
-        file.write("mL(x),pH(y)\n")
-except Exception as e:
-    print("ข้อผิดพลาดในการเปิดไฟล์ CSV:", e)
-
 
 
 timer_0.init(mode=Timer.PERIODIC, period=1, callback=T1)  
 Homedisplays()
 led1_pin.value(0)                           
 led2_pin.value(0)
+
 while True:
     current_time = ticks_ms()
     
@@ -345,21 +389,18 @@ while True:
 
         for rom in roms:
             temp_str = tempR()
-            
-            dynamicHomedisplays()
-                                                        
-            voltage,phValue = GetpH(slope_m,intercept_b) 
-            
+            dynamicHomedisplays()                                          
+            voltage,phValue = GetpH(slope_m,intercept_b)             
 
             if button2_pin.value() == 1:     
                 while button2_pin.value() == 1:
                     sleep_ms(1)
                 beep()
                 p=p+1
-                if p > 4:
+                if p > 5:
                     p=1
                 if p == 1:
-                    display.draw_text(27, 150, '  ', arcadepix, color565(255, 255, 255))
+                    display.draw_text(27, 180, '  ', arcadepix, color565(255, 255, 255))
                     display.draw_text(27, 60, '>', arcadepix, color565(0, 255, 0))
                 if p == 2:
                     display.draw_text(27, 60, '  ', arcadepix, color565(255, 255, 255))
@@ -370,6 +411,9 @@ while True:
                 if p == 4:
                     display.draw_text(27, 120, '  ', arcadepix, color565(255, 255, 255))
                     display.draw_text(27, 150, '>', arcadepix, color565(0, 255, 0))
+                if p == 5:
+                    display.draw_text(27, 150, '  ', arcadepix, color565(255, 255, 255))
+                    display.draw_text(27, 180, '>', arcadepix, color565(0, 255, 0))
        
             if button1_pin.value() == 1:        
                 while button1_pin.value() == 1:
@@ -391,6 +435,10 @@ while True:
                     m=4
                     display.clear()
                     calFlowRatedisplays()
+                if p == 5:
+                    m=5
+                    display.clear()
+                    testpumpDisplay()
                         
 
             """........................................cal PH..................................................."""           
@@ -426,7 +474,6 @@ while True:
                         sleep_ms(1500)
                         display.clear()  
                         Phcaldisplays()
-                    
                         
                 elif b == 1:
                     display.draw_text(37, 95, '  ', arcadepix, color565(255, 193, 34))
@@ -442,10 +489,7 @@ while True:
                         sleep_ms(1500)
                         display.clear()                       
                         Phcaldisplays()
-                        
-                    
-                   
-                    
+ 
                 elif b == 2:
                     display.draw_text(37, 125, '  ', arcadepix, color565(255, 193, 34))
                     display.draw_text(37, 155,'>', arcadepix, color565(0, 255, 0))
@@ -461,7 +505,6 @@ while True:
                         display.clear()
                         Phcaldisplays()
                         
-                        
                 elif b == 3:
                     display.draw_text(34, 155, '  ', arcadepix, color565(255, 255, 255))
                     display.draw_text(172, 215, '>', arcadepix, color565(0, 255, 0))
@@ -475,9 +518,6 @@ while True:
                         display.clear()
                         soundOut()
                         Homedisplays() 
-                    
-                    
-                
                 
             """................................cal flow rate...................................................""" 
             while m==4:
@@ -492,7 +532,16 @@ while True:
                     b = b+1
                     if b > 3:
                         b = 0
-                            
+                
+                if button3_pin.value() == 1:
+                        beep()
+                        Time1=0
+                        Time2=0
+                        Time3=0
+                        display.draw_text(190, 80,'{:.2f} sec  '.format(Time1*0.001), arcadepix, color565(255, 193, 34))
+                        display.draw_text(190, 105,'{:.2f} sec  '.format(Time2*0.001), arcadepix, color565(255, 193, 34))
+                        display.draw_text(190, 130,'{:.2f} sec  '.format(Time2*0.001), arcadepix, color565(255, 193, 34))
+                
                 if b == 0:
                     timer_count = Time1
                     if button1_pin.value() == 1:
@@ -510,10 +559,7 @@ while True:
                             light2_pwm.duty(light2_duty)
                             display.draw_text(190, 80,'{:.2f} sec  '.format(Time1*0.001), arcadepix, color565(255, 193, 34))
                     light2_pwm.duty(0)
-                    if button3_pin.value() == 1:
-                        beep()
-                        Time1 = 0
-                        display.draw_text(190, 80,'{:.2f} sec  '.format(Time1*001), arcadepix, color565(255, 193, 34))
+                    
                     display.draw_text(172, 215, '  ', arcadepix, color565(255, 255, 255))
                     display.draw_text(15, 80, '>', arcadepix, color565(0, 255, 0))
                     
@@ -532,12 +578,10 @@ while True:
                             light2_pwm.duty(light2_duty)
                             display.draw_text(190, 105,'{:.2f} sec  '.format(Time2*0.001), arcadepix, color565(255, 193, 34))
                     light2_pwm.duty(0)
-                    if button3_pin.value() == 1:                       
-                        beep()
-                        Time2=0
-                        display.draw_text(190, 80,'{:.2f} sec  '.format(Time2*0.001), arcadepix, color565(255, 193, 34))             
+                                
                     display.draw_text(12, 80, '  ', arcadepix, color565(255, 255, 255))
                     display.draw_text(15, 102, '>', arcadepix, color565(0, 255, 0))
+                    
                 if b == 2:
                     timer_count = Time3
                     if button1_pin.value() == 1:
@@ -553,13 +597,9 @@ while True:
                             light2_pwm.duty(light2_duty)
                             display.draw_text(190, 130,'{:.2f} sec  '.format(Time3*0.001), arcadepix, color565(255, 193, 34))
                     light2_pwm.duty(0)
-                    if button3_pin.value() == 1:
-                        while button3_pin.value() == 1:
-                            beep()
-                            Time3=0
+                    
                     display.draw_text(12, 105, '  ', arcadepix, color565(255, 255, 255))
-                    display.draw_text(15, 130, '>', arcadepix, color565(0, 255, 0))
-          
+                    display.draw_text(15, 130, '>', arcadepix, color565(0, 255, 0))     
                    
                 if Time1 != 0 and Time1 != 0 and Time3 != 0:
                     Time_avr = ((Time1*0.001)+(Time2*0.001)+(Time3*0.001))/3
@@ -568,6 +608,12 @@ while True:
                     display.draw_text(160, 160, '{:.2f} sec  '.format(Time_avr), arcadepix, color565(255, 255, 255))
                     display.draw_text(10, 190, 'Flow Rate = ', arcadepix, color565(255, 255, 255))
                     display.draw_text(170, 190, '{:.2f} ML/min  '.format(TFlow5), arcadepix, color565(255, 255, 255))
+                    
+                elif Time1 == 0 or Time1 == 0 or Time3 == 0:
+                    display.draw_text(20, 160, '                 ', arcadepix, color565(255, 255, 255))
+                    display.draw_text(160, 160, '                '.format(Time_avr), arcadepix, color565(255, 255, 255))
+                    display.draw_text(10, 190, '                 ', arcadepix, color565(255, 255, 255))
+                    display.draw_text(170, 190, '                '.format(TFlow5), arcadepix, color565(255, 255, 255))
                     
                 if b == 3:
                     display.draw_text(12, 130, '  ', arcadepix, color565(255, 255, 255))
@@ -595,7 +641,7 @@ while True:
                     i = 0
                     while button3_pin.value() == 1:
                         i = i+1
-                        sleep_ms(1000)
+                        sleep_ms(1000) 
                         if i == 3:
                             t=0
                             b=0
@@ -606,12 +652,12 @@ while True:
                             led2_pin.value(0)
                             display.clear()
                             soundOut()
-                            Homedisplays()
-                            
+                            Homedisplays()                           
                                         
                 if button1_pin.value() == 1:
                     while button1_pin.value() == 1:
                         sleep_ms(5)
+                    make_headM1()
                     t=1
                     b=1
                     beep()
@@ -662,9 +708,13 @@ while True:
                                     display.draw_text(170, 170, " {:.2f} ".format(phValue), arcadepix, color565(255, 193, 34))
                                     sleep_ms(1)
                                     display.draw_text(80, 145, "pause : {:} sec  " .format(int(timer_count*0.001)), arcadepix, color565(255, 255, 255))
-                                write_data_to_csvM1("{:.2f}".format(phValue), "{:.2f}".format(amount))
-                                display.draw_text(80, 145, "pause : 30 sec  " , arcadepix, color565(255, 255, 255))
-                                timer_count = TimeF  
+                                if t == 0:
+                                    display.draw_text(80, 145, "pause : 30 sec  " , arcadepix, color565(255, 255, 255))
+                                    timer_count = TimeF
+                                else:
+                                    write_data_to_csvM1("{:.2f}".format(phValue), "{:.2f}".format(amount))
+                                    display.draw_text(80, 145, "pause : 30 sec  " , arcadepix, color565(255, 255, 255))
+                                    timer_count = TimeF    
                                 
                         if button2_pin.value() == 1:
                             sleep_ms(5)
@@ -709,12 +759,12 @@ while True:
                             led2_pin.value(0)
                             display.clear()
                             soundOut()
-                            Homedisplays()
-                            
+                            Homedisplays()                            
                                         
                 if button1_pin.value() == 1:
                     while button1_pin.value() == 1:
                         sleep_ms(5)
+                    make_headM2()
                     if light2_percentage == 0:
                         display.clear()
                         display.draw_text(20, 95, 'Please adjust FlowRate', arcadepix, color565(255, 255, 255))
@@ -729,7 +779,7 @@ while True:
                         display.draw_text(170,195, "        ", arcadepix, color565(255, 193, 34))
                         display.draw_text(150, 95, "    ",  arcadepix, color565(255, 193, 34))
                         while t==1:
-                            light2_pwm.duty(light2_percentage)
+                            light2_pwm.duty(light2_duty)
                             led1_pin.value(1)
                             led2_pin.value(0)
                             TimeF = timer_count
@@ -761,5 +811,72 @@ while True:
                                 write_data_to_csvM2("{:.2f}".format(phValue), "{:.2f}".format(amount))
                                 display.draw_text(170,195, "{:.2f} ".format(phValue), arcadepix, color565(255, 193, 34))
                             
-
+         #mode3-----------------Test Pump----------------------------------------------------------------------------
                             
+            while m==5:
+                light2_percentage,light2_duty = motors()
+                light2_pwm.duty(0)
+                display.draw_text(210, 45, 'OFF ', arcadepix, color565(255, 193, 34))
+                
+                if button1_pin.value() == 1:
+                    while button1_pin.value() == 1:
+                        sleep_ms(5)
+                    secs = 0
+                    mins = 2
+                    p=1
+                    t=0
+                    timer_count = 0
+                    timer_secs = 0
+                while p==1:
+                    if t==0:
+                        mins = 1
+                        secs = 59
+                        t=1
+                    
+                    light2_pwm.duty(1023)
+                    display.draw_text(210, 45, 'ON ', arcadepix, color565(255, 193, 34))
+                    TimeF = timer_count
+                    Timerun = timer_secs
+                    sec = (Timerun*0.001)
+                    print(int(sec))
+                    if int(sec) == 1:
+                       secs -=1
+                       timer_secs = 0
+                       if secs < 0 :
+                           mins -= 1
+                           secs = 59
+                    display.draw_text(210, 75, "{} : {} " .format(mins,secs), arcadepix, color565(255, 193, 34))
+                    
+                    if mins == 0 and secs == 0 :
+                        p=0
+                        display.draw_text(210, 75, '2 : 00', arcadepix, color565(255, 193, 34))
+                        
+                    
+                    if button2_pin.value() == 1:
+                        while button2_pin.value() == 1:
+                            sleep_ms(5)
+                        p=0
+                        display.draw_text(210, 75, '2 : 00', arcadepix, color565(255, 193, 34))                        
+                    
+                if button3_pin.value() == 1:
+                    i = 0
+                    while button3_pin.value() == 1:
+                        i = i+1
+                        sleep_ms(1000)
+                        if i == 3:
+                            p=0 
+                            m=0                    
+                            display.clear()
+                            soundOut()
+                            Homedisplays()
+                
+                    
+                        
+                    
+                    
+                
+                
+                
+                            
+
+
