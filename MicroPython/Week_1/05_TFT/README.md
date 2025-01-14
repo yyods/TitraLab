@@ -6,7 +6,14 @@ This example demonstrates how to utilize the TFT display on the TitraLab board u
 
 The TFT example code includes the following files:
 
-. ├── 01_test_display.py # Example script to test basic TFT display functionality ├── 02_temperature.py # Example script to display temperature readings on the TFT ├── fonts │ ├── ArcadePix9x11.c # Font file for use with TFT display │ └── EspressoDolce18x24.c # Font file for use with TFT display ├── ili9341.py # TFT display driver └── xglcd_font.py # Font management library for TFT display
+    .
+    ├── 01_test_display.py # Example script to test basic TFT display functionality
+    ├── 02_temperature.py # Example script to display temperature readings on the TFT
+    ├── fonts
+    │ ├── ArcadePix9x11.c # Font file for use with TFT display
+    │ └── EspressoDolce18x24.c # Font file for use with TFT display
+    ├── ili9341.py # TFT display driver
+    └── xglcd_font.py # Font management library for TFT display
 
 ## Setup Instructions
 
