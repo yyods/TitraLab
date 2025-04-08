@@ -16,8 +16,8 @@ data_file = sys.argv[1]
 
 # Load data from the specified CSV file
 data = pd.read_csv(data_file)
-volume = data['mL(x)'].values
-pH = data['pH(y)'].values
+volume = data['Volume (mL)'].values
+pH = data['pH Value'].values
 
 # Fit a spline to the data
 spline = UnivariateSpline(volume, pH, s=1.0)  # Adjust the smoothing factor as needed

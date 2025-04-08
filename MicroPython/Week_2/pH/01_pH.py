@@ -155,5 +155,7 @@ while True:
     for sensor in sensors:
         temp = ds.read_temp(sensor)
         show_temperature(temp)
-    time.sleep(2)
+    # show_ph(adc.read())
+    
+
 
