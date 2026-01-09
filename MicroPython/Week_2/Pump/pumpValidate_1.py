@@ -1,76 +1,186 @@
+# ==============================================================================
+# pumpValidate_1.py - การตรวจสอบปริมาตรปั๊มแบบต่อเนื่อง (Continuous Pump Volume Validation)
+# ==============================================================================
+# โปรแกรมนี้ตรวจสอบความแม่นยำของปั๊มโดยปั๊มน้ำปริมาตรที่กำหนดแบบต่อเนื่อง
+# This program validates pump accuracy by pumping a target volume continuously
+#
+# วัตถุประสงค์การเรียนรู้ (Learning Objectives):
+# 1. เรียนรู้การควบคุมปริมาตรด้วย flow rate ที่ทราบค่า
+# 2. เข้าใจการคำนวณเวลาจาก flow rate และปริมาตร
+# 3. ใช้ precise timing สำหรับการควบคุมที่แม่นยำ
+#
+# ความสำคัญในการไทเทรต (Importance in Titration):
+# - ต้องส่งสารไทแทรนต์ปริมาตรที่แม่นยำเพื่อหาจุดสมมูล
+# - flow_rate_per_cycle ได้จากการ calibrate ปั๊ม
+# - การปั๊มต่อเนื่องใช้ในช่วงเริ่มต้นที่ห่างจากจุดสมมูล
+#
+# Hardware Configuration:
+# - GPIO 21: Pump (PWM output)
+# - GPIO 34: Button 1 (Start pump) - input-only, ต้องใช้ external pull-down
+# ==============================================================================
+
 from machine import Pin, PWM, Timer
 from time import ticks_us, ticks_diff, sleep_ms
 
-# กำหนดพินต่างๆ
-button_1_pin = Pin(34, Pin.IN, Pin.PULL_DOWN)  # ปุ่มกดสำหรับเริ่มการทำงานของปั๊ม
-pump_pin = Pin(21, Pin.OUT)  # พินที่เชื่อมต่อกับปั๊ม
+# ==============================================================================
+# การตั้งค่าพินต่างๆ (Pin Configuration)
+# ==============================================================================
+# หมายเหตุ: GPIO34 เป็น input-only pin ไม่รองรับ internal pull resistors
+# Note: GPIO34 is input-only, does NOT support internal pull resistors
+# ต้องใช้ตัวต้านทาน pull-down ภายนอก (10K ohm)
+# Must use external pull-down resistor (10K ohm)
+button_1_pin = Pin(34, Pin.IN)  # ปุ่มเริ่มปั๊ม (Start pump button)
+pump_pin = Pin(21, Pin.OUT)     # พินปั๊ม GPIO21 (Pump pin GPIO21)
 
-# ตั้งค่าเริ่มต้นสำหรับปั๊ม และตัวจับเวลา
-pump_pwm = PWM(pump_pin, freq=1000)  # สร้างสัญญาณ PWM ที่ควบคุมปั๊ม
-pump_pwm.duty(0)  # เริ่มต้นปั๊มในสถานะหยุด (duty cycle = 0)
-timer = Timer(0)  # สร้างตัวจับเวลา
-running = False  # ตัวแปรบอกสถานะว่าปั๊มกำลังทำงานหรือไม่
-debounce_time = 200  # กำหนดเวลา debounce (หน่วย: มิลลิวินาที)
-last_press_time = 0  # เวลาที่กดปุ่มครั้งล่าสุด
+# ==============================================================================
+# การตั้งค่า PWM และตัวจับเวลา (PWM and Timer Setup)
+# ==============================================================================
+# PWM ควบคุมความเร็วปั๊มโดยการเปิด-ปิดสัญญาณอย่างรวดเร็ว
+# PWM controls pump speed by rapidly switching signal on/off
+pump_pwm = PWM(pump_pin, freq=1000)  # สร้าง PWM ที่ 1000 Hz (Create PWM at 1000 Hz)
+pump_pwm.duty(0)                      # เริ่มต้นปิดปั๊ม (Start with pump off)
+timer = Timer(0)                      # สร้างตัวจับเวลา (Create timer)
 
-# กำหนดค่าคงที่
-flow_rate_per_cycle = 0.2772  # ปริมาตรน้ำที่ไหลออกต่อรอบ
-target_volume = 10.0  # ปริมาตรน้ำที่ต้องการ (5 ml)
-total_volume = 0  # ปริมาตรน้ำที่ไหลออกมาทั้งหมด
-duty_cycle_percent = 100  # ใช้ค่า duty cycle 100%
-total_elapsed_time = 0  # เวลาเริ่มต้นที่ปั๊มทำงาน
+# ==============================================================================
+# ตัวแปรควบคุม (Control Variables)
+# ==============================================================================
+running = False           # สถานะปั๊ม (Pump running state)
+debounce_time = 200       # เวลา debounce (ms)
+last_press_time = 0       # เวลากดปุ่มล่าสุด (Last button press time)
 
-# ฟังก์ชันหยุดทำงานชั่วคราว (sleep) ที่แม่นยำ
+# ==============================================================================
+# ค่าคงที่สำหรับการคำนวณปริมาตร (Volume Calculation Constants)
+# ==============================================================================
+# ค่าเหล่านี้ได้จากการ calibrate ปั๊ม (These values come from pump calibration)
+flow_rate_per_cycle = 0.2772  # ปริมาตรต่อรอบ (mL/cycle) - Volume per cycle
+target_volume = 10.0          # ปริมาตรเป้าหมาย (mL) - Target volume
+total_volume = 0              # ปริมาตรสะสม (mL) - Accumulated volume
+duty_cycle_percent = 100      # Duty cycle (%) - ความเร็วเต็มที่
+total_elapsed_time = 0        # เวลารวมที่ปั๊มทำงาน (s) - Total pump run time
+
+# ==============================================================================
+# ฟังก์ชัน Precise Sleep (Precise Sleep Function)
+# ==============================================================================
 def precise_sleep(duration):
+    """
+    หยุดทำงานชั่วคราวด้วยความแม่นยำระดับไมโครวินาที
+    Pause execution with microsecond precision
+
+    พารามิเตอร์ (Parameters):
+    - duration: เวลาที่ต้องการหยุด (วินาที) / Time to sleep (seconds)
+
+    หมายเหตุ: ใช้ busy-wait loop เพื่อความแม่นยำสูงสุด
+    Note: Uses busy-wait loop for maximum precision
+    """
     start_time = ticks_us()
     while ticks_diff(ticks_us(), start_time) < duration * 1_000_000:
         pass  # Busy-wait loop
 
+# ==============================================================================
+# ฟังก์ชันเริ่มปั๊ม (Start Pump Function)
+# ==============================================================================
 def start_pump():
+    """
+    เริ่มปั๊มและทำงานจนถึงปริมาตรเป้าหมาย
+    Start pump and run until target volume is reached
+
+    การคำนวณ (Calculation):
+    - ปริมาตร = flow_rate × เวลา
+    - Volume = flow_rate × time
+    """
     global running, total_volume, total_elapsed_time
-    if not running:  # ตรวจสอบว่าปั๊มยังไม่ทำงาน
+
+    if not running:  # ตรวจสอบว่าปั๊มยังไม่ทำงาน (Check pump not running)
         duty_cycle = int((duty_cycle_percent / 100) * 1023)
-        pump_pwm.duty(duty_cycle)  # เริ่มปั๊มด้วยค่า duty cycle ที่ตั้งไว้
-        running = True  # เปลี่ยนสถานะเป็นปั๊มกำลังทำงาน
-        cycle_elapsed_time = 0  # ตัวแปรเก็บเวลารวมของรอบปัจจุบัน
+        pump_pwm.duty(duty_cycle)  # เริ่มปั๊ม (Start pump)
+        running = True
+        cycle_elapsed_time = 0
 
-        while total_volume < target_volume:  # ทำงานจนกว่าจะถึงปริมาตรที่ต้องการ
-            if total_volume + flow_rate_per_cycle > target_volume:  # หากรอบสุดท้ายปริมาตรเกินเป้าหมาย
-                flow_rate_per_cycle_adjusted = target_volume - total_volume  # ปรับปริมาตรในรอบสุดท้าย
-                run_time_adjusted = flow_rate_per_cycle_adjusted / flow_rate_per_cycle  # คำนวณเวลาปั๊มที่ต้องการ
-                precise_sleep(run_time_adjusted)  # ปั๊มด้วยเวลาที่ปรับ
-                total_volume += flow_rate_per_cycle_adjusted  # เพิ่มปริมาตรน้ำที่ไหลออกมา
-                cycle_elapsed_time += run_time_adjusted  # เก็บเวลาที่ใช้ในรอบสุดท้าย
-                break  # จบรอบเมื่อถึงปริมาตรที่ต้องการ
+        print("=== เริ่มปั๊ม (Pump Started) ===")
+        print(f"เป้าหมาย (Target): {target_volume:.2f} mL")
 
-            start_time = ticks_us()  # บันทึกเวลาเริ่มต้น
-            precise_sleep(1.0)  # ปั๊มด้วยเวลาปกติ 1 วินาที
-            total_volume += flow_rate_per_cycle  # เพิ่มปริมาตรน้ำที่ไหลออกมาในแต่ละรอบ
-            cycle_elapsed_time += 1.0  # เพิ่มเวลาที่ใช้ในรอบนี้
-            print(f"Current volume: {total_volume:.2f} ml")  # แสดงผลปริมาตรในคอนโซล
+        # ทำงานจนกว่าจะถึงปริมาตรเป้าหมาย
+        # Run until target volume is reached
+        while total_volume < target_volume:
+            # ตรวจสอบรอบสุดท้าย (Check if last cycle)
+            if total_volume + flow_rate_per_cycle > target_volume:
+                # ปรับเวลาสำหรับรอบสุดท้าย (Adjust time for last cycle)
+                remaining_volume = target_volume - total_volume
+                run_time_adjusted = remaining_volume / flow_rate_per_cycle
+                precise_sleep(run_time_adjusted)
+                total_volume += remaining_volume
+                cycle_elapsed_time += run_time_adjusted
+                break
 
-        total_elapsed_time += cycle_elapsed_time  # เก็บเวลารวมที่ปั๊มทำงาน
-        stop_pump(duty_cycle_percent, total_volume, total_elapsed_time)  # หยุดปั๊มหลังจากเวลาที่กำหนด
+            # ปั๊มปกติ 1 วินาที (Normal pump for 1 second)
+            precise_sleep(1.0)
+            total_volume += flow_rate_per_cycle
+            cycle_elapsed_time += 1.0
+            print(f"ปริมาตรปัจจุบัน (Current volume): {total_volume:.2f} mL")
 
-def stop_pump(duty_cycle_percent, total_volume, total_elapsed_time):
+        total_elapsed_time += cycle_elapsed_time
+        stop_pump()
+
+# ==============================================================================
+# ฟังก์ชันหยุดปั๊ม (Stop Pump Function)
+# ==============================================================================
+def stop_pump():
+    """
+    หยุดปั๊มและแสดงผลสรุป
+    Stop pump and display summary
+    """
     global running
-    if running:  # หากปั๊มกำลังทำงาน
-        pump_pwm.duty(0)  # หยุดปั๊ม (duty cycle = 0)
-        running = False  # เปลี่ยนสถานะเป็นปั๊มหยุดทำงาน
-        # แสดงข้อมูลในคอนโซล
-        print(f"Pump stopped. Total volume: {total_volume:.2f} ml")
-        print(f"Total elapsed time: {total_elapsed_time:.2f} seconds")  # แสดงเวลารวมที่ปั๊มทำงาน
 
-def check_buttons(timer):
+    if running:
+        pump_pwm.duty(0)  # หยุดปั๊ม (Stop pump)
+        running = False
+
+        print("=== หยุดปั๊ม (Pump Stopped) ===")
+        print(f"ปริมาตรรวม (Total volume): {total_volume:.2f} mL")
+        print(f"เวลารวม (Total time): {total_elapsed_time:.2f} วินาที (seconds)")
+
+# ==============================================================================
+# ฟังก์ชันตรวจสอบปุ่ม (Button Check Function)
+# ==============================================================================
+def check_buttons(t):
+    """
+    Callback สำหรับ Timer - ตรวจสอบการกดปุ่มพร้อม debounce
+    Timer callback - check button press with debounce
+    """
     global last_press_time
-    current_time = ticks_us() // 1000  # แปลงเวลาเป็นมิลลิวินาที
-    if button_1_pin.value() == 1 and not running and (current_time - last_press_time) > debounce_time:  # ตรวจสอบ debounce
-        last_press_time = current_time  # อัปเดตเวลาเมื่อปุ่มถูกกด
-        start_pump()  # เริ่มปั๊ม
 
-# ตรวจสอบการกดปุ่มทุก ๆ 1 มิลลิวินาที
-timer.init(period=1, mode=Timer.PERIODIC, callback=check_buttons)
+    current_time = ticks_us() // 1000  # แปลงเป็น ms (Convert to ms)
 
-# ลูปหลัก
-while True:
-    precise_sleep(0.01)  # ใช้ precise_sleep แทน sleep_ms เพื่อความแม่นยำมากขึ้น
+    # ตรวจสอบปุ่มพร้อม debounce (Check button with debounce)
+    if button_1_pin.value() == 1 and not running:
+        if (current_time - last_press_time) > debounce_time:
+            last_press_time = current_time
+            start_pump()
+
+# ==============================================================================
+# โปรแกรมหลัก (Main Program)
+# ==============================================================================
+print("=" * 50)
+print("การตรวจสอบปริมาตรปั๊ม (Pump Volume Validation)")
+print(f"ปริมาตรเป้าหมาย (Target volume): {target_volume:.2f} mL")
+print(f"Flow rate: {flow_rate_per_cycle:.4f} mL/cycle")
+print("กดปุ่ม 1 เพื่อเริ่ม (Press Button 1 to start)")
+print("=" * 50)
+
+try:
+    # ตรวจสอบปุ่มทุก 1 ms (Check button every 1 ms)
+    timer.init(period=1, mode=Timer.PERIODIC, callback=check_buttons)
+
+    # ลูปหลัก (Main loop)
+    while True:
+        precise_sleep(0.01)
+
+except KeyboardInterrupt:
+    print("\nหยุดโปรแกรม (Program stopped)")
+
+finally:
+    # ทำความสะอาด resources (Cleanup resources)
+    pump_pwm.duty(0)
+    pump_pwm.deinit()
+    timer.deinit()
+    print("ปิดปั๊มและ Timer แล้ว (Pump and Timer released)")
