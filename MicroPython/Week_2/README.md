@@ -9,6 +9,114 @@
 
 ---
 
+## สารบัญ (Table of Contents)
+
+| หมวด | เนื้อหา |
+|:----:|---------|
+| 1 | [Quick Start - เริ่มต้นที่นี่](#quick-start---เริ่มต้นที่นี่) |
+| 2 | [ความรู้พื้นฐานจาก Week 1](#ความรู้พื้นฐานจาก-week-1-prerequisites-from-week-1) |
+| 3 | [วัตถุประสงค์หลัก](#วัตถุประสงค์หลัก-primary-objectives) |
+| 4 | [หลักการทางเคมี](#หลักการทางเคมี-chemistry-principles) |
+| 5 | [ตารางเวลาการสอน](#ตารางเวลาการสอน-3-ชั่วโมง-3-hour-teaching-schedule) |
+| 6 | [โครงสร้างโฟลเดอร์](#โครงสร้างโฟลเดอร์-folder-structure) |
+| 7 | [เคล็ดลับการปฏิบัติ](#เคล็ดลับการปฏิบัติ-practical-tips) |
+| 8 | [ไฟล์สอบเทียบหลัก](#ไฟล์สอบเทียบหลัก-key-calibration-files) |
+| 9 | [GPIO Pin Reference](#gpio-pin-reference--ตารางอ้างอิงขา-gpio) |
+| 10 | [ทักษะ OOP สนับสนุน](#ทักษะ-oop-สนับสนุน-supporting-oop-skills) |
+| 11 | [ผลลัพธ์การเรียนรู้](#ผลลัพธ์การเรียนรู้-learning-outcomes) |
+
+---
+
+## Quick Start - เริ่มต้นที่นี่
+
+> **สำหรับนิสิต:** หน้านี้คือแผนที่นำทางของคุณสำหรับ Week 2 เริ่มจาก 2 ไฟล์หลักด้านล่าง
+> **For Students:** This page is your roadmap for Week 2. Start with the 2 CORE files below.
+
+### 2 ไฟล์หลักที่ต้องทำ (2 CORE Files to Complete)
+
+| ลำดับ | ไฟล์ | คำอธิบาย | เวลา |
+|:-----:|------|----------|:----:|
+| **1** | [`01_pH_Sensor/02_calibration_3point.py`](01_pH_Sensor/02_calibration_3point.py) | **สอบเทียบ pH 3 จุด** - ใช้สารละลายบัฟเฟอร์ pH 4, 7, 10 | 40 นาที |
+| **2** | [`02_Pump_Control/01_flow_rate_calibration.py`](02_Pump_Control/01_flow_rate_calibration.py) | **สอบเทียบ Flow Rate** - วัดปริมาตรและเวลาจากปั๊ม | 20 นาที |
+
+### ความสำเร็จที่ต้องการ (Success Criteria)
+
+เมื่อจบ Week 2 นิสิตต้องได้:
+
+| ผลลัพธ์ | ไฟล์ที่ได้ | เกณฑ์ผ่าน |
+|---------|-----------|-----------|
+| ค่าสอบเทียบ pH | `data_calibrate.txt` | R-squared >= 0.99 |
+| ค่า Flow Rate | `data_flowrate.txt` | %RSD < 5% |
+
+---
+
+### เส้นทางการเรียนรู้ 3 ขั้นตอน (3-Step Learning Path)
+
+```
+  ╔═══════════════════════════════════════════════════════════════════════════╗
+  ║                         WEEK 2 LEARNING PATH                              ║
+  ║                    เส้นทางการเรียนรู้สัปดาห์ที่ 2                            ║
+  ╚═══════════════════════════════════════════════════════════════════════════╝
+
+     STEP 1                      STEP 2                      STEP 3
+     ชั่วโมงที่ 1                   ชั่วโมงที่ 2                   ชั่วโมงที่ 3
+  ═══════════════════════════════════════════════════════════════════════════
+
+  ┌───────────────────┐      ┌───────────────────┐      ┌───────────────────┐
+  │  01_pH_Sensor/    │      │  02_Pump_Control/ │      │  03_OOP_Advanced/ │
+  │  ─────────────────│      │  ─────────────────│      │  ─────────────────│
+  │  การสอบเทียบ pH    │      │  การสอบเทียบปั๊ม   │      │  ทฤษฎี OOP        │
+  │  ----------------  │      │  ----------------  │      │  ----------------  │
+  │  - Nernst Equation │ ───> │  - PWM Control    │ ───> │  - Inheritance    │
+  │  - Linear Regress. │      │  - Flow Rate      │      │  - Composition    │
+  │  - R-squared       │      │  - %RSD           │      │  - @property      │
+  └───────────────────┘      └───────────────────┘      └───────────────────┘
+       [60 นาที]                  [45 นาที]                  [60 นาที]
+
+       ต่อยอดจาก:                  ต่อยอดจาก:                  ต่อยอดจาก:
+       Week_1/core/07_ADC         Week_1/core/07_PWM         Week_1 OOP basics
+```
+
+---
+
+## ความรู้พื้นฐานจาก Week 1 (Prerequisites from Week 1)
+
+Week 2 ต่อยอดจากความรู้ที่เรียนใน Week 1 โดยเฉพาะ:
+
+### 1. ADC (Analog-to-Digital Converter) - จาก `Week_1/core/07_ADC/`
+
+| Week 1 Content | Week 2 Application |
+|----------------|-------------------|
+| `01_adc_basics.py` - อ่านค่า ADC 12-bit (0-4095) | ใช้อ่านค่าจาก pH Sensor ที่ GPIO25 |
+| `02_adc_averaging.py` - การหาค่าเฉลี่ย | ลดสัญญาณรบกวน (noise) ในการอ่าน pH |
+| `03_adc_attenuation.py` - การตั้งค่าย่านวัด | ตั้ง ATTN_11DB สำหรับ 0-3.3V จาก pH probe |
+
+**การเชื่อมโยงทางเคมี:**
+```
+pH Probe (mV) --> ADC (0-4095) --> แปลงเป็น mV --> ใช้สมการ Nernst --> ค่า pH
+```
+
+### 2. PWM (Pulse Width Modulation) - จาก `Week_1/core/07_PWM/`
+
+| Week 1 Content | Week 2 Application |
+|----------------|-------------------|
+| `01_pwm_led_brightness.py` - Duty Cycle พื้นฐาน | ใช้ควบคุมความเร็วปั๊มที่ GPIO21 |
+| `04_pwm_pump_preview.py` - ตัวอย่างปั๊ม | พื้นฐานสำหรับ Flow Rate Calibration |
+
+**การเชื่อมโยงทางเคมี:**
+```
+Duty Cycle (0-1023) --> ความเร็วปั๊ม --> อัตราการไหล (mL/s) --> ปริมาตรสารไทแทรนต์
+```
+
+### 3. OOP พื้นฐาน - จาก `Week_1/core/`
+
+| Week 1 Content | Week 2 Application |
+|----------------|-------------------|
+| `01_intro_oop.py` - Class และ Object | ขยายเป็น Inheritance และ Composition |
+| `02_led_class.py` - สร้าง Class เบื้องต้น | ใช้เป็นแม่แบบสำหรับ Sensor classes |
+
+---
+
 ## วัตถุประสงค์หลัก (Primary Objectives)
 
 หลังจากเรียนจบบทเรียนนี้ นิสิตจะสามารถ:
@@ -86,18 +194,18 @@ E (mV) = m x pH + b
 |:--------:|--------|------|:----:|
 | **ชั่วโมงที่ 1** | **การสอบเทียบเซ็นเซอร์ pH** | | **60 นาที** |
 | 0:00-0:15 | ทฤษฎี: สมการ Nernst และหลักการสอบเทียบ | - | 15 นาที |
-| 0:15-0:55 | ปฏิบัติ: สอบเทียบ 3 จุดด้วย pH 4, 7, 10 | `pH/02_calibration.py` | 40 นาที |
+| 0:15-0:55 | ปฏิบัติ: สอบเทียบ 3 จุดด้วย pH 4, 7, 10 | `01_pH_Sensor/02_calibration_3point.py` | 40 นาที |
 | 0:55-1:00 | อภิปราย: วิเคราะห์ R-squared และ Slope Efficiency | - | 5 นาที |
 | **ชั่วโมงที่ 2** | **การสอบเทียบปั๊ม** | | **45 นาที** |
 | 1:00-1:15 | ทฤษฎี: PWM และผลต่ออัตราการไหล | - | 15 นาที |
-| 1:15-1:35 | ปฏิบัติ: วัด flow rate 3-5 ครั้ง | `Pump/01_flowRate.py` | 20 นาที |
-| 1:35-1:45 | ปฏิบัติ: ตรวจสอบความแม่นยำ | `Pump/pumpValidate_1.py` | 10 นาที |
+| 1:15-1:35 | ปฏิบัติ: วัด flow rate 3-5 ครั้ง | `02_Pump_Control/01_flow_rate_calibration.py` | 20 นาที |
+| 1:35-1:45 | ปฏิบัติ: ตรวจสอบความแม่นยำ | `02_Pump_Control/02_pump_validate_continuous.py` | 10 นาที |
 | **ชั่วโมงที่ 3** | **OOP สำหรับระบบไทเทรต** | | **60 นาที** |
-| 1:45-2:15 | Inheritance: BaseSensor -> pHSensor | `core/01_inheritance_basics.py` | 30 นาที |
-| 2:15-2:35 | Composition: Pump มี PWMController | `core/02_composition_basics.py` | 20 นาที |
-| 2:35-2:45 | @property สำหรับข้อมูลสอบเทียบ | `core/03_property_decorator.py` | 10 นาที |
+| 1:45-2:15 | Inheritance: BaseSensor -> pHSensor | `03_OOP_Advanced/01_inheritance_sensors.py` | 30 นาที |
+| 2:15-2:35 | Composition: Pump มี PWMController | `03_OOP_Advanced/02_composition_pump.py` | 20 นาที |
+| 2:35-2:45 | @property สำหรับข้อมูลสอบเทียบ | `03_OOP_Advanced/03_property_decorator.py` | 10 นาที |
 | **แบบฝึกหัด** | **รวมความรู้** | | **15 นาที** |
-| 2:45-3:00 | รวม concepts และสรุป | `core/04_combined_demo.py` | 15 นาที |
+| 2:45-3:00 | รวม concepts และสรุป | `03_OOP_Advanced/04_combined_demo.py` | 15 นาที |
 
 ---
 
@@ -105,22 +213,27 @@ E (mV) = m x pH + b
 
 ```
 Week_2/
-├── pH/                         # [สำคัญ] การวัดและสอบเทียบ pH
-│   ├── 01_pH.py                # การวัดค่า pH แบบต่อเนื่อง
-│   └── 02_calibration.py       # *** การสอบเทียบ pH 3 จุด ***
+├── README.md                   # เอกสารนี้
+├── pins.py                     # ค่าคงที่ขา GPIO (จาก Week_1)
 │
-├── Pump/                       # [สำคัญ] การควบคุมและสอบเทียบปั๊ม
-│   ├── 01_flowRate.py          # *** การสอบเทียบ flow rate ***
-│   ├── pumpValidate_1.py       # การตรวจสอบ: ปั๊มต่อเนื่อง
-│   └── pumpValidate_2.py       # การตรวจสอบ: ปั๊มเป็นช่วง
+├── 01_pH_Sensor/               # [ปฏิบัติการ 1] การวัดและสอบเทียบ pH
+│   ├── 01_basic_ph_read.py         # การวัดค่า pH แบบต่อเนื่อง
+│   └── 02_calibration_3point.py    # *** การสอบเทียบ pH 3 จุด ***
 │
-├── core/                       # [บทเรียน OOP] ไฟล์สำหรับสอนในห้องเรียน
-│   ├── 01_inheritance_basics.py    # Inheritance พื้นฐาน
-│   ├── 02_composition_basics.py    # Composition พื้นฐาน
+├── 02_Pump_Control/            # [ปฏิบัติการ 2] การควบคุมและสอบเทียบปั๊ม
+│   ├── 01_flow_rate_calibration.py     # *** การสอบเทียบ flow rate ***
+│   ├── 02_pump_validate_continuous.py  # การตรวจสอบ: ปั๊มต่อเนื่อง
+│   └── 03_pump_validate_stepwise.py    # การตรวจสอบ: ปั๊มเป็นช่วง
+│
+├── 03_OOP_Advanced/            # [บทเรียน OOP] แนวคิด OOP ขั้นสูง
+│   ├── 01_inheritance_sensors.py   # Inheritance: BaseSensor -> pHSensor
+│   ├── 02_composition_pump.py      # Composition: Pump มี PWMController
 │   ├── 03_property_decorator.py    # @property และ Encapsulation
-│   └── 04_combined_demo.py         # รวม concepts
+│   ├── 04_combined_demo.py         # รวม concepts
+│   └── 05_class_static_methods.py  # @classmethod และ @staticmethod
 │
 ├── lib/                        # [ห้องสมุดคลาส] OOP classes สำหรับอ้างอิง
+│   ├── __init__.py             # Package initialization
 │   ├── base_sensor.py          # Abstract Base Class สำหรับเซ็นเซอร์
 │   ├── ph_sensor.py            # คลาส pHSensor สืบทอดจาก BaseSensor
 │   ├── temp_sensor.py          # คลาส TempSensor สืบทอดจาก BaseSensor
@@ -135,13 +248,46 @@ Week_2/
 │   ├── exercise_03_composition_starter.py
 │   └── exercise_03_composition_solution.py
 │
-├── 01_sensor_inheritance.py    # [สาธิต] Inheritance demo
-├── 02_composition_demo.py      # [สาธิต] Composition demo
-├── 03_properties_demo.py       # [สาธิต] @property demo
-│
-└── Old/                        # [อ้างอิง] Legacy code
-    ├── cal_flowrate.py
-    └── cal_pH.py
+└── archive/                    # [เก็บถาวร] ไฟล์เก่า/ตัวอย่างเพิ่มเติม
+    ├── Old/                        # Legacy code
+    │   ├── cal_flowrate.py
+    │   └── cal_pH.py
+    └── root_demos/                 # ไฟล์ demo จาก root (สำหรับอ้างอิง)
+        ├── 01_sensor_inheritance.py
+        ├── 02_composition_demo.py
+        └── 03_properties_demo.py
+```
+
+### ลำดับการเรียนรู้ที่แนะนำ (Recommended Learning Path)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ชั่วโมงที่ 1: ปฏิบัติการ pH                                 │
+│  01_pH_Sensor/ -> เริ่มที่นี่!                               │
+│  ├── 01_basic_ph_read.py (ทำความเข้าใจ)                     │
+│  └── 02_calibration_3point.py (ปฏิบัติสำคัญ)                │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  ชั่วโมงที่ 2: ปฏิบัติการปั๊ม                                │
+│  02_Pump_Control/                                           │
+│  ├── 01_flow_rate_calibration.py (ปฏิบัติสำคัญ)            │
+│  └── 02_pump_validate_continuous.py (ตรวจสอบ)              │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  ชั่วโมงที่ 3: ทฤษฎี OOP                                    │
+│  03_OOP_Advanced/                                           │
+│  ├── 01_inheritance_sensors.py                              │
+│  ├── 02_composition_pump.py                                 │
+│  └── 03_property_decorator.py                               │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│  แบบฝึกหัด: ทดสอบความเข้าใจ                                 │
+│  exercises/                                                 │
+│  └── exercise_01_* -> exercise_02_* -> exercise_03_*       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -188,7 +334,7 @@ Week_2/
    - %RSD >= 5% = ตรวจสอบปั๊มและท่อ
 
 4. **การตรวจสอบความแม่นยำ (Validation)**
-   - หลังสอบเทียบ ให้รัน `pumpValidate_1.py` เพื่อปั๊มปริมาตรที่กำหนด
+   - หลังสอบเทียบ ให้รัน `02_Pump_Control/02_pump_validate_continuous.py` เพื่อปั๊มปริมาตรที่กำหนด
    - เปรียบเทียบปริมาตรที่วัดได้กับค่าที่คำนวณ
    - % error < 5% ถือว่าผ่าน
 
@@ -196,7 +342,7 @@ Week_2/
 
 ## ไฟล์สอบเทียบหลัก (Key Calibration Files)
 
-### 1. การสอบเทียบ pH: `pH/02_calibration.py`
+### 1. การสอบเทียบ pH: `01_pH_Sensor/02_calibration_3point.py`
 
 **วัตถุประสงค์:** สอบเทียบหัววัด pH ด้วยสารละลายกันชนมาตรฐาน 3 จุด
 
@@ -245,7 +391,7 @@ def linear_regression(x_values, y_values):
 
 ---
 
-### 2. การสอบเทียบ Flow Rate: `Pump/01_flowRate.py`
+### 2. การสอบเทียบ Flow Rate: `02_Pump_Control/01_flow_rate_calibration.py`
 
 **วัตถุประสงค์:** หาอัตราการไหลที่แท้จริงของปั๊ม
 
@@ -292,13 +438,13 @@ def record_measurement():
 
 ---
 
-### 3. การตรวจสอบความแม่นยำ: `Pump/pumpValidate_1.py` และ `pumpValidate_2.py`
+### 3. การตรวจสอบความแม่นยำ: `02_Pump_Control/02_pump_validate_continuous.py` และ `03_pump_validate_stepwise.py`
 
-**pumpValidate_1.py** - ปั๊มต่อเนื่อง:
+**02_pump_validate_continuous.py** - ปั๊มต่อเนื่อง:
 - ปั๊มน้ำจนถึงปริมาตรเป้าหมาย (เช่น 5 mL) แบบต่อเนื่อง
 - ใช้ในช่วงเริ่มต้นการไทเทรต (pH ยังห่างจากจุดสมมูล)
 
-**pumpValidate_2.py** - ปั๊มเป็นช่วง:
+**03_pump_validate_stepwise.py** - ปั๊มเป็นช่วง:
 - ปั๊ม -> หยุด -> (อ่าน pH) -> ปั๊ม -> ...
 - ใช้ในช่วงใกล้จุดสมมูล (equivalence point)
 - รอให้ pH stabilize ก่อนปั๊มครั้งถัดไป
