@@ -399,7 +399,7 @@ class PHSensor(BaseSensor):
         เพิ่มจุด calibration (Add calibration point)
 
         Args:
-            buffer_ph (float): ค่า pH ของสารละลายบัฟเฟอร์
+            buffer_ph (float): ค่า pH ของสารละลายกันชน (buffer solution)
             voltage (float): แรงดันที่วัดได้ (V)
         """
         self._calibration_points.append({

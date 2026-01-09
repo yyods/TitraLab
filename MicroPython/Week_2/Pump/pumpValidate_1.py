@@ -1,186 +1,332 @@
 # ==============================================================================
-# pumpValidate_1.py - การตรวจสอบปริมาตรปั๊มแบบต่อเนื่อง (Continuous Pump Volume Validation)
+# pumpValidate_1.py - การตรวจสอบปริมาตรปั๊มแบบต่อเนื่อง
+# (Continuous Pump Volume Validation)
 # ==============================================================================
-# โปรแกรมนี้ตรวจสอบความแม่นยำของปั๊มโดยปั๊มน้ำปริมาตรที่กำหนดแบบต่อเนื่อง
-# This program validates pump accuracy by pumping a target volume continuously
+# โปรแกรมนี้ช่วยนิสิตตรวจสอบความแม่นยำของการสอบเทียบปั๊มโดยปั๊มน้ำ
+# ปริมาตรที่กำหนดแบบต่อเนื่อง แล้วเปรียบเทียบกับปริมาตรที่วัดได้จริง
 #
-# วัตถุประสงค์การเรียนรู้ (Learning Objectives):
-# 1. เรียนรู้การควบคุมปริมาตรด้วย flow rate ที่ทราบค่า
-# 2. เข้าใจการคำนวณเวลาจาก flow rate และปริมาตร
-# 3. ใช้ precise timing สำหรับการควบคุมที่แม่นยำ
+# This program helps students validate pump calibration accuracy by pumping
+# a target volume continuously, then comparing with actual measured volume
 #
-# ความสำคัญในการไทเทรต (Importance in Titration):
-# - ต้องส่งสารไทแทรนต์ปริมาตรที่แม่นยำเพื่อหาจุดสมมูล
-# - flow_rate_per_cycle ได้จากการ calibrate ปั๊ม
-# - การปั๊มต่อเนื่องใช้ในช่วงเริ่มต้นที่ห่างจากจุดสมมูล
+# เวลาที่ใช้ในการเรียนรู้ (Estimated Teaching Time): 20-30 นาที
 #
+# ==============================================================================
+# วัตถุประสงค์การเรียนรู้ด้านเคมี (Chemistry Learning Objectives):
+# ==============================================================================
+# 1. ตรวจสอบความแม่นยำของการสอบเทียบปั๊ม (Validate pump calibration accuracy)
+# 2. เข้าใจความสัมพันธ์ระหว่าง flow rate, เวลา และปริมาตร
+#    (Understand relationship between flow rate, time and volume)
+# 3. คำนวณ % error ระหว่างค่าที่คาดหวังกับค่าจริง
+#    (Calculate % error between expected and actual values)
+#
+# ความสำคัญ: ถ้า flow rate ไม่แม่นยำ จะส่งผลต่อ:
+# - การคำนวณปริมาตรสารไทแทรนต์ที่จุดสมมูล
+# - ความเข้มข้นของสารตัวอย่างที่คำนวณได้
+# - ค่าความไม่แน่นอน (uncertainty) ของผลการทดลอง
+#
+# ==============================================================================
+# วัตถุประสงค์การเรียนรู้ด้าน OOP/Programming (OOP Learning Objectives):
+# ==============================================================================
+# 1. การอ่านค่าจากไฟล์สอบเทียบ (Reading calibration data from file)
+# 2. การใช้ precise timing สำหรับการควบคุมที่แม่นยำ
+# 3. การคำนวณปริมาตรจาก flow rate และเวลา
+#
+# ==============================================================================
+# การใช้งานในการไทเทรต (Usage in Titration):
+# ==============================================================================
+# การปั๊มต่อเนื่องใช้ในช่วงเริ่มต้นการไทเทรต:
+# - เมื่อ pH ยังห่างจากจุดสมมูลมาก (เช่น pH < 4 สำหรับกรดแก่-เบสแก่)
+# - ต้องการเติมสารไทแทรนต์ปริมาณมากเพื่อประหยัดเวลา
+# - ตัวอย่าง: ปั๊ม 5 mL ก่อน แล้วเปลี่ยนเป็นปั๊มเป็นช่วงเมื่อใกล้จุดสมมูล
+#
+# ==============================================================================
 # Hardware Configuration:
+# ==============================================================================
 # - GPIO 21: Pump (PWM output)
-# - GPIO 34: Button 1 (Start pump) - input-only, ต้องใช้ external pull-down
+# - GPIO 2:  Red LED (ปั๊มทำงาน / Pump running)
+# - GPIO 4:  Green LED (เสร็จสิ้น / Complete)
+# - GPIO 34: Button 1 (Start pump) - input-only
 # ==============================================================================
 
-from machine import Pin, PWM, Timer
+from machine import Pin, PWM
 from time import ticks_us, ticks_diff, sleep_ms
 
 # ==============================================================================
-# การตั้งค่าพินต่างๆ (Pin Configuration)
+# การตั้งค่าขา GPIO (GPIO Pin Configuration)
 # ==============================================================================
+
+# LED แสดงสถานะ (Status LEDs)
+led_red = Pin(2, Pin.OUT)    # LED สีแดง - ปั๊มทำงาน (Red LED - pump running)
+led_green = Pin(4, Pin.OUT)  # LED สีเขียว - เสร็จสิ้น (Green LED - complete)
+
+# ปุ่มกด (Button)
 # หมายเหตุ: GPIO34 เป็น input-only pin ไม่รองรับ internal pull resistors
 # Note: GPIO34 is input-only, does NOT support internal pull resistors
-# ต้องใช้ตัวต้านทาน pull-down ภายนอก (10K ohm)
-# Must use external pull-down resistor (10K ohm)
-button_1_pin = Pin(34, Pin.IN)  # ปุ่มเริ่มปั๊ม (Start pump button)
-pump_pin = Pin(21, Pin.OUT)     # พินปั๊ม GPIO21 (Pump pin GPIO21)
+btn_start = Pin(34, Pin.IN)  # ปุ่มเริ่มปั๊ม (Start pump button)
 
-# ==============================================================================
-# การตั้งค่า PWM และตัวจับเวลา (PWM and Timer Setup)
-# ==============================================================================
-# PWM ควบคุมความเร็วปั๊มโดยการเปิด-ปิดสัญญาณอย่างรวดเร็ว
-# PWM controls pump speed by rapidly switching signal on/off
-pump_pwm = PWM(pump_pin, freq=1000)  # สร้าง PWM ที่ 1000 Hz (Create PWM at 1000 Hz)
-pump_pwm.duty(0)                      # เริ่มต้นปิดปั๊ม (Start with pump off)
-timer = Timer(0)                      # สร้างตัวจับเวลา (Create timer)
-
-# ==============================================================================
-# ตัวแปรควบคุม (Control Variables)
-# ==============================================================================
-running = False           # สถานะปั๊ม (Pump running state)
-debounce_time = 200       # เวลา debounce (ms)
-last_press_time = 0       # เวลากดปุ่มล่าสุด (Last button press time)
+# ปั๊ม (Pump) - PWM Control
+pump_pin = Pin(21, Pin.OUT)
+pump_pwm = PWM(pump_pin, freq=1000)
+pump_pwm.duty(0)  # เริ่มต้นปิดปั๊ม (Start with pump off)
 
 # ==============================================================================
 # ค่าคงที่สำหรับการคำนวณปริมาตร (Volume Calculation Constants)
 # ==============================================================================
-# ค่าเหล่านี้ได้จากการ calibrate ปั๊ม (These values come from pump calibration)
-flow_rate_per_cycle = 0.2772  # ปริมาตรต่อรอบ (mL/cycle) - Volume per cycle
-target_volume = 10.0          # ปริมาตรเป้าหมาย (mL) - Target volume
-total_volume = 0              # ปริมาตรสะสม (mL) - Accumulated volume
-duty_cycle_percent = 100      # Duty cycle (%) - ความเร็วเต็มที่
-total_elapsed_time = 0        # เวลารวมที่ปั๊มทำงาน (s) - Total pump run time
+
+def load_flow_rate():
+    """
+    โหลดค่า flow rate จากไฟล์ data_flowrate.txt
+    Load flow rate from data_flowrate.txt file
+
+    ไฟล์นี้สร้างจากโปรแกรม 01_flowRate.py
+    This file is created by 01_flowRate.py
+
+    Returns:
+        float: flow rate ใน mL/s หรือค่า default ถ้าไม่พบไฟล์
+    """
+    default_flow_rate = 0.28  # ค่าเริ่มต้นถ้าไม่พบไฟล์ (Default if file not found)
+
+    try:
+        with open('data_flowrate.txt', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('flow_rate='):
+                    value = float(line.split('=')[1])
+                    print(f"โหลด flow_rate จากไฟล์: {value:.4f} mL/s")
+                    print("(Loaded flow_rate from file)")
+                    return value
+    except OSError:
+        print(f"ไม่พบไฟล์ data_flowrate.txt - ใช้ค่าเริ่มต้น {default_flow_rate} mL/s")
+        print("(File not found - using default value)")
+        print("*** คำแนะนำ: รัน 01_flowRate.py เพื่อสอบเทียบปั๊มก่อน ***")
+        print("*** Tip: Run 01_flowRate.py to calibrate pump first ***")
+    except Exception as e:
+        print(f"ข้อผิดพลาดในการอ่านไฟล์ (Error reading file): {e}")
+
+    return default_flow_rate
+
+
+# โหลดค่า flow rate (Load flow rate)
+FLOW_RATE = load_flow_rate()  # mL/s - อัตราการไหลที่สอบเทียบได้
+
+# ค่าเป้าหมายสำหรับการตรวจสอบ (Target values for validation)
+TARGET_VOLUME = 5.0           # ปริมาตรเป้าหมาย (mL) - ลองปั๊ม 5 mL ก่อน
+DUTY_CYCLE_PERCENT = 100      # Duty cycle (%) - ความเร็วเต็มที่
+
+# ==============================================================================
+# ตัวแปรควบคุม (Control Variables)
+# ==============================================================================
+running = False               # สถานะปั๊ม (Pump running state)
+debounce_time_ms = 300        # เวลา debounce (ms)
+last_press_time = 0           # เวลากดปุ่มล่าสุด (Last button press time)
+
+# ผลการทดสอบ (Test results)
+test_results = []             # รายการผลการทดสอบ
 
 # ==============================================================================
 # ฟังก์ชัน Precise Sleep (Precise Sleep Function)
 # ==============================================================================
-def precise_sleep(duration):
+def precise_sleep(duration_s):
     """
     หยุดทำงานชั่วคราวด้วยความแม่นยำระดับไมโครวินาที
     Pause execution with microsecond precision
 
     พารามิเตอร์ (Parameters):
-    - duration: เวลาที่ต้องการหยุด (วินาที) / Time to sleep (seconds)
+    - duration_s: เวลาที่ต้องการหยุด (วินาที) / Time to sleep (seconds)
 
     หมายเหตุ: ใช้ busy-wait loop เพื่อความแม่นยำสูงสุด
     Note: Uses busy-wait loop for maximum precision
+    ข้อเสีย: ใช้ CPU 100% ระหว่างรอ แต่แม่นยำกว่า sleep_ms
+    Downside: Uses 100% CPU while waiting, but more precise than sleep_ms
     """
     start_time = ticks_us()
-    while ticks_diff(ticks_us(), start_time) < duration * 1_000_000:
-        pass  # Busy-wait loop
+    target_us = int(duration_s * 1_000_000)
+    while ticks_diff(ticks_us(), start_time) < target_us:
+        pass
+
 
 # ==============================================================================
-# ฟังก์ชันเริ่มปั๊ม (Start Pump Function)
+# ฟังก์ชันปั๊มต่อเนื่อง (Continuous Pump Function)
 # ==============================================================================
-def start_pump():
+def pump_continuous(target_volume_ml):
     """
-    เริ่มปั๊มและทำงานจนถึงปริมาตรเป้าหมาย
-    Start pump and run until target volume is reached
+    ปั๊มน้ำแบบต่อเนื่องจนถึงปริมาตรเป้าหมาย
+    Pump water continuously until target volume is reached
 
-    การคำนวณ (Calculation):
-    - ปริมาตร = flow_rate × เวลา
-    - Volume = flow_rate × time
-    """
-    global running, total_volume, total_elapsed_time
+    สูตรการคำนวณ (Calculation formula):
+    - เวลาที่ต้องปั๊ม = ปริมาตรเป้าหมาย / flow_rate
+    - pumping_time = target_volume / flow_rate
 
-    if not running:  # ตรวจสอบว่าปั๊มยังไม่ทำงาน (Check pump not running)
-        duty_cycle = int((duty_cycle_percent / 100) * 1023)
-        pump_pwm.duty(duty_cycle)  # เริ่มปั๊ม (Start pump)
-        running = True
-        cycle_elapsed_time = 0
+    พารามิเตอร์ (Parameters):
+    - target_volume_ml: ปริมาตรเป้าหมาย (mL)
 
-        print("=== เริ่มปั๊ม (Pump Started) ===")
-        print(f"เป้าหมาย (Target): {target_volume:.2f} mL")
-
-        # ทำงานจนกว่าจะถึงปริมาตรเป้าหมาย
-        # Run until target volume is reached
-        while total_volume < target_volume:
-            # ตรวจสอบรอบสุดท้าย (Check if last cycle)
-            if total_volume + flow_rate_per_cycle > target_volume:
-                # ปรับเวลาสำหรับรอบสุดท้าย (Adjust time for last cycle)
-                remaining_volume = target_volume - total_volume
-                run_time_adjusted = remaining_volume / flow_rate_per_cycle
-                precise_sleep(run_time_adjusted)
-                total_volume += remaining_volume
-                cycle_elapsed_time += run_time_adjusted
-                break
-
-            # ปั๊มปกติ 1 วินาที (Normal pump for 1 second)
-            precise_sleep(1.0)
-            total_volume += flow_rate_per_cycle
-            cycle_elapsed_time += 1.0
-            print(f"ปริมาตรปัจจุบัน (Current volume): {total_volume:.2f} mL")
-
-        total_elapsed_time += cycle_elapsed_time
-        stop_pump()
-
-# ==============================================================================
-# ฟังก์ชันหยุดปั๊ม (Stop Pump Function)
-# ==============================================================================
-def stop_pump():
-    """
-    หยุดปั๊มและแสดงผลสรุป
-    Stop pump and display summary
+    Returns:
+    - tuple: (เวลาที่ปั๊มจริง, ปริมาตรที่คำนวณได้)
     """
     global running
 
     if running:
-        pump_pwm.duty(0)  # หยุดปั๊ม (Stop pump)
-        running = False
+        print("ปั๊มกำลังทำงานอยู่แล้ว (Pump already running)")
+        return None
 
-        print("=== หยุดปั๊ม (Pump Stopped) ===")
-        print(f"ปริมาตรรวม (Total volume): {total_volume:.2f} mL")
-        print(f"เวลารวม (Total time): {total_elapsed_time:.2f} วินาที (seconds)")
+    running = True
+    led_red.on()  # เปิด LED แดงแสดงปั๊มทำงาน (Turn on red LED)
 
-# ==============================================================================
-# ฟังก์ชันตรวจสอบปุ่ม (Button Check Function)
-# ==============================================================================
-def check_buttons(t):
+    # คำนวณเวลาที่ต้องปั๊ม (Calculate pumping time)
+    pumping_time = target_volume_ml / FLOW_RATE
+
+    print("\n" + "=" * 55)
+    print("  เริ่มปั๊มแบบต่อเนื่อง (CONTINUOUS PUMPING STARTED)")
+    print("=" * 55)
+    print(f"  ปริมาตรเป้าหมาย (Target volume): {target_volume_ml:.2f} mL")
+    print(f"  Flow rate: {FLOW_RATE:.4f} mL/s")
+    print(f"  เวลาที่ต้องปั๊ม (Pumping time): {pumping_time:.2f} s")
+    print(f"  Duty Cycle: {DUTY_CYCLE_PERCENT}%")
+    print("-" * 55)
+
+    # เริ่มปั๊ม (Start pump)
+    duty_value = int((DUTY_CYCLE_PERCENT / 100) * 1023)
+    pump_pwm.duty(duty_value)
+    start_time = ticks_us()
+
+    # แสดง progress ทุก 1 วินาที (Show progress every 1 second)
+    elapsed = 0
+    while elapsed < pumping_time:
+        # รอ 1 วินาทีหรือเวลาที่เหลือ (Wait 1 second or remaining time)
+        wait_time = min(1.0, pumping_time - elapsed)
+        precise_sleep(wait_time)
+        elapsed += wait_time
+
+        # คำนวณปริมาตรปัจจุบัน (Calculate current volume)
+        current_volume = elapsed * FLOW_RATE
+        progress = (current_volume / target_volume_ml) * 100
+
+        # แสดง progress bar (Show progress bar)
+        bar_length = 20
+        filled = int(bar_length * progress / 100)
+        bar = "=" * filled + "-" * (bar_length - filled)
+        print(f"  [{bar}] {progress:5.1f}% | {current_volume:.2f}/{target_volume_ml:.2f} mL")
+
+    # หยุดปั๊ม (Stop pump)
+    pump_pwm.duty(0)
+    actual_time = ticks_diff(ticks_us(), start_time) / 1_000_000
+    calculated_volume = actual_time * FLOW_RATE
+
+    running = False
+    led_red.off()
+    led_green.on()  # เปิด LED เขียวแสดงเสร็จสิ้น (Turn on green LED)
+
+    print("-" * 55)
+    print("  เสร็จสิ้น! (COMPLETE!)")
+    print("=" * 55)
+    print(f"  เวลาที่ปั๊มจริง (Actual time): {actual_time:.3f} s")
+    print(f"  ปริมาตรที่คำนวณได้ (Calculated volume): {calculated_volume:.3f} mL")
+    print("=" * 55)
+
+    # ปิด LED เขียวหลัง 2 วินาที (Turn off green LED after 2 seconds)
+    sleep_ms(2000)
+    led_green.off()
+
+    return (actual_time, calculated_volume)
+
+
+def display_validation_instructions(calculated_volume):
     """
-    Callback สำหรับ Timer - ตรวจสอบการกดปุ่มพร้อม debounce
-    Timer callback - check button press with debounce
+    แสดงคำแนะนำสำหรับการตรวจสอบความแม่นยำ
+    Display instructions for accuracy validation
     """
-    global last_press_time
+    print("\n" + "=" * 55)
+    print("  การตรวจสอบความแม่นยำ (ACCURACY VALIDATION)")
+    print("=" * 55)
+    print("  ขั้นตอน (Steps):")
+    print("  1. วัดปริมาตรน้ำในกระบอกตวง (Measure water in cylinder)")
+    print("  2. เปรียบเทียบกับค่าที่คำนวณได้")
+    print()
+    print(f"  ปริมาตรที่คำนวณได้: {calculated_volume:.3f} mL")
+    print(f"  ปริมาตรที่วัดได้จริง: _______ mL (กรอกเอง)")
+    print()
+    print("  สูตรคำนวณ % error:")
+    print("  % error = |ค่าจริง - ค่าคำนวณ| / ค่าคำนวณ x 100")
+    print()
+    print("  เกณฑ์ยอมรับ (Acceptable criteria):")
+    print("  - % error < 2% = ดีมาก (Excellent)")
+    print("  - % error 2-5% = พอใช้ได้ (Acceptable)")
+    print("  - % error > 5% = ควรสอบเทียบใหม่ (Recalibrate)")
+    print("=" * 55)
+    print()
+    print("กดปุ่ม 1 เพื่อทดสอบอีกครั้ง หรือ Ctrl+C เพื่อหยุด")
+    print("(Press Button 1 to test again, or Ctrl+C to stop)")
 
-    current_time = ticks_us() // 1000  # แปลงเป็น ms (Convert to ms)
-
-    # ตรวจสอบปุ่มพร้อม debounce (Check button with debounce)
-    if button_1_pin.value() == 1 and not running:
-        if (current_time - last_press_time) > debounce_time:
-            last_press_time = current_time
-            start_pump()
 
 # ==============================================================================
 # โปรแกรมหลัก (Main Program)
 # ==============================================================================
-print("=" * 50)
-print("การตรวจสอบปริมาตรปั๊ม (Pump Volume Validation)")
-print(f"ปริมาตรเป้าหมาย (Target volume): {target_volume:.2f} mL")
-print(f"Flow rate: {flow_rate_per_cycle:.4f} mL/cycle")
-print("กดปุ่ม 1 เพื่อเริ่ม (Press Button 1 to start)")
-print("=" * 50)
+print("\n" + "=" * 60)
+print("  การตรวจสอบปริมาตรปั๊มแบบต่อเนื่อง")
+print("  (Continuous Pump Volume Validation)")
+print("=" * 60)
+print()
+print("วัตถุประสงค์ (Purpose):")
+print("  ตรวจสอบว่า flow rate ที่สอบเทียบถูกต้องหรือไม่")
+print("  โดยปั๊มน้ำปริมาตรที่กำหนดแล้วเปรียบเทียบกับค่าจริง")
+print()
+print(f"ค่าที่ใช้ (Current Settings):")
+print(f"  Flow Rate: {FLOW_RATE:.4f} mL/s")
+print(f"  ปริมาตรเป้าหมาย (Target): {TARGET_VOLUME:.2f} mL")
+print(f"  เวลาที่ต้องปั๊ม: {TARGET_VOLUME/FLOW_RATE:.2f} วินาที")
+print()
+print("การเตรียมตัว (Preparation):")
+print("  1. วางกระบอกตวงเปล่าใต้หัวปั๊ม")
+print("  2. เตรียมบีกเกอร์น้ำสำหรับปั๊ม")
+print("  3. ต่อท่อปั๊มให้เรียบร้อย")
+print()
+print("การควบคุม (Controls):")
+print("  [ปุ่ม 1] เริ่มปั๊ม")
+print("  [Ctrl+C] หยุดโปรแกรม")
+print("=" * 60)
 
 try:
-    # ตรวจสอบปุ่มทุก 1 ms (Check button every 1 ms)
-    timer.init(period=1, mode=Timer.PERIODIC, callback=check_buttons)
+    led_red.off()
+    led_green.off()
 
-    # ลูปหลัก (Main loop)
     while True:
-        precise_sleep(0.01)
+        current_time = ticks_us() // 1000  # แปลงเป็น ms
+
+        # ตรวจสอบปุ่มพร้อม debounce (Check button with debounce)
+        if btn_start.value() == 1 and not running:
+            if (current_time - last_press_time) > debounce_time_ms:
+                last_press_time = current_time
+
+                # รอจนกว่าปุ่มจะถูกปล่อย (Wait for button release)
+                while btn_start.value() == 1:
+                    sleep_ms(10)
+
+                # เริ่มปั๊ม (Start pumping)
+                result = pump_continuous(TARGET_VOLUME)
+
+                if result:
+                    actual_time, calculated_volume = result
+                    test_results.append(result)
+                    display_validation_instructions(calculated_volume)
+
+        sleep_ms(10)  # ลด CPU usage
 
 except KeyboardInterrupt:
-    print("\nหยุดโปรแกรม (Program stopped)")
+    print("\n\nหยุดโปรแกรม (Program stopped by user)")
 
 finally:
     # ทำความสะอาด resources (Cleanup resources)
     pump_pwm.duty(0)
     pump_pwm.deinit()
-    timer.deinit()
-    print("ปิดปั๊มและ Timer แล้ว (Pump and Timer released)")
+    led_red.off()
+    led_green.off()
+    print("ปิดปั๊มและ LED แล้ว (Pump and LEDs released)")
+
+    # แสดงสรุปผลการทดสอบ (Show test summary)
+    if len(test_results) > 0:
+        print("\n" + "=" * 50)
+        print("สรุปผลการทดสอบ (Test Summary)")
+        print("=" * 50)
+        for i, (time_s, vol_ml) in enumerate(test_results, 1):
+            print(f"  ครั้งที่ {i}: {time_s:.3f} s, {vol_ml:.3f} mL")
+        print("=" * 50)

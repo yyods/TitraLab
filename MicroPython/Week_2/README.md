@@ -1,359 +1,331 @@
-# TitraLab Week 2: Intermediate OOP
-# TitraLab สัปดาห์ที่ 2: OOP ระดับกลาง
+# TitraLab Week 2: pH and Pump Calibration
+# TitraLab สัปดาห์ที่ 2: การสอบเทียบเซ็นเซอร์ pH และปั๊ม
 
 ---
 
-## วัตถุประสงค์ (Objectives)
-
-หลังจากเรียนจบบทเรียนนี้ นักศึกษาจะสามารถ:
-
-1. **เข้าใจ Inheritance/การสืบทอด**
-   - สร้างคลาสลูก (Child Class) จากคลาสแม่ (Parent Class)
-   - ใช้ `super().__init__()` เพื่อเรียก constructor ของคลาสแม่
-   - Override เมธอดจากคลาสแม่เพื่อปรับแต่งพฤติกรรม
-
-2. **เข้าใจ Composition/การประกอบ**
-   - สร้างออบเจ็กต์ที่ประกอบด้วยออบเจ็กต์อื่น
-   - เข้าใจความแตกต่างระหว่าง Inheritance และ Composition
-
-3. **ใช้ @property decorator**
-   - สร้าง getter และ setter สำหรับ attributes
-   - ควบคุมการเข้าถึงข้อมูลภายในออบเจ็กต์
-
-4. **เข้าใจ Encapsulation/การห่อหุ้ม**
-   - ใช้ private attributes (`_variable`) เพื่อซ่อนข้อมูลภายใน
-   - ป้องกันการเข้าถึงข้อมูลที่ไม่ต้องการให้แก้ไขโดยตรง
-
-5. **ประยุกต์ใช้ OOP กับการควบคุม Hardware**
-   - อ่านค่า pH และอุณหภูมิแบบ OOP
-   - ควบคุมปั๊มด้วย PWM อย่างเป็นระบบ
-   - สอบเทียบเซ็นเซอร์ด้วยโครงสร้างที่ดี
+> **รายวิชา:** 2302311 Integrated Chemistry Laboratory I
+> **ภาควิชา:** เคมี คณะวิทยาศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย
+> **Department of Chemistry, Faculty of Science, Chulalongkorn University**
 
 ---
 
-## ความรู้พื้นฐาน (Prerequisites)
+## วัตถุประสงค์หลัก (Primary Objectives)
 
-### ความรู้ทางเคมี (Chemistry Knowledge)
-- หลักการไทเทรตกรด-เบส (Acid-base titration)
-- สมการ Nernst: E = E0 - (2.303RT/nF) x pH
-- การสอบเทียบหัววัด pH ด้วยสารละลายบัฟเฟอร์มาตรฐาน (Standard buffer solutions)
-- ความหมายของจุดสมมูล (Equivalence point) และจุดยุติ (Endpoint)
+หลังจากเรียนจบบทเรียนนี้ นิสิตจะสามารถ:
 
-### ความรู้จาก Week 1 (Week 1 Knowledge)
-- Python พื้นฐาน: Variables/ตัวแปร, Functions/ฟังก์ชัน, Loops/ลูป
-- การสร้าง Class และ Object เบื้องต้น
-- การทำงานกับ GPIO, ADC, PWM บน ESP32
-- การใช้ Timer และ Interrupt
+### วัตถุประสงค์ด้านเคมีวิเคราะห์ (Analytical Chemistry Objectives)
+
+1. **เข้าใจสมการ Nernst และการสอบเทียบ pH**
+   - อธิบายสมการ Nernst: E = E0 - (2.303RT/nF) x pH
+   - เข้าใจว่าความชันทฤษฎีที่ 25C คือ -59.16 mV/pH
+   - ทำการสอบเทียบ 3 จุดด้วยสารละลายกันชนมาตรฐาน (pH 4, 7, 10)
+
+2. **คำนวณและประเมินคุณภาพการสอบเทียบ**
+   - คำนวณสมการถดถอยเชิงเส้น (Linear Regression): E = m x pH + b
+   - ประเมินค่า R-squared (ค่าที่ดีต้อง >= 0.99)
+   - คำนวณ Nernst Slope Efficiency (ค่าที่ดีต้องอยู่ในช่วง 95-105%)
+
+3. **สอบเทียบอัตราการไหลของปั๊ม**
+   - คำนวณ flow rate จากปริมาตรและเวลา: flow_rate = volume / time
+   - ประเมินความสม่ำเสมอด้วย %RSD (ค่าที่ดีต้อง < 5%)
+   - เข้าใจผลกระทบของ flow rate ที่ไม่แม่นยำต่อการไทเทรต
+
+### วัตถุประสงค์ด้านทักษะโปรแกรม (Supporting Programming Objectives)
+
+4. **ใช้ OOP จัดระเบียบโค้ดสำหรับการสอบเทียบ**
+   - ใช้ Inheritance สำหรับเซ็นเซอร์ (BaseSensor -> pHSensor, TempSensor)
+   - ใช้ Composition สำหรับตัวกระตุ้น (Pump มี PWMController)
+   - ใช้ @property สำหรับการห่อหุ้มข้อมูลสอบเทียบ
 
 ---
 
-## การเชื่อมต่อกับ Week 1 (Connection to Week 1)
+## หลักการทางเคมี (Chemistry Principles)
 
-### Week 1 สิ่งที่เรียนไปแล้ว (Week 1 Review)
+### สมการ Nernst (Nernst Equation)
 
-| หัวข้อ | สิ่งที่เรียน |
-|--------|-------------|
-| **Blink LED** | การควบคุม GPIO output, การใช้ loop |
-| **Button** | การอ่าน GPIO input, interrupt, debounce |
-| **DS18B20** | โปรโตคอล OneWire, การอ่านอุณหภูมิ |
-| **SD Card** | การอ่าน/เขียนไฟล์ |
-| **TFT Display** | การแสดงผลบนจอ ILI9341 |
-| **Buzzer** | การใช้ PWM สร้างเสียง |
-
-### Week 2 ต่อยอด (Week 2 Building On)
-
-Week 2 นำความรู้จาก Week 1 มาจัดระเบียบด้วย OOP:
+หัววัด pH ให้สัญญาณแรงดันไฟฟ้าตามสมการ Nernst:
 
 ```
-Week 1: ฟังก์ชันแยกกันทำงาน
-  read_ph() --> แปลง ADC --> แสดงผล
+E = E0 - (2.303RT/nF) x pH
+```
 
-Week 2: รวมเป็น Class ที่มีโครงสร้าง
-  class pHSensor:
-      def __init__(self):
-          self._adc = ADC(Pin(25))
-          self._slope = -5.7901
-          self._intercept = 16.769
+จัดรูปใหม่เป็นสมการเส้นตรง:
 
-      @property
-      def slope(self):
-          return self._slope
+```
+E (mV) = m x pH + b
+```
 
-      def read(self):
-          voltage = self._read_voltage()
-          ph = self._slope * voltage + self._intercept
-          return voltage, ph
+โดย:
+- **m (slope)** = ความชัน (mV/pH)
+  - ค่าทฤษฎีที่ 20C = -58.17 mV/pH
+  - ค่าทฤษฎีที่ 25C = -59.16 mV/pH (ค่ามาตรฐาน)
+  - ค่าทฤษฎีที่ 30C = -60.15 mV/pH
+- **b (intercept)** = ศักย์ไฟฟ้าที่ pH = 0 (mV)
+
+### ทำไมต้องสอบเทียบ 3 จุด?
+
+| สารละลายกันชน | ค่า pH | ความสำคัญ |
+|:-------------:|:------:|-----------|
+| Potassium hydrogen phthalate | 4.00 | ตัวแทนช่วงกรด |
+| Phosphate buffer | 7.00 | จุด isopotential (ไม่ขึ้นกับอุณหภูมิ) |
+| Carbonate-bicarbonate buffer | 10.00 | ตัวแทนช่วงเบส |
+
+### เกณฑ์คุณภาพการสอบเทียบ
+
+| ตัวชี้วัด | ดีเยี่ยม | พอใช้ได้ | ต้องสอบเทียบใหม่ |
+|----------|:--------:|:--------:|:---------------:|
+| R-squared | >= 0.999 | >= 0.99 | < 0.99 |
+| Slope Efficiency | 95-105% | 90-110% | < 90% หรือ > 110% |
+| %RSD (flow rate) | < 2% | < 5% | >= 5% |
+
+---
+
+## ตารางเวลาการสอน 3 ชั่วโมง (3-Hour Teaching Schedule)
+
+| ช่วงเวลา | หัวข้อ | ไฟล์ | เวลา |
+|:--------:|--------|------|:----:|
+| **ชั่วโมงที่ 1** | **การสอบเทียบเซ็นเซอร์ pH** | | **60 นาที** |
+| 0:00-0:15 | ทฤษฎี: สมการ Nernst และหลักการสอบเทียบ | - | 15 นาที |
+| 0:15-0:55 | ปฏิบัติ: สอบเทียบ 3 จุดด้วย pH 4, 7, 10 | `pH/02_calibration.py` | 40 นาที |
+| 0:55-1:00 | อภิปราย: วิเคราะห์ R-squared และ Slope Efficiency | - | 5 นาที |
+| **ชั่วโมงที่ 2** | **การสอบเทียบปั๊ม** | | **45 นาที** |
+| 1:00-1:15 | ทฤษฎี: PWM และผลต่ออัตราการไหล | - | 15 นาที |
+| 1:15-1:35 | ปฏิบัติ: วัด flow rate 3-5 ครั้ง | `Pump/01_flowRate.py` | 20 นาที |
+| 1:35-1:45 | ปฏิบัติ: ตรวจสอบความแม่นยำ | `Pump/pumpValidate_1.py` | 10 นาที |
+| **ชั่วโมงที่ 3** | **OOP สำหรับระบบไทเทรต** | | **60 นาที** |
+| 1:45-2:15 | Inheritance: BaseSensor -> pHSensor | `core/01_inheritance_basics.py` | 30 นาที |
+| 2:15-2:35 | Composition: Pump มี PWMController | `core/02_composition_basics.py` | 20 นาที |
+| 2:35-2:45 | @property สำหรับข้อมูลสอบเทียบ | `core/03_property_decorator.py` | 10 นาที |
+| **แบบฝึกหัด** | **รวมความรู้** | | **15 นาที** |
+| 2:45-3:00 | รวม concepts และสรุป | `core/04_combined_demo.py` | 15 นาที |
+
+---
+
+## โครงสร้างโฟลเดอร์ (Folder Structure)
+
+```
+Week_2/
+├── pH/                         # [สำคัญ] การวัดและสอบเทียบ pH
+│   ├── 01_pH.py                # การวัดค่า pH แบบต่อเนื่อง
+│   └── 02_calibration.py       # *** การสอบเทียบ pH 3 จุด ***
+│
+├── Pump/                       # [สำคัญ] การควบคุมและสอบเทียบปั๊ม
+│   ├── 01_flowRate.py          # *** การสอบเทียบ flow rate ***
+│   ├── pumpValidate_1.py       # การตรวจสอบ: ปั๊มต่อเนื่อง
+│   └── pumpValidate_2.py       # การตรวจสอบ: ปั๊มเป็นช่วง
+│
+├── core/                       # [บทเรียน OOP] ไฟล์สำหรับสอนในห้องเรียน
+│   ├── 01_inheritance_basics.py    # Inheritance พื้นฐาน
+│   ├── 02_composition_basics.py    # Composition พื้นฐาน
+│   ├── 03_property_decorator.py    # @property และ Encapsulation
+│   └── 04_combined_demo.py         # รวม concepts
+│
+├── lib/                        # [ห้องสมุดคลาส] OOP classes สำหรับอ้างอิง
+│   ├── base_sensor.py          # Abstract Base Class สำหรับเซ็นเซอร์
+│   ├── ph_sensor.py            # คลาส pHSensor สืบทอดจาก BaseSensor
+│   ├── temp_sensor.py          # คลาส TempSensor สืบทอดจาก BaseSensor
+│   ├── pump.py                 # คลาส Pump ใช้ Composition
+│   └── buzzer.py               # คลาส Buzzer ใช้ PWM
+│
+├── exercises/                  # [แบบฝึกหัด] สำหรับนิสิตทำเอง
+│   ├── exercise_01_inheritance_starter.py
+│   ├── exercise_01_inheritance_solution.py
+│   ├── exercise_02_property_starter.py
+│   ├── exercise_02_property_solution.py
+│   ├── exercise_03_composition_starter.py
+│   └── exercise_03_composition_solution.py
+│
+├── 01_sensor_inheritance.py    # [สาธิต] Inheritance demo
+├── 02_composition_demo.py      # [สาธิต] Composition demo
+├── 03_properties_demo.py       # [สาธิต] @property demo
+│
+└── Old/                        # [อ้างอิง] Legacy code
+    ├── cal_flowrate.py
+    └── cal_pH.py
 ```
 
 ---
 
-## แนวคิดหลัก (Key Concepts)
+## เคล็ดลับการปฏิบัติ (Practical Tips)
 
-### 1. Inheritance/การสืบทอด
+### การสอบเทียบ pH
 
-**แนวคิดทางเคมี (Chemistry Analogy):**
-- หัววัด pH (pH electrode) เป็น **ประเภทหนึ่งของ** electrode ทั่วไป
-- หัววัดอุณหภูมิ (Temperature sensor) เป็น **ประเภทหนึ่งของ** sensor ทั่วไป
-- เหมือนกับที่ "กรดแก่" และ "กรดอ่อน" เป็นประเภทของ "กรด"
+1. **การเตรียมสารละลายกันชน**
+   - ใช้สารละลายกันชนมาตรฐานที่ยังไม่หมดอายุ
+   - เก็บรักษาในภาชนะที่ปิดสนิท ห่างจากความร้อนและแสง
+   - ตรวจสอบอุณหภูมิของสารละลายกันชน (ค่า pH เปลี่ยนตามอุณหภูมิ)
 
-**แนวคิดการเขียนโปรแกรม (Programming Concept):**
+2. **การล้างหัววัด**
+   - ล้างด้วยน้ำกลั่น (deionized water) ระหว่างเปลี่ยนสารละลายกันชน
+   - ซับน้ำเบาๆ ด้วยกระดาษทิชชู่ ห้ามถูแรง
+   - ไม่ควรปล่อยให้หัววัดแห้ง
+
+3. **เวลารอให้ค่าเสถียร (Stabilization Time)**
+   - รอ 30-60 วินาทีหลังจากแช่หัววัดในสารละลายกันชน
+   - สังเกตค่าแรงดันไฟฟ้า (mV) ที่แสดงบนจอ
+   - ค่าควรหยุดเปลี่ยนแปลงหรือเปลี่ยนช้ามาก (< 1 mV/นาที) ก่อนกดบันทึก
+
+4. **การแก้ไขเมื่อ R-squared < 0.99**
+   - ตรวจสอบสารละลายกันชน (อาจเสื่อมสภาพ)
+   - ทำความสะอาดหัววัด pH
+   - ตรวจสอบการเชื่อมต่อสายสัญญาณ
+   - รอให้ค่าเสถียรนานขึ้น
+
+### การสอบเทียบปั๊ม
+
+1. **การเตรียมอุปกรณ์**
+   - ใช้กระบอกตวงที่มีความละเอียด 0.1 mL หรือดีกว่า
+   - ตรวจสอบว่าท่อปั๊มไม่มีฟองอากาศ (purge ก่อนสอบเทียบ)
+   - วางกระบอกตวงให้ตั้งตรง
+
+2. **การวัด Flow Rate**
+   - ทำซ้ำ 3-5 ครั้งเพื่อหาค่าเฉลี่ย
+   - ปั๊มครั้งละ 10-20 วินาทีเพื่อให้ได้ปริมาตรที่วัดง่าย
+   - อ่านกระบอกตวงที่ระดับสายตา (meniscus)
+
+3. **เกณฑ์ยอมรับ %RSD**
+   - %RSD < 5% = ใช้งานได้
+   - %RSD >= 5% = ตรวจสอบปั๊มและท่อ
+
+4. **การตรวจสอบความแม่นยำ (Validation)**
+   - หลังสอบเทียบ ให้รัน `pumpValidate_1.py` เพื่อปั๊มปริมาตรที่กำหนด
+   - เปรียบเทียบปริมาตรที่วัดได้กับค่าที่คำนวณ
+   - % error < 5% ถือว่าผ่าน
+
+---
+
+## ไฟล์สอบเทียบหลัก (Key Calibration Files)
+
+### 1. การสอบเทียบ pH: `pH/02_calibration.py`
+
+**วัตถุประสงค์:** สอบเทียบหัววัด pH ด้วยสารละลายกันชนมาตรฐาน 3 จุด
+
+**ขั้นตอนการทำงาน:**
+1. แช่หัววัดในสารละลายกันชน pH 4.00 -> รอค่าเสถียร -> กดปุ่มบันทึก
+2. แช่หัววัดในสารละลายกันชน pH 7.00 -> รอค่าเสถียร -> กดปุ่มบันทึก
+3. แช่หัววัดในสารละลายกันชน pH 10.00 -> รอค่าเสถียร -> กดปุ่มบันทึก
+4. โปรแกรมคำนวณ Linear Regression และแสดงผล
+
+**ผลลัพธ์:**
+- ไฟล์ `data_calibrate.txt`: slope, intercept, R-squared, อุณหภูมิ
+- ไฟล์ `calibration_log.txt`: รายละเอียดการสอบเทียบ
+
+**โค้ดสำคัญ - การคำนวณ Linear Regression:**
 
 ```python
-# คลาสแม่ (Parent Class/Base Class)
-class Sensor:
-    """คลาสพื้นฐานสำหรับเซ็นเซอร์ทั่วไป"""
+def linear_regression(x_values, y_values):
+    """
+    คำนวณการถดถอยเชิงเส้น y = mx + b พร้อมค่า R-squared
+    สำหรับเซ็นเซอร์ pH: E(mV) = m * pH + b
+    """
+    n = len(x_values)
 
-    def __init__(self, pin_number):
-        self._pin = pin_number
-        self._is_calibrated = False
+    # คำนวณค่าที่ต้องใช้ (Calculate required sums)
+    sum_x = sum(x_values)
+    sum_y = sum(y_values)
+    sum_xy = sum(x * y for x, y in zip(x_values, y_values))
+    sum_x2 = sum(x ** 2 for x in x_values)
 
-    def read_raw(self):
-        """อ่านค่าดิบจากเซ็นเซอร์"""
-        raise NotImplementedError("Subclass must implement")
+    # คำนวณความชัน (Calculate slope)
+    denominator = n * sum_x2 - sum_x ** 2
+    slope = (n * sum_xy - sum_x * sum_y) / denominator
 
-    def calibrate(self):
-        """สอบเทียบเซ็นเซอร์"""
-        raise NotImplementedError("Subclass must implement")
+    # คำนวณจุดตัดแกน y (Calculate intercept)
+    intercept = (sum_y - slope * sum_x) / n
 
+    # คำนวณ R-squared
+    y_mean = sum_y / n
+    ss_tot = sum((y - y_mean) ** 2 for y in y_values)
+    ss_res = sum((y - (slope * x + intercept)) ** 2
+                 for x, y in zip(x_values, y_values))
+    r_squared = 1 - (ss_res / ss_tot)
 
-# คลาสลูก (Child Class/Subclass)
-class pHSensor(Sensor):
-    """คลาสเซ็นเซอร์ pH สืบทอดจาก Sensor"""
-
-    def __init__(self, pin_number=25, slope=-5.7901, intercept=16.769):
-        # เรียก constructor ของคลาสแม่
-        super().__init__(pin_number)
-
-        # เพิ่ม attributes เฉพาะของ pHSensor
-        self._slope = slope
-        self._intercept = intercept
-        self._adc = ADC(Pin(pin_number))
-        self._adc.atten(ADC.ATTN_11DB)
-
-    def read_raw(self):
-        """Override: อ่านค่า ADC ดิบ"""
-        return self._adc.read()
-
-    def read_ph(self):
-        """Method เฉพาะของ pHSensor"""
-        voltage = self.read_voltage()
-        return self._slope * voltage + self._intercept
-
-    def calibrate(self):
-        """Override: สอบเทียบเซ็นเซอร์ pH"""
-        # ... calibration logic ...
-        self._is_calibrated = True
+    return slope, intercept, r_squared
 ```
-
-**Syntax สำคัญ:**
-
-| Syntax | ความหมาย |
-|--------|----------|
-| `class Child(Parent):` | สร้างคลาสลูกที่สืบทอดจากคลาสแม่ |
-| `super().__init__()` | เรียก constructor ของคลาสแม่ |
-| Method override | กำหนด method ชื่อเดียวกับคลาสแม่เพื่อเปลี่ยนพฤติกรรม |
 
 ---
 
-### 2. Composition/การประกอบ
+### 2. การสอบเทียบ Flow Rate: `Pump/01_flowRate.py`
 
-**แนวคิดทางเคมี (Chemistry Analogy):**
-- ปั๊มไทแทรนต์ **ประกอบด้วย** มอเตอร์และตัวควบคุม PWM
-- ระบบไทเทรต **ประกอบด้วย** หัววัด pH, ปั๊ม, และจอแสดงผล
-- เหมือนกับที่ "เครื่อง pH Meter" ประกอบด้วย electrode, display, และ microprocessor
+**วัตถุประสงค์:** หาอัตราการไหลที่แท้จริงของปั๊ม
 
-**แนวคิดการเขียนโปรแกรม (Programming Concept):**
+**ขั้นตอนการทำงาน:**
+1. กดปุ่ม 1 เริ่มปั๊ม (จับเวลาอัตโนมัติ)
+2. ปั๊มน้ำลงกระบอกตวงประมาณ 10-20 วินาที
+3. กดปุ่ม 1 หยุดปั๊ม
+4. อ่านปริมาตรจากกระบอกตวง -> แก้ไข `MEASURED_VOLUME` ในโค้ด
+5. กดปุ่ม 2 บันทึกผลการวัด (ทำซ้ำ 3-5 ครั้ง)
+6. กดปุ่ม 3 บันทึกค่า flow rate ลงไฟล์
+
+**ผลลัพธ์:**
+- ไฟล์ `data_flowrate.txt`: ค่า flow rate เฉลี่ย (mL/s)
+
+**โค้ดสำคัญ - การคำนวณ Flow Rate:**
 
 ```python
-class PWMController:
-    """คลาสควบคุม PWM"""
+def record_measurement():
+    """
+    บันทึกผลการวัดและคำนวณ flow rate
+    สูตร: flow_rate = volume / time (mL/s)
+    """
+    global calibration_data, current_volume
 
-    def __init__(self, pin_number, freq=1000):
-        self._pin = Pin(pin_number, Pin.OUT)
-        self._pwm = PWM(self._pin, freq=freq)
-        self._pwm.duty(0)
+    # ใช้ค่าจากตัวแปร MEASURED_VOLUME
+    current_volume = MEASURED_VOLUME
 
-    def set_duty(self, percent):
-        """กำหนด duty cycle (0-100%)"""
-        duty_value = int((percent / 100) * 1023)
-        self._pwm.duty(duty_value)
+    # คำนวณ flow rate
+    flow_rate = current_volume / elapsed_time
 
-    def stop(self):
-        """หยุด PWM"""
-        self._pwm.duty(0)
+    # บันทึกข้อมูล
+    calibration_data.append((elapsed_time, current_volume, flow_rate))
 
+    # แสดงค่าเฉลี่ยและ RSD
+    if len(calibration_data) >= 2:
+        avg_flow_rate = sum(d[2] for d in calibration_data) / len(calibration_data)
+        variance = sum((d[2] - avg_flow_rate) ** 2 for d in calibration_data) / len(calibration_data)
+        std_dev = variance ** 0.5
+        rsd = (std_dev / avg_flow_rate) * 100  # %RSD
 
-class Pump:
-    """คลาสปั๊ม - ประกอบด้วย PWMController"""
-
-    def __init__(self, pin_number=21, flow_rate=0.2772):
-        # Composition: Pump มี PWMController
-        self._pwm_controller = PWMController(pin_number)
-        self._flow_rate = flow_rate
-        self._is_running = False
-        self._start_time = 0
-
-    def start(self, duty_percent=100):
-        """เริ่มปั๊ม"""
-        self._pwm_controller.set_duty(duty_percent)
-        self._start_time = ticks_us()
-        self._is_running = True
-
-    def stop(self):
-        """หยุดปั๊ม"""
-        self._pwm_controller.stop()
-        elapsed = ticks_diff(ticks_us(), self._start_time) / 1_000_000
-        volume = self._flow_rate * elapsed
-        self._is_running = False
-        return {'time': elapsed, 'volume': volume}
-```
-
-**Inheritance vs Composition:**
-
-| ความสัมพันธ์ | ตัวอย่าง | เมื่อใช้ |
-|-------------|----------|---------|
-| **Inheritance** (is-a) | pHSensor **is a** Sensor | เมื่อคลาสลูก "เป็นประเภทหนึ่งของ" คลาสแม่ |
-| **Composition** (has-a) | Pump **has a** PWMController | เมื่อคลาสหนึ่ง "มี" คลาสอื่นเป็นส่วนประกอบ |
-
----
-
-### 3. @property Decorator
-
-**แนวคิดทางเคมี (Chemistry Analogy):**
-- ค่า slope ของการสอบเทียบ - อ่านได้ แต่ควรเปลี่ยนผ่านกระบวนการสอบเทียบเท่านั้น
-- ค่า R-squared - อ่านได้อย่างเดียว เกิดจากการคำนวณ
-
-**แนวคิดการเขียนโปรแกรม (Programming Concept):**
-
-```python
-class pHSensor:
-    def __init__(self):
-        self._slope = -5.7901      # Private attribute
-        self._intercept = 16.769   # Private attribute
-
-    @property
-    def slope(self):
-        """Getter - อ่านค่า slope"""
-        return self._slope
-
-    @slope.setter
-    def slope(self, value):
-        """Setter - กำหนดค่า slope พร้อม validation"""
-        if -100 < value < 0:
-            self._slope = value
-            print(f"Slope updated: {value}")
-        else:
-            raise ValueError("Slope must be between -100 and 0")
-
-    @property
-    def intercept(self):
-        """Getter - อ่านค่า intercept"""
-        return self._intercept
-
-    @intercept.setter
-    def intercept(self, value):
-        """Setter - กำหนดค่า intercept"""
-        self._intercept = value
-
-
-# การใช้งาน
-sensor = pHSensor()
-print(sensor.slope)      # อ่านค่า: -5.7901
-sensor.slope = -6.0      # กำหนดค่าใหม่
-sensor.slope = 10        # Error! ค่าไม่ถูกต้อง
+        if rsd > 5:
+            print("*** คำเตือน: RSD > 5% - ค่าไม่สม่ำเสมอ ***")
 ```
 
 ---
 
-### 4. Encapsulation/การห่อหุ้ม
+### 3. การตรวจสอบความแม่นยำ: `Pump/pumpValidate_1.py` และ `pumpValidate_2.py`
 
-**แนวคิดทางเคมี (Chemistry Analogy):**
-- ข้อมูลการสอบเทียบภายในเครื่อง pH Meter - ผู้ใช้ไม่ควรแก้ไขโดยตรง
-- Reference electrode voltage - ค่าภายในที่ไม่ควรเปลี่ยน
+**pumpValidate_1.py** - ปั๊มต่อเนื่อง:
+- ปั๊มน้ำจนถึงปริมาตรเป้าหมาย (เช่น 5 mL) แบบต่อเนื่อง
+- ใช้ในช่วงเริ่มต้นการไทเทรต (pH ยังห่างจากจุดสมมูล)
 
-**แนวคิดการเขียนโปรแกรม (Programming Concept):**
-
-```python
-class pHSensor:
-    def __init__(self):
-        # Private attributes (ขึ้นต้นด้วย _)
-        self._adc = ADC(Pin(25))           # ซ่อนการเข้าถึง ADC โดยตรง
-        self._calibration_points = []       # ข้อมูลสอบเทียบภายใน
-        self._slope = -5.7901
-        self._intercept = 16.769
-
-    # Public method - ผู้ใช้เรียกได้
-    def read(self):
-        """อ่านค่า pH (public)"""
-        voltage = self._read_voltage()      # เรียก private method
-        ph = self._calculate_ph(voltage)    # เรียก private method
-        return voltage, ph
-
-    # Private method - ใช้ภายในเท่านั้น
-    def _read_voltage(self):
-        """อ่านแรงดัน (private)"""
-        raw = self._adc.read()
-        return (raw / 4095) * 3.3
-
-    def _calculate_ph(self, voltage):
-        """คำนวณ pH (private)"""
-        return self._slope * voltage + self._intercept
-```
-
-**Convention สำหรับ Private:**
-
-| รูปแบบ | ความหมาย |
-|--------|----------|
-| `variable` | Public - เข้าถึงได้จากภายนอก |
-| `_variable` | Protected - ควรใช้ภายในเท่านั้น (convention) |
-| `__variable` | Private - Python จะ name mangle (ไม่ค่อยใช้) |
+**pumpValidate_2.py** - ปั๊มเป็นช่วง:
+- ปั๊ม -> หยุด -> (อ่าน pH) -> ปั๊ม -> ...
+- ใช้ในช่วงใกล้จุดสมมูล (equivalence point)
+- รอให้ pH stabilize ก่อนปั๊มครั้งถัดไป
 
 ---
 
-## การกำหนดขา GPIO (Hardware Configuration)
+## GPIO Pin Reference / ตารางอ้างอิงขา GPIO
 
-### GPIO สำหรับ Week 2
+ตารางนี้ตรงกับ `MicroPython/Week_1/pins.py`:
 
-```
-                    +------------------+
-                    |    ESP32 Board   |
-                    |                  |
-    Red LED    <----|  GPIO2           |
-    Green LED  <----|  GPIO4           |
-                    |                  |
-    TFT SCK    <----|  GPIO14          |
-    TFT MOSI   <----|  GPIO13          |
-    TFT CS     <----|  GPIO15          |
-    TFT DC     <----|  GPIO27          |
-    TFT RST    <----|  GPIO0           |
-                    |                  |
-    DS18B20    <----|  GPIO16          |  <- Temperature Sensor
-                    |                  |
-    Pump PWM   <----|  GPIO21          |  <- Pump Control
-                    |                  |
-    pH Sensor  ---->|  GPIO25 (ADC)    |  <- pH Measurement
-                    |                  |
-    Button 1   ---->|  GPIO34 (Input)  |  <- Start/Confirm
-    Button 2   ---->|  GPIO35 (Input)  |  <- Select/Navigate
-    Button 3   ---->|  GPIO39 (Input)  |  <- Back/Cancel
-                    |                  |
-    Buzzer     <----|  GPIO26 (PWM)    |
-                    +------------------+
-```
+### ขา GPIO ที่ใช้ใน Week 2
 
-### ตารางสรุป GPIO
-
-| อุปกรณ์ | GPIO | ประเภท | หมายเหตุ |
-|---------|------|--------|----------|
-| **Sensors** |
-| pH Sensor | GPIO25 | ADC Input | อ่านแรงดัน 0-3.3V จากหัววัด pH |
-| Temperature (DS18B20) | GPIO16 | OneWire | ต้องใช้ pull-up resistor 4.7K |
-| **Actuators** |
-| Pump | GPIO21 | PWM Output | ความถี่ 1000 Hz, 10-bit duty (0-1023) |
-| **Buttons** |
-| Button 1 (Start) | GPIO34 | Input-only | ต้องใช้ external pull-down 10K |
-| Button 2 (Select) | GPIO35 | Input-only | ต้องใช้ external pull-down 10K |
-| Button 3 (Back) | GPIO39 | Input-only | ต้องใช้ external pull-down 10K |
+| อุปกรณ์ | GPIO | ค่าคงที่ใน pins.py | ประเภท | หมายเหตุ |
+|---------|:----:|-------------------|--------|----------|
+| **Sensors (เซ็นเซอร์)** |
+| pH Sensor | 25 | `PH_PIN` | ADC Input | อ่านแรงดัน 0-3.3V จากหัววัด pH |
+| Temperature (DS18B20) | 16 | `DS18B20_PIN` | OneWire | ต้องใช้ pull-up resistor 4.7K |
+| **Actuators (ตัวกระตุ้น)** |
+| Pump | 21 | `PUMP_PIN` | PWM Output | ความถี่ 1000 Hz, 10-bit duty (0-1023) |
+| Buzzer | 26 | `BUZZER_PIN` | PWM Output | สำหรับ feedback เสียง |
+| **LEDs** |
+| Red LED | 2 | `LED_RED` | Output | แสดงสถานะ error / ปั๊มทำงาน |
+| Green LED | 4 | `LED_GREEN` | Output | แสดงสถานะ OK / เสร็จสิ้น |
+| **Buttons (ปุ่มกด)** |
+| Button 1 | 34 | `BUTTON1` | Input-only | ต้องใช้ external pull-down 10K |
+| Button 2 | 35 | `BUTTON2` | Input-only | ต้องใช้ external pull-down 10K |
+| Button 3 | 39 | `BUTTON3` | Input-only | ต้องใช้ external pull-down 10K |
 
 ### ข้อควรระวัง GPIO34/35/39
 
@@ -364,547 +336,129 @@ class pHSensor:
 
 button_1 = Pin(34, Pin.IN)  # ถูกต้อง
 button_1 = Pin(34, Pin.IN, Pin.PULL_DOWN)  # ผิด! ไม่รองรับ
-
-# การต่อวงจร:
-#   Button -> GPIO34
-#   GPIO34 -> 10K resistor -> GND
-#   Button อีกขา -> 3.3V
 ```
 
 ---
 
-## คำอธิบายไฟล์ (File Descriptions)
+## ทักษะ OOP สนับสนุน (Supporting OOP Skills)
 
-### โฟลเดอร์ pH/
+### 1. Inheritance/การสืบทอด
 
-| ไฟล์ | คำอธิบาย | แนวคิด OOP ที่เรียน |
-|------|----------|-------------------|
-| `01_pH.py` | การวัดค่า pH และอุณหภูมิ พร้อมบันทึกข้อมูล | Functions, Timer interrupt, State variables |
-| `02_calibration.py` | การสอบเทียบ pH 3 จุด | Procedural calibration |
+**แนวคิดทางเคมี:**
+- หัววัด pH (pH electrode) เป็น **ประเภทหนึ่งของ** electrode ทั่วไป
+- หัววัดอุณหภูมิ (Temperature sensor) เป็น **ประเภทหนึ่งของ** sensor ทั่วไป
 
-### โฟลเดอร์ Pump/
+**Syntax:**
+```python
+class pHSensor(BaseSensor):
+    def __init__(self, pin=25, slope=-5.7901, intercept=16.769):
+        # เรียก constructor ของคลาสแม่
+        super().__init__(pin, "pH Sensor")
 
-| ไฟล์ | คำอธิบาย | แนวคิด OOP ที่เรียน |
-|------|----------|-------------------|
-| `01_flowRate.py` | การควบคุมปั๊มด้วย PWM | PWM control, Duty cycle |
-| `pumpValidate_1.py` | การปั๊มต่อเนื่องจนถึงปริมาตรเป้าหมาย | Volume calculation, Precise timing |
-| `pumpValidate_2.py` | การปั๊มแบบเป็นช่วงๆ (intermittent) | Interval pumping, pH stabilization |
-
-### โฟลเดอร์ Old/
-
-| ไฟล์ | คำอธิบาย | หมายเหตุ |
-|------|----------|----------|
-| `cal_pH.py` | โค้ดเก่าสำหรับ calibrate pH | อ้างอิงสำหรับการเรียนรู้ |
-| `cal_flowrate.py` | โค้ดเก่าสำหรับ calibrate flow rate | อ้างอิงสำหรับการเรียนรู้ |
+        # เพิ่ม attributes เฉพาะของ pHSensor
+        self._slope = slope
+        self._intercept = intercept
+```
 
 ---
 
-## โค้ดตัวอย่าง (Example Code)
+### 2. Composition/การประกอบ
 
-### ตัวอย่าง 1: Inheritance - สร้างคลาส pHSensor
+**แนวคิดทางเคมี:**
+- ปั๊มไทแทรนต์ **ประกอบด้วย** มอเตอร์และตัวควบคุม PWM
+- ระบบไทเทรต **ประกอบด้วย** หัววัด pH, ปั๊ม, และจอแสดงผล
 
+**Syntax:**
 ```python
-"""
-ตัวอย่าง Inheritance: pHSensor สืบทอดจาก BaseSensor
-Example Inheritance: pHSensor inherits from BaseSensor
-"""
-from machine import Pin, ADC
-from time import sleep_ms
+class Pump:
+    def __init__(self, pin=21, flow_rate=0.2772):
+        # Composition: Pump มี PWMController
+        self._pwm_controller = PWMController(pin)
+        self._flow_rate = flow_rate
+```
 
+---
 
-class BaseSensor:
-    """
-    คลาสพื้นฐานสำหรับเซ็นเซอร์ทั้งหมด
-    Base class for all sensors
-    """
+### 3. @property Decorator
 
-    def __init__(self, pin_number, name="Sensor"):
-        self._pin_number = pin_number
-        self._name = name
-        self._is_calibrated = False
-        print(f"{name} initialized on GPIO{pin_number}")
+**แนวคิดทางเคมี:**
+- ค่า slope ของการสอบเทียบ - อ่านได้ แต่ควรเปลี่ยนผ่านกระบวนการสอบเทียบเท่านั้น
+- ค่า R-squared - อ่านได้อย่างเดียว เกิดจากการคำนวณ
 
-    @property
-    def name(self):
-        """ชื่อเซ็นเซอร์ (Sensor name)"""
-        return self._name
-
-    @property
-    def is_calibrated(self):
-        """สถานะการสอบเทียบ (Calibration status)"""
-        return self._is_calibrated
-
-    def read_raw(self):
-        """อ่านค่าดิบ - ต้อง override ในคลาสลูก"""
-        raise NotImplementedError("Subclass must implement read_raw()")
-
-
-class pHSensor(BaseSensor):
-    """
-    คลาสเซ็นเซอร์ pH - สืบทอดจาก BaseSensor
-    pH Sensor class - inherits from BaseSensor
-
-    ตัวอย่างการใช้งาน (Usage):
-        >>> sensor = pHSensor()
-        >>> voltage, ph = sensor.read()
-        >>> print(f"pH = {ph:.2f}")
-    """
-
-    # ค่าคงที่ (Constants)
-    ADC_MAX = 4095
-    ADC_VOLTAGE = 3.3
-
-    def __init__(self, pin=25, slope=-5.7901, intercept=16.769):
-        # เรียก constructor ของ BaseSensor
-        super().__init__(pin, "pH Sensor")
-
-        # Private attributes เฉพาะ pHSensor
-        self._slope = slope
-        self._intercept = intercept
-        self._adc = ADC(Pin(pin))
-        self._adc.atten(ADC.ATTN_11DB)
-        self._samples = 10
-
+**Syntax:**
+```python
+class pHSensor:
     @property
     def slope(self):
-        """ค่า slope ของสมการสอบเทียบ"""
+        """Getter - อ่านค่า slope"""
         return self._slope
 
     @slope.setter
     def slope(self, value):
-        """กำหนดค่า slope"""
-        self._slope = value
-
-    @property
-    def intercept(self):
-        """ค่า intercept ของสมการสอบเทียบ"""
-        return self._intercept
-
-    @intercept.setter
-    def intercept(self, value):
-        """กำหนดค่า intercept"""
-        self._intercept = value
-
-    def read_raw(self):
-        """Override: อ่านค่า ADC ดิบ (0-4095)"""
-        return self._adc.read()
-
-    def read_voltage(self):
-        """อ่านแรงดันพร้อมกรองค่า (Read filtered voltage)"""
-        samples = []
-        for _ in range(self._samples):
-            samples.append(self._adc.read())
-            sleep_ms(10)
-
-        # เรียงลำดับและตัดค่าสูง-ต่ำสุดออก
-        samples.sort()
-        trimmed = samples[2:8]
-        avg_adc = sum(trimmed) / len(trimmed)
-
-        return (avg_adc / self.ADC_MAX) * self.ADC_VOLTAGE
-
-    def read(self):
-        """อ่านค่า pH พร้อมแรงดัน"""
-        voltage = self.read_voltage()
-        ph = self._slope * voltage + self._intercept
-        return voltage, ph
-
-    def read_ph(self):
-        """อ่านเฉพาะค่า pH"""
-        _, ph = self.read()
-        return ph
-
-    def set_calibration(self, slope, intercept):
-        """กำหนดค่าสอบเทียบใหม่"""
-        self._slope = slope
-        self._intercept = intercept
-        self._is_calibrated = True
-        print(f"Calibration updated: pH = {slope:.4f} * V + {intercept:.4f}")
-
-
-# ทดสอบการใช้งาน
-if __name__ == "__main__":
-    sensor = pHSensor()
-    print(f"Sensor: {sensor.name}")
-    print(f"Slope: {sensor.slope}")
-
-    for i in range(5):
-        voltage, ph = sensor.read()
-        print(f"Reading {i+1}: V={voltage:.4f}V, pH={ph:.2f}")
-        sleep_ms(1000)
-```
-
----
-
-### ตัวอย่าง 2: Composition - สร้างคลาส Pump
-
-```python
-"""
-ตัวอย่าง Composition: Pump ประกอบด้วย PWMController
-Example Composition: Pump contains PWMController
-"""
-from machine import Pin, PWM
-from time import ticks_us, ticks_diff, sleep_ms
-
-
-class PWMController:
-    """
-    คลาสควบคุม PWM
-    PWM Controller class
-    """
-
-    MAX_DUTY = 1023  # 10-bit PWM
-
-    def __init__(self, pin_number, freq=1000):
-        self._pin = Pin(pin_number, Pin.OUT)
-        self._pwm = PWM(self._pin, freq=freq)
-        self._pwm.duty(0)
-        self._current_duty = 0
-
-    @property
-    def current_duty(self):
-        """Duty cycle ปัจจุบัน (%)"""
-        return (self._current_duty / self.MAX_DUTY) * 100
-
-    def set_duty_percent(self, percent):
-        """กำหนด duty cycle (0-100%)"""
-        percent = max(0, min(100, percent))
-        duty_value = int((percent / 100) * self.MAX_DUTY)
-        self._pwm.duty(duty_value)
-        self._current_duty = duty_value
-
-    def stop(self):
-        """หยุด PWM"""
-        self._pwm.duty(0)
-        self._current_duty = 0
-
-    def deinit(self):
-        """ปิดการใช้งาน PWM"""
-        self._pwm.duty(0)
-        self._pwm.deinit()
-
-
-class Pump:
-    """
-    คลาสควบคุมปั๊ม - ใช้ Composition กับ PWMController
-    Pump control class - uses Composition with PWMController
-
-    Composition: Pump "has-a" PWMController
-    เปรียบเทียบ: ปั๊ม "มี" ตัวควบคุม PWM เป็นส่วนประกอบ
-
-    ตัวอย่างการใช้งาน (Usage):
-        >>> pump = Pump()
-        >>> pump.start(duty_percent=100)
-        >>> sleep_ms(2000)
-        >>> result = pump.stop()
-        >>> print(f"Volume: {result['volume_ml']:.2f} mL")
-    """
-
-    def __init__(self, pin=21, flow_rate=0.2772):
-        # Composition: Pump มี PWMController
-        self._pwm_controller = PWMController(pin)
-        self._flow_rate = flow_rate  # mL/s at 100% duty
-        self._is_running = False
-        self._start_time = 0
-        self._current_duty_percent = 0
-
-        print(f"Pump initialized on GPIO{pin}")
-        print(f"Flow rate: {flow_rate} mL/s at 100% duty")
-
-    @property
-    def is_running(self):
-        """สถานะปั๊ม (Pump status)"""
-        return self._is_running
-
-    @property
-    def flow_rate(self):
-        """อัตราการไหล (Flow rate)"""
-        return self._flow_rate
-
-    @flow_rate.setter
-    def flow_rate(self, value):
-        """กำหนดอัตราการไหล"""
-        if value > 0:
-            self._flow_rate = value
+        """Setter - กำหนดค่า slope พร้อม validation"""
+        if -100 < value < 0:
+            self._slope = value
         else:
-            raise ValueError("Flow rate must be positive")
-
-    def start(self, duty_percent=100):
-        """เริ่มปั๊ม (Start pump)"""
-        if self._is_running:
-            print("Warning: Pump already running")
-            return False
-
-        self._pwm_controller.set_duty_percent(duty_percent)
-        self._start_time = ticks_us()
-        self._current_duty_percent = duty_percent
-        self._is_running = True
-
-        print(f"Pump started at {duty_percent}%")
-        return True
-
-    def stop(self):
-        """หยุดปั๊มและคำนวณปริมาตร (Stop pump and calculate volume)"""
-        if not self._is_running:
-            return {'elapsed_s': 0, 'volume_ml': 0}
-
-        self._pwm_controller.stop()
-
-        elapsed_us = ticks_diff(ticks_us(), self._start_time)
-        elapsed_s = elapsed_us / 1_000_000
-
-        # คำนวณปริมาตร
-        effective_flow = self._flow_rate * (self._current_duty_percent / 100)
-        volume_ml = effective_flow * elapsed_s
-
-        self._is_running = False
-
-        result = {
-            'elapsed_s': elapsed_s,
-            'volume_ml': volume_ml,
-            'duty_percent': self._current_duty_percent
-        }
-
-        print(f"Pump stopped: {elapsed_s:.2f}s, {volume_ml:.3f} mL")
-        return result
-
-    def run_for_volume(self, volume_ml, duty_percent=100):
-        """ปั๊มจนได้ปริมาตรที่ต้องการ (Pump until target volume)"""
-        effective_flow = self._flow_rate * (duty_percent / 100)
-        required_time_ms = int((volume_ml / effective_flow) * 1000)
-
-        print(f"Pumping {volume_ml} mL (estimated {required_time_ms/1000:.2f}s)")
-
-        self.start(duty_percent)
-        sleep_ms(required_time_ms)
-        return self.stop()
-
-    def purge(self, duration_ms=3000):
-        """ล้างท่อ (Purge lines)"""
-        print(f"Purging for {duration_ms}ms...")
-        self.start(100)
-        sleep_ms(duration_ms)
-        return self.stop()
-
-    def deinit(self):
-        """ปิดการใช้งาน"""
-        if self._is_running:
-            self.stop()
-        self._pwm_controller.deinit()
-
-
-# ทดสอบการใช้งาน
-if __name__ == "__main__":
-    pump = Pump()
-
-    # ทดสอบ start/stop
-    pump.start(50)
-    sleep_ms(2000)
-    result = pump.stop()
-    print(f"Result: {result}")
-
-    # ทดสอบ run_for_volume
-    result = pump.run_for_volume(1.0, duty_percent=100)
-    print(f"Volume pumped: {result['volume_ml']:.3f} mL")
-
-    pump.deinit()
+            raise ValueError("Slope must be between -100 and 0")
 ```
 
 ---
 
-### ตัวอย่าง 3: การรวม pHSensor และ Pump สำหรับไทเทรต
+## ผลลัพธ์การเรียนรู้ (Learning Outcomes)
 
-```python
-"""
-ตัวอย่างการรวม pHSensor และ Pump
-Example combining pHSensor and Pump for simple titration
-"""
+ใช้ checkbox ด้านล่างเพื่อติดตามความก้าวหน้า:
 
-class SimpleTitrator:
-    """
-    ระบบไทเทรตอย่างง่าย - ใช้ Composition
-    Simple titration system - uses Composition
+### การสอบเทียบ pH (pH Calibration) - 60 นาที
+- [ ] เข้าใจสมการ Nernst และความสัมพันธ์ระหว่าง mV กับ pH
+- [ ] ทำการสอบเทียบ 3 จุดด้วยสารละลายกันชน pH 4, 7, 10 สำเร็จ
+- [ ] ได้ค่า R-squared >= 0.99
+- [ ] เข้าใจความหมายของ Nernst Slope Efficiency
+- [ ] บันทึกค่าสอบเทียบลงไฟล์ได้
 
-    Composition:
-        - Titrator "has-a" pHSensor
-        - Titrator "has-a" Pump
-    """
+### การสอบเทียบปั๊ม (Pump Calibration) - 45 นาที
+- [ ] เข้าใจความสำคัญของ flow rate ที่แม่นยำต่อการไทเทรต
+- [ ] คำนวณ flow rate จากปริมาตรและเวลาได้
+- [ ] ได้ค่า %RSD < 5%
+- [ ] ตรวจสอบความแม่นยำด้วย pumpValidate สำเร็จ
 
-    def __init__(self, target_ph=7.0):
-        # Composition: Titrator มี pHSensor และ Pump
-        self._ph_sensor = pHSensor()
-        self._pump = Pump()
-        self._target_ph = target_ph
-        self._data = []
-
-    @property
-    def target_ph(self):
-        return self._target_ph
-
-    @target_ph.setter
-    def target_ph(self, value):
-        if 0 <= value <= 14:
-            self._target_ph = value
-        else:
-            raise ValueError("pH must be between 0 and 14")
-
-    def read_ph(self):
-        """อ่านค่า pH ปัจจุบัน"""
-        voltage, ph = self._ph_sensor.read()
-        return ph
-
-    def add_titrant(self, volume_ml):
-        """เติมสารไทแทรนต์"""
-        result = self._pump.run_for_volume(volume_ml)
-        return result['volume_ml']
-
-    def run_simple_titration(self, increment_ml=0.5, max_volume=50):
-        """
-        รันไทเทรตอย่างง่าย
-        Run simple titration
-        """
-        total_volume = 0
-        self._data = []
-
-        print("Starting simple titration...")
-        print(f"Target pH: {self._target_ph}")
-
-        while total_volume < max_volume:
-            # อ่านค่า pH
-            ph = self.read_ph()
-            self._data.append({'volume': total_volume, 'ph': ph})
-
-            print(f"Volume: {total_volume:.2f} mL, pH: {ph:.2f}")
-
-            # ตรวจสอบว่าถึง target หรือยัง
-            if abs(ph - self._target_ph) < 0.3:
-                print(f"Target reached at {total_volume:.2f} mL!")
-                break
-
-            # เติมสารไทแทรนต์
-            self.add_titrant(increment_ml)
-            total_volume += increment_ml
-
-            sleep_ms(2000)  # รอให้ pH เสถียร
-
-        return self._data
-
-    def deinit(self):
-        """ปิดการใช้งาน"""
-        self._pump.deinit()
-
-
-# ทดสอบ
-if __name__ == "__main__":
-    titrator = SimpleTitrator(target_ph=7.0)
-    data = titrator.run_simple_titration(increment_ml=0.5, max_volume=10)
-    titrator.deinit()
-```
+### ทักษะ OOP (OOP Skills) - 60 นาที
+- [ ] สร้าง child class ที่สืบทอดจาก parent class ได้
+- [ ] ใช้ `super().__init__()` ได้ถูกต้อง
+- [ ] สร้างคลาสที่ใช้ Composition ได้
+- [ ] ใช้ @property สำหรับ getter และ setter ได้
 
 ---
 
-## แบบฝึกหัด (Exercises)
+## ความรู้พื้นฐาน (Prerequisites)
 
-### แบบฝึกหัดที่ 1: สร้างคลาส TemperatureSensor
+### ความรู้ทางเคมี (Chemistry Knowledge)
+- หลักการไทเทรตกรด-เบส (Acid-base titration)
+- สมการ Nernst: E = E0 - (2.303RT/nF) x pH
+- การใช้สารละลายกันชนมาตรฐาน (Standard buffer solutions)
+- ความหมายของจุดสมมูล (Equivalence point) และจุดยุติ (Endpoint)
 
-สร้างคลาส `TemperatureSensor` ที่สืบทอดจาก `BaseSensor`:
-
-```python
-class TemperatureSensor(BaseSensor):
-    """
-    เซ็นเซอร์อุณหภูมิ DS18B20
-    ต้อง implement:
-    - __init__() พร้อมเรียก super().__init__()
-    - read_raw() - override
-    - read_celsius() - อ่านอุณหภูมิเป็นเซลเซียส
-    - read_fahrenheit() - อ่านอุณหภูมิเป็นฟาเรนไฮต์
-    """
-    pass
-```
-
-### แบบฝึกหัดที่ 2: เพิ่ม Calibration ให้ pHSensor
-
-เพิ่ม methods สำหรับการสอบเทียบ 3 จุดให้คลาส pHSensor:
-
-```python
-def add_calibration_point(self, buffer_ph, voltage):
-    """เพิ่มจุดสอบเทียบ"""
-    pass
-
-def calculate_calibration(self):
-    """คำนวณ slope, intercept, r_squared"""
-    pass
-
-def validate_calibration(self):
-    """ตรวจสอบว่า R-squared >= 0.99"""
-    pass
-```
-
-### แบบฝึกหัดที่ 3: สร้าง DataLogger
-
-สร้างคลาส `DataLogger` ที่ใช้ Composition:
-
-```python
-class DataLogger:
-    """
-    บันทึกข้อมูลการทดลอง
-    Composition: มี list สำหรับเก็บข้อมูล
-
-    Methods:
-    - add_data(volume, ph, temperature)
-    - save_to_csv(filename)
-    - get_statistics() - คืน mean, std, min, max
-    """
-    pass
-```
+### ความรู้จาก Week 1 (Week 1 Knowledge)
+- Python พื้นฐาน: Variables/ตัวแปร, Functions/ฟังก์ชัน, Loops/ลูป
+- การสร้าง Class และ Object เบื้องต้น
+- การทำงานกับ GPIO, ADC, PWM บน ESP32
+- การอ่าน/เขียนไฟล์
 
 ---
 
 ## การเชื่อมต่อกับ Week 3 (Connection to Week 3)
 
-### Week 3 Preview: Full OOP Modular System
+Week 3 นำค่าสอบเทียบจาก Week 2 มาใช้ในระบบไทเทรตอัตโนมัติ:
 
-Week 3 จะนำแนวคิดจาก Week 2 มาสร้างระบบที่สมบูรณ์:
-
-```
-Week_3/
-|
-|-- main.py                 # Entry point
-|-- config.py               # GPIO และค่าคงที่
-|
-|-- hardware/               # Hardware Layer (Composition)
-|   |-- pump.py             # คลาส Pump (จาก Week 2)
-|   |-- ph_sensor.py        # คลาส pHSensor (จาก Week 2)
-|   |-- temp_sensor.py      # คลาส TemperatureSensor
-|   |-- display.py          # คลาส Display
-|   |-- buttons.py          # คลาส Buttons
-|
-|-- core/                   # Business Logic Layer
-|   |-- calibrator.py       # การสอบเทียบ
-|   |-- titration.py        # การไทเทรต
-|
-|-- modes/                  # Mode Layer (Inheritance)
-|   |-- base_mode.py        # คลาสแม่ BaseMode
-|   |-- mode_calibrate_ph.py    # สืบทอดจาก BaseMode
-|   |-- mode_test_ph.py         # สืบทอดจาก BaseMode
-|   |-- mode_titration.py       # สืบทอดจาก BaseMode
-|
-|-- ui/                     # UI Layer
-    |-- menu.py             # State Machine
-```
-
-### หลักการที่จะเรียนเพิ่มใน Week 3
-
-| หัวข้อ | รายละเอียด |
-|--------|-------------|
-| **Abstract Base Class** | BaseMode บังคับให้คลาสลูก implement methods |
-| **State Machine** | MenuSystem จัดการสถานะของโปรแกรม |
-| **Dependency Injection** | ส่ง hardware objects ผ่าน constructor |
-| **Modular Design** | แยกโค้ดเป็นโมดูลย่อยๆ ที่จัดการได้ง่าย |
+| Week 2 | Week 3 |
+|--------|--------|
+| ค่า slope, intercept จาก `data_calibrate.txt` | ใช้ใน pHSensor class เพื่อแปลง mV เป็น pH |
+| ค่า flow_rate จาก `data_flowrate.txt` | ใช้ใน Pump class เพื่อคำนวณปริมาตร |
+| Inheritance concept | ขยายเป็น BaseMode สำหรับ mode ต่างๆ |
+| Composition concept | ขยายเป็น TitrationSystem ที่รวมทุกอุปกรณ์ |
 
 ---
 
-## ตารางสรุป OOP Concepts
+## ตารางสรุปแนวคิด OOP
 
 | แนวคิด | Syntax | เปรียบเทียบเคมี | ตัวอย่างใน Week 2 |
 |--------|--------|-----------------|-------------------|
@@ -920,18 +474,14 @@ Week_3/
 ## อ้างอิง (References)
 
 ### เอกสารทางเคมี
-- หลักการ Nernst equation และ pH measurement
-- 3-point calibration methodology
-- Titration theory and equivalence point detection
+- สมการ Nernst และการวัด pH
+- วิธีการสอบเทียบ 3 จุด (3-point calibration methodology)
+- หลักการไทเทรตและการหาจุดสมมูล
 
 ### เอกสาร MicroPython
 - [MicroPython Documentation](https://docs.micropython.org/)
 - [ESP32 ADC Reference](https://docs.micropython.org/en/latest/esp32/quickref.html#adc-analog-to-digital-conversion)
 - [ESP32 PWM Reference](https://docs.micropython.org/en/latest/esp32/quickref.html#pwm-pulse-width-modulation)
-
-### เอกสาร Python OOP
-- [Python Classes Tutorial](https://docs.python.org/3/tutorial/classes.html)
-- [Property Decorator](https://docs.python.org/3/library/functions.html#property)
 
 ---
 
@@ -943,21 +493,21 @@ Week_3/
 - Sumrit Wacharasindhu
 - Viwat Vchirawongkwin
 
-**รายวิชา:** 2302311 Analytical Chemistry Laboratory
-**สถาบัน:** Chulalongkorn University
+**รายวิชา:** 2302311 Integrated Chemistry Laboratory I
+**สถาบัน:** ภาควิชาเคมี คณะวิทยาศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย / Department of Chemistry, Faculty of Science, Chulalongkorn University
 
 ---
 
 ## เวอร์ชัน (Version)
 
-**Version 1.0.0** - Week 2: Intermediate OOP
+**Version 2.0.0** - Week 2: pH and Pump Calibration
 
 การเรียนรู้หลัก:
-- Inheritance และ super()
-- Method overriding
-- Composition (has-a relationship)
-- @property decorator
-- Encapsulation กับ private attributes
+- การสอบเทียบเซ็นเซอร์ pH ด้วยสมการ Nernst และ Linear Regression
+- การสอบเทียบอัตราการไหลของปั๊มและการตรวจสอบความแม่นยำ
+- ทักษะ OOP (Inheritance, Composition, @property) เป็นเครื่องมือสนับสนุน
+
+**เวลาที่ใช้ทั้งหมด:** ประมาณ 3 ชั่วโมง
 
 ---
 
