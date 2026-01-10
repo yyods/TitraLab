@@ -3,6 +3,247 @@
 
 ---
 
+## สารบัญ (Table of Contents)
+
+1. [เริ่มต้นที่นี่ (Quick Start)](#เริ่มต้นที่นี่-quick-start)
+2. [สถาปัตยกรรมระบบ (System Architecture)](#สถาปัตยกรรมระบบ-system-architecture)
+3. [ความรู้พื้นฐานจาก Week 1-2 (Prerequisites from Week 1-2)](#ความรู้พื้นฐานจาก-week-1-2-prerequisites-from-week-1-2)
+4. [วัตถุประสงค์ (Objectives)](#วัตถุประสงค์-objectives)
+5. [ความรู้พื้นฐาน (Prerequisites)](#ความรู้พื้นฐาน-prerequisites)
+6. [แนวคิดหลัก (Key Concepts)](#แนวคิดหลัก-key-concepts)
+7. [โครงสร้างโฟลเดอร์ (Directory Structure)](#โครงสร้างโฟลเดอร์-directory-structure)
+8. [การกำหนดขา GPIO (Hardware Configuration)](#การกำหนดขา-gpio-hardware-configuration)
+9. [โหมดการทำงาน 6 โหมด (The 6 Operating Modes)](#โหมดการทำงาน-6-โหมด-the-6-operating-modes)
+10. [แผนภาพคลาส (Class Diagram)](#แผนภาพคลาส-class-diagram)
+11. [คำอธิบายไฟล์สำคัญ (File Descriptions)](#คำอธิบายไฟล์สำคัญ-file-descriptions)
+12. [คู่มือเริ่มต้นใช้งาน (Quick Start Guide)](#คู่มือเริ่มต้นใช้งาน-quick-start-guide)
+13. [การแก้ไขปัญหา (Troubleshooting)](#การแก้ไขปัญหา-troubleshooting)
+14. [โค้ดตัวอย่าง (Example Code)](#โค้ดตัวอย่าง-example-code)
+15. [อ้างอิง (References)](#อ้างอิง-references)
+
+---
+
+## เริ่มต้นที่นี่ (Quick Start)
+
+> **สำหรับนักศึกษาที่ต้องการเริ่มต้นเร็ว** (For students who want to start quickly)
+
+### ขั้นตอนที่ 1: ตรวจสอบความพร้อม (Check Prerequisites)
+
+ก่อนเริ่ม Week 3 ตรวจสอบว่าคุณมีความรู้เหล่านี้จาก Week 1-2:
+
+| หัวข้อ | ที่มา | ตรวจสอบตัวเอง |
+|--------|-------|---------------|
+| ควบคุม LED ด้วย GPIO | Week 1 | `led.on()`, `led.off()` ทำงานได้ |
+| อ่านค่า ADC จากเซ็นเซอร์ | Week 1 | เข้าใจ `adc.read()` ค่า 0-4095 |
+| ควบคุม PWM | Week 1 | เข้าใจ duty cycle 0-1023 |
+| อ่านค่า pH และ calibration | Week 2 | สร้างสมการ `pH = slope * mV + intercept` |
+| ควบคุมปั๊มและ flow rate | Week 2 | คำนวณ `flow_rate (mL/s)` |
+| OOP พื้นฐาน (Class, Object) | Week 1-2 | สร้าง class และ object ได้ |
+
+### ขั้นตอนที่ 2: อัปโหลดไฟล์ทั้งหมด (Upload All Files)
+
+```bash
+# ใช้ Thonny IDE อัปโหลดโฟลเดอร์ Week_3 ทั้งหมดไปยัง ESP32
+# Upload entire Week_3 folder to ESP32 using Thonny IDE
+```
+
+### ขั้นตอนที่ 3: รันโปรแกรม (Run the Program)
+
+```python
+# ใน Thonny หรือ REPL
+>>> import main
+>>> main.main()
+```
+
+### ขั้นตอนที่ 4: ใช้งานเมนู (Use the Menu)
+
+```
++----------------------------------+
+|          TitraLab Menu           |
++----------------------------------+
+| > 1. Calibrate pH Sensor         |
+|   2. pH Sensor Test              |
+|   3. Calibrate Flow Rate         |
+|   4. Flow Rate Test              |
+|   5. Purge                       |
+|   6. Full Auto Titration         |
++----------------------------------+
+|  [UP/DOWN] Navigate  [SEL] Enter |
+|  Hold DOWN 3s to exit            |
++----------------------------------+
+```
+
+### เส้นทางการเรียนรู้ (Learning Path)
+
+```
+1. เริ่มจาก main.py         → ดูภาพรวมการทำงาน
+2. ศึกษา config.py          → เข้าใจการตั้งค่า GPIO
+3. ศึกษา hardware/          → เรียนรู้ Hardware Abstraction Layer
+4. ศึกษา core/              → เข้าใจ Logic และ Math
+5. ศึกษา modes/             → ดูการทำงานแต่ละโหมด
+6. ศึกษา ui/                → เรียนรู้ State Machine
+```
+
+> **ดูรายละเอียดเพิ่มเติม**: อ่าน [LEARNING_PATH.md](LEARNING_PATH.md) สำหรับคู่มือการเรียนรู้ทีละขั้นตอน
+
+---
+
+## สถาปัตยกรรมระบบ (System Architecture)
+
+Week 3 ใช้สถาปัตยกรรมแบบ **4 ชั้น (4-Layer Architecture)** เพื่อจัดระเบียบโค้ดและทำให้ง่ายต่อการบำรุงรักษา
+
+### แผนภาพสถาปัตยกรรม (Architecture Diagram)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         MAIN APPLICATION                                 │
+│                           main.py                                        │
+│                     (Entry Point/จุดเริ่มต้น)                            │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 4: USER INTERFACE (UI)                                ui/        │
+│  ┌─────────────────────┐  ┌─────────────────────────────────────────┐  │
+│  │    MenuSystem       │  │           State Machine                  │  │
+│  │  menu.py            │  │  MAIN_MENU → MODE_RUNNING → RESULT      │  │
+│  └─────────────────────┘  └─────────────────────────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                         screens.py                               │   │
+│  │     BaseScreen, MainMenuScreen, CalibrationScreen, etc.          │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 3: OPERATING MODES                                   modes/      │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                      BaseMode (Abstract)                          │  │
+│  │              on_enter() → update() → on_exit()                    │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│         │           │           │           │           │              │
+│         ▼           ▼           ▼           ▼           ▼              │
+│  ┌──────────┐┌──────────┐┌──────────┐┌──────────┐┌──────────┐         │
+│  │Calibrate ││ Test pH  ││Calibrate ││  Purge   ││Titration │         │
+│  │   pH     ││          ││  Flow    ││          ││          │         │
+│  │ Mode 1   ││ Mode 2   ││ Mode 3-4 ││ Mode 5   ││ Mode 6   │         │
+│  └──────────┘└──────────┘└──────────┘└──────────┘└──────────┘         │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 2: CORE LOGIC                                        core/       │
+│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌────────────┐  │
+│  │  Calibrator   │ │  math_utils   │ │ DataManager   │ │ Titration  │  │
+│  │               │ │               │ │               │ │ Controller │  │
+│  │ - pH calibr.  │ │ - Linear Reg. │ │ - Save/Load   │ │ - Auto     │  │
+│  │ - Flow calibr.│ │ - Statistics  │ │ - File I/O    │ │ - Detect   │  │
+│  └───────────────┘ └───────────────┘ └───────────────┘ └────────────┘  │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  LAYER 1: HARDWARE ABSTRACTION                              hardware/   │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────────┐ │
+│  │  Pump  │ │pH Sensor│ │Temp    │ │Display │ │Buttons │ │   Buzzer   │ │
+│  │        │ │        │ │Sensor  │ │        │ │        │ │            │ │
+│  │ GPIO21 │ │ GPIO25 │ │ GPIO16 │ │  SPI1  │ │ 34,35, │ │   GPIO22   │ │
+│  │  PWM   │ │  ADC   │ │OneWire │ │ILI9341 │ │   39   │ │    PWM     │ │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────────┘ │
+│  ┌────────┐ ┌─────────────────────────────────────────────────────────┐ │
+│  │  LEDs  │ │                        SD Card                          │ │
+│  │GPIO2,4 │ │                    GPIO 5,18,19,23                      │ │
+│  └────────┘ └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          ESP32 Hardware                                  │
+│                    (Physical TitraLab Board)                            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### คำอธิบายแต่ละชั้น (Layer Descriptions)
+
+| ชั้น (Layer) | โฟลเดอร์ | หน้าที่ | ไฟล์สำคัญ |
+|:------------:|----------|---------|-----------|
+| **Layer 4** | `ui/` | จัดการส่วนติดต่อผู้ใช้ และ State Machine | `menu.py`, `screens.py` |
+| **Layer 3** | `modes/` | กำหนดพฤติกรรมของแต่ละโหมดการทำงาน | `base_mode.py`, `mode_*.py` |
+| **Layer 2** | `core/` | Logic ทางคณิตศาสตร์ และการจัดการข้อมูล | `calibrator.py`, `math_utils.py` |
+| **Layer 1** | `hardware/` | ห่อหุ้มการเข้าถึง Hardware ทั้งหมด | `pump.py`, `ph_sensor.py`, etc. |
+
+### ข้อดีของสถาปัตยกรรมนี้ (Benefits of This Architecture)
+
+1. **Separation of Concerns/การแยกความรับผิดชอบ**: แต่ละชั้นทำหน้าที่เฉพาะทาง
+2. **Reusability/ใช้ซ้ำได้**: คลาสใน hardware/ สามารถนำไปใช้ในโปรเจกต์อื่น
+3. **Testability/ทดสอบได้**: สามารถ mock hardware layer เพื่อทดสอบ logic
+4. **Maintainability/บำรุงรักษาง่าย**: แก้ไขชั้นใดชั้นหนึ่งโดยไม่กระทบชั้นอื่น
+
+---
+
+## ความรู้พื้นฐานจาก Week 1-2 (Prerequisites from Week 1-2)
+
+### จาก Week 1: พื้นฐาน Hardware และ OOP
+
+```python
+# สิ่งที่นักศึกษาต้องรู้จาก Week 1
+# What students should know from Week 1
+
+# 1. ควบคุม LED (GPIO Digital Output)
+led = LED(2)
+led.on()
+led.off()
+
+# 2. อ่านปุ่มกด (GPIO Digital Input)
+button = Button(34)
+if button.is_pressed():
+    print("Button pressed!")
+
+# 3. อ่านค่า ADC (Analog Input)
+adc = ADC(Pin(25))
+adc.atten(ADC.ATTN_11DB)
+raw = adc.read()  # 0-4095
+voltage = raw / 4095 * 3.3
+
+# 4. ควบคุม PWM (Analog-like Output)
+pwm = PWM(Pin(21), freq=1000)
+pwm.duty(512)  # 50% duty cycle
+```
+
+### จาก Week 2: การสอบเทียบและการวัด pH
+
+```python
+# สิ่งที่นักศึกษาต้องรู้จาก Week 2
+# What students should know from Week 2
+
+# 1. สมการสอบเทียบ pH (pH Calibration Equation)
+# pH = slope * voltage + intercept
+# slope และ intercept ได้จาก Linear Regression
+
+# 2. การคำนวณ Flow Rate
+# flow_rate = volume / time  (mL/s)
+
+# 3. Linear Regression
+# y = mx + b
+# m = covariance(x,y) / variance(x)
+# b = mean(y) - m * mean(x)
+# R² = 1 - (SS_res / SS_tot)
+```
+
+### ความเชื่อมโยงกับ Week 3 (Connection to Week 3)
+
+| Week 1-2 | Week 3 | การพัฒนาต่อ |
+|----------|--------|-------------|
+| `LED` class พื้นฐาน | `LEDManager` | รวม LED หลายดวงเข้าด้วยกัน |
+| `Button` class | `ButtonManager` | จัดการปุ่มหลายปุ่มพร้อม debounce |
+| `ADC.read()` | `PHSensor` class | ห่อหุ้มการอ่านค่าพร้อม calibration |
+| `PWM.duty()` | `Pump` class | ควบคุมปั๊มพร้อมคำนวณปริมาตร |
+| Calibration script | `Calibrator` class | รวม pH และ flow calibration |
+| - | `BaseMode` | Abstract class สำหรับทุกโหมด |
+| - | `MenuSystem` | State Machine สำหรับนำทาง |
+
+---
+
 ## วัตถุประสงค์ (Objectives)
 
 หลังจากเรียนจบบทเรียนนี้ นักศึกษาจะสามารถ:
