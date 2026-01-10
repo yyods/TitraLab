@@ -41,6 +41,30 @@
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### เส้นทางการเรียนรู้ TitraLab (TitraLab Learning Path)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    TitraLab Learning Path                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Week 1                   Week 2                   Week 3          │
+│   ┌─────────────┐         ┌─────────────┐         ┌─────────────┐  │
+│   │ พื้นฐาน     │  ──►   │ การสอบเทียบ  │  ──►   │ ระบบเต็ม    │  │
+│   │ Hardware    │         │ Calibration │         │ Full System │  │
+│   ├─────────────┤         ├─────────────┤         ├─────────────┤  │
+│   │ LED/Button  │         │ pH Sensor   │         │ Titration   │  │
+│   │ ADC/PWM     │         │ Pump Flow   │         │ Loop        │  │
+│   │ Display     │         │ OOP ขั้นกลาง │         │ Data Log    │  │
+│   │ OOP พื้นฐาน  │         │ Inheritance │         │ Menu System │  │
+│   └─────────────┘         └─────────────┘         └─────────────┘  │
+│                                                                     │
+│   ความซับซ้อน: ง่าย ─────────────────────────────────────► ยาก    │
+│   Complexity:  Simple ──────────────────────────────────► Complex │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## วัตถุประสงค์การเรียนรู้ (Learning Objectives)
@@ -94,24 +118,26 @@ Digital (0/1) → Analog (0-4095)
 |:--------:|--------|------|:----:|
 | **ชั่วโมงที่ 1** | **Digital I/O พื้นฐาน** | | **60 นาที** |
 | 0:00-0:15 | แนะนำ TitraLab: ส่วนประกอบและเป้าหมาย | - | 15 นาที |
-| 0:15-0:35 | **LED (Digital Output)**: เปิด/ปิด | `core/02_led_class.py` | 20 นาที |
+| 0:15-0:35 | **LED (Digital Output)**: เปิด/ปิด | `core/01_led_class.py` | 20 นาที |
 | | *→ เคมี: แสดงสถานะ (เขียว = กำลังทำงาน, แดง = ถึงจุดสมมูล)* | | |
-| 0:35-0:50 | **Button (Digital Input)**: กด/ไม่กด | `core/03_button_class.py` | 15 นาที |
+| 0:35-0:50 | **Button (Digital Input)**: กด/ไม่กด | `core/02_button_class.py` | 15 นาที |
 | | *→ เคมี: ควบคุมการไทเทรต (เริ่ม/หยุด/ยืนยัน)* | | |
 | 0:50-1:00 | **พัก (Break)** | - | 10 นาที |
 | **ชั่วโมงที่ 2** | **Analog I/O สำหรับเซ็นเซอร์/ปั๊ม** | | **60 นาที** |
-| 1:00-1:25 | **ADC (Analog Input)**: อ่านค่า 0-4095 | `core/07_ADC/01_adc_basics.py`, `02_adc_averaging.py` | 25 นาที |
+| 1:00-1:20 | **ADC (Analog Input)**: อ่านค่า 0-4095 | `core/03_adc_ph_basics.py` | 20 นาที |
 | | *→ เคมี: เซ็นเซอร์ pH อ่านแรงดัน แปลงเป็น pH ด้วยสมการ Nernst* | | |
-| 1:25-1:45 | **PWM (Analog-like Output)**: Duty cycle | `core/07_PWM/01_pwm_led_brightness.py`, `04_pwm_pump_preview.py` | 20 นาที |
+| 1:20-1:35 | **PWM (Analog-like Output)**: Duty cycle | `core/04_pwm_pump_basics.py` | 15 นาที |
 | | *→ เคมี: ควบคุมความเร็วปั๊ม (เร็วตอนเริ่ม, ช้าใกล้จุดสมมูล)* | | |
-| 1:45-1:55 | **เซ็นเซอร์อุณหภูมิ**: ชดเชย Nernst | `core/04_temp_sensor_class.py` | 10 นาที |
+| 1:35-1:50 | **ADC+PWM รวมกัน**: Pot -> LED Dimming | `core/05_pot_led_dimming.py` | 15 นาที |
+| | *→ เตรียมพร้อม: pH Sensor (ADC) -> Pump Speed (PWM)* | | |
+| 1:50-1:55 | **เซ็นเซอร์อุณหภูมิ**: ชดเชย Nernst | `core/06_temp_sensor_class.py` | 5 นาที |
 | | *→ เคมี: ความชัน Nernst เปลี่ยนตามอุณหภูมิ (59.16 mV ที่ 25°C)* | | |
 | 1:55-2:00 | **พัก (Break)** | - | 5 นาที |
 | **ชั่วโมงที่ 3** | **จอแสดงผล, OOP และการรวมระบบ** | | **60 นาที** |
-| 2:00-2:20 | **จอ TFT**: แสดง pH และกราฟ | `core/05_display_basics.py` | 20 นาที |
-| 2:20-2:40 | **OOP พื้นฐาน**: Class และ Object | `core/01_intro_oop.py` | 20 นาที |
+| 2:00-2:20 | **จอ TFT**: แสดง pH และกราฟ | `core/07_display_basics.py` | 20 นาที |
+| 2:20-2:40 | **OOP พื้นฐาน**: Class และ Object | `core/08_intro_oop.py` | 20 นาที |
 | | *→ เปรียบเทียบ: Class = พิมพ์เขียวบีกเกอร์, Object = บีกเกอร์จริงแต่ละใบ* | | |
-| 2:40-2:55 | **ตัวอย่างรวม**: Lab Alert System | `core/06_combined_example.py` | 15 นาที |
+| 2:40-2:55 | **ตัวอย่างรวม**: Lab Alert System | `core/09_combined_example.py` | 15 นาที |
 | 2:55-3:00 | สรุปและเชื่อมโยงกับ Week 2 (การสอบเทียบ) | - | 5 นาที |
 
 ### ทำไมต้องเรียน LED/Button ก่อน ADC/PWM?
@@ -131,25 +157,16 @@ Digital (0/1) → Analog (0-4095)
 
 ```
 Week_1/
-├── core/                               # [หลัก] ไฟล์สำหรับสอนในห้องเรียน
-│   ├── 01_intro_oop.py                 # บทนำ OOP (ตัวอย่างคลาส Beaker)
-│   ├── 02_led_class.py                 # คลาส LED - แสดงสถานะการไทเทรต
-│   ├── 03_button_class.py              # คลาส Button - ควบคุมการไทเทรต
-│   ├── 04_temp_sensor_class.py         # คลาส TemperatureSensor - สมการ Nernst
-│   ├── 05_display_basics.py            # พื้นฐานจอ TFT Display
-│   ├── 06_combined_example.py          # ตัวอย่างรวม Lab Alert System
-│   │
-│   ├── 07_ADC/                         # [สำคัญ] พื้นฐาน ADC สำหรับเซ็นเซอร์ pH
-│   │   ├── 01_adc_basics.py            # อ่านค่า ADC จาก Potentiometer
-│   │   ├── 02_adc_averaging.py         # การหาค่าเฉลี่ย (ลด noise)
-│   │   └── 03_adc_attenuation.py       # ตั้งค่าช่วงแรงดัน (ATTN_11DB)
-│   │
-│   ├── 07_PWM/                         # [สำคัญ] พื้นฐาน PWM สำหรับควบคุมปั๊ม
-│   │   ├── 01_pwm_led_brightness.py    # Duty cycle กับความสว่าง LED
-│   │   ├── 02_pwm_led_fade.py          # Fade in/out
-│   │   ├── 03_pwm_frequency.py         # ความถี่ PWM
-│   │   └── 04_pwm_pump_preview.py      # ตัวอย่างควบคุมปั๊ม
-│   │
+├── core/                               # [หลัก] ไฟล์สำหรับสอนในห้องเรียน (เรียงตามลำดับการสอน)
+│   ├── 01_led_class.py                 # ชม.1: คลาส LED - แสดงสถานะการไทเทรต
+│   ├── 02_button_class.py              # ชม.1: คลาส Button - ควบคุมการไทเทรต
+│   ├── 03_adc_ph_basics.py             # ชม.2: พื้นฐาน ADC สำหรับเซ็นเซอร์ pH
+│   ├── 04_pwm_pump_basics.py           # ชม.2: พื้นฐาน PWM สำหรับควบคุมปั๊ม
+│   ├── 05_pot_led_dimming.py           # ชม.2: Pot (ADC) -> LED (PWM) รวมกัน
+│   ├── 06_temp_sensor_class.py         # ชม.2: คลาส TemperatureSensor - สมการ Nernst
+│   ├── 07_display_basics.py            # ชม.3: พื้นฐานจอ TFT Display
+│   ├── 08_intro_oop.py                 # ชม.3: บทนำ OOP (ตัวอย่างคลาส Beaker)
+│   ├── 09_combined_example.py          # ชม.3: ตัวอย่างรวม Lab Alert System
 │   ├── ex_status_led.py                # แบบฝึกหัด: คลาส StatusLED
 │   └── README.md                       # คู่มือโฟลเดอร์ core
 │
@@ -157,7 +174,10 @@ Week_1/
 │   ├── 01_procedural/                  # ตัวอย่างแบบ Procedural (ไม่ใช้ OOP)
 │   │   ├── 01_basic.py                 # LED พื้นฐาน
 │   │   ├── 02_toggle.py                # สลับ LED
+│   │   ├── 02_basic_loop.py            # LED กระพริบใน loop
+│   │   ├── 03_twoLed.py                # ควบคุม LED 2 ดวง
 │   │   ├── 03_Potentiometer.py         # อ่านค่า ADC
+│   │   ├── 04_twoLed_infiniteLoop.py   # LED 2 ดวงใน infinite loop
 │   │   └── 04_PWM_OUT.py               # PWM ควบคุม LED
 │   ├── 02_advanced_oop/                # OOP ขั้นสูง
 │   ├── 03_exercises/                   # แบบฝึกหัดพร้อมเฉลย
@@ -167,12 +187,16 @@ Week_1/
 │   │   ├── DS18B20/                    # เซ็นเซอร์อุณหภูมิ
 │   │   ├── SDCard/                     # SD Card - บันทึกข้อมูล
 │   │   └── TFT/                        # จอ TFT - แสดง pH และกราฟ
-│   └── 05_reference/                   # เอกสารอ้างอิง
+│   ├── 05_reference/                   # เอกสารอ้างอิง
+│   └── archive/                        # [เก็บถาวร] ตัวอย่าง ADC/PWM แบบละเอียด
+│       ├── 07_ADC/                     # ตัวอย่าง ADC หลายไฟล์
+│       └── 07_PWM/                     # ตัวอย่าง PWM หลายไฟล์
 │
 ├── lib/                                # ไลบรารีที่จำเป็น (อัปโหลดไปยัง ESP32)
 │   ├── ili9341.py                      # ไดรเวอร์จอ TFT
 │   ├── xglcd_font.py                   # ไลบรารีแสดงฟอนต์
-│   └── sdcard.py                       # ไลบรารี SD Card
+│   ├── sdcard.py                       # ไลบรารี SD Card
+│   └── titralab_simple.py              # คลาสพื้นฐาน TitraLab (LED, Button, etc.)
 │
 ├── fonts/                              # ไฟล์ฟอนต์ (อัปโหลดไปยัง ESP32)
 │   ├── ArcadePix9x11.c                 # ฟอนต์เล็ก
@@ -186,14 +210,15 @@ Week_1/
 
 | ชั่วโมง | หัวข้อ | ไฟล์หลัก | ไฟล์เสริม |
 |:------:|--------|----------|-----------|
-| **1** | LED | `core/02_led_class.py` | `extras/01_procedural/01_basic.py` |
-| **1** | Button | `core/03_button_class.py` | `extras/01_procedural/02_toggle.py` |
-| **2** | ADC | `core/07_ADC/01_adc_basics.py` | `extras/01_procedural/03_Potentiometer.py` |
-| **2** | PWM | `core/07_PWM/01_pwm_led_brightness.py` | `extras/01_procedural/04_PWM_OUT.py` |
-| **2** | Temperature | `core/04_temp_sensor_class.py` | `extras/04_hardware/DS18B20/` |
-| **3** | TFT Display | `core/05_display_basics.py` | `extras/04_hardware/TFT/` |
-| **3** | OOP | `core/01_intro_oop.py` | - |
-| **3** | Combined | `core/06_combined_example.py` | - |
+| **1** | LED | `core/01_led_class.py` | `extras/01_procedural/01_basic.py` |
+| **1** | Button | `core/02_button_class.py` | `extras/01_procedural/02_toggle.py` |
+| **2** | ADC | `core/03_adc_ph_basics.py` | `extras/01_procedural/03_Potentiometer.py` |
+| **2** | PWM | `core/04_pwm_pump_basics.py` | `extras/01_procedural/04_PWM_OUT.py` |
+| **2** | ADC+PWM | `core/05_pot_led_dimming.py` | - |
+| **2** | Temperature | `core/06_temp_sensor_class.py` | `extras/04_hardware/DS18B20/` |
+| **3** | TFT Display | `core/07_display_basics.py` | `extras/04_hardware/TFT/` |
+| **3** | OOP | `core/08_intro_oop.py` | - |
+| **3** | Combined | `core/09_combined_example.py` | - |
 
 ---
 
@@ -389,7 +414,7 @@ Thonny เป็น IDE (Integrated Development Environment/สภาพแว�
 ### ขั้นตอนที่ 5: เปิดไฟล์โค้ด (Open the code file)
 
 1. ไปที่ **File > Open** (Ctrl+O)
-2. นำทางไปยัง `Week_1/core/01_intro_oop.py`
+2. นำทางไปยัง `Week_1/core/01_led_class.py`
 3. เปิดไฟล์
 
 ### ขั้นตอนที่ 6: รันโค้ด (Run the code)
@@ -397,17 +422,20 @@ Thonny เป็น IDE (Integrated Development Environment/สภาพแว�
 1. คลิกปุ่ม **Run** (สีเขียว) หรือกด **F5**
 2. ดูผลลัพธ์ใน Shell panel:
    ```
-   === OOP Basics Demo ===
-   Creating Beaker objects...
-   Beaker A: 250 mL (contains HCl)
+   ==================================================
+   ทดสอบคลาส LED - จำลองสถานะระบบไทเทรชัน
+   LED Class Test - Simulate Titration System Status
+   ==================================================
+   LED 'Red-Error' พร้อมใช้งานที่ GPIO2 (ready)
+   LED 'Green-Status' พร้อมใช้งานที่ GPIO4 (ready)
    ...
    ```
 
 ### ขั้นตอนที่ 7: ลองแก้ไขโค้ด (Try modifying the code)
 
-1. ลองเปลี่ยนค่าใน Beaker เช่น:
+1. ลองเปลี่ยนจำนวนครั้งกระพริบ เช่น:
    ```python
-   beaker_c = Beaker(100, "NaOH")  # เพิ่ม beaker ใหม่
+   led_green.blink(5, 0.2)  # กระพริบ 5 ครั้ง
    ```
 2. กด **F5** เพื่อรันใหม่
 3. สังเกตผลลัพธ์ที่เปลี่ยนไป
@@ -916,37 +944,42 @@ class TemperatureSensor:
 **ไฟล์หลักสำหรับการสอน (Core Teaching Files):**
 | ไฟล์ | คำอธิบาย | บทบาทในการไทเทรต |
 |------|----------|------------------|
-| `core/02_led_class.py` | คลาส LED | แสดงสถานะ: เขียว = กำลังทำงาน, แดง = ถึงจุดสมมูล |
-| `core/03_button_class.py` | คลาส Button พร้อม debounce | ควบคุมการเริ่ม/หยุด/ยืนยัน |
-| `core/04_temp_sensor_class.py` | คลาส TemperatureSensor | ชดเชยอุณหภูมิในสมการ Nernst |
-| `core/05_display_basics.py` | พื้นฐานจอ TFT | แสดง pH, กราฟ, เมนู |
-| `core/01_intro_oop.py` | บทนำ OOP (คลาส Beaker) | เข้าใจ Class/Object |
-| `core/06_combined_example.py` | ตัวอย่างรวม Lab Alert | รวมทุก concept |
+| `core/01_led_class.py` | คลาส LED | แสดงสถานะ: เขียว = กำลังทำงาน, แดง = ถึงจุดสมมูล |
+| `core/02_button_class.py` | คลาส Button พร้อม debounce | ควบคุมการเริ่ม/หยุด/ยืนยัน |
+| `core/06_temp_sensor_class.py` | คลาส TemperatureSensor | ชดเชยอุณหภูมิในสมการ Nernst |
+| `core/07_display_basics.py` | พื้นฐานจอ TFT | แสดง pH, กราฟ, เมนู |
+| `core/08_intro_oop.py` | บทนำ OOP (คลาส Beaker) | เข้าใจ Class/Object |
+| `core/09_combined_example.py` | ตัวอย่างรวม Lab Alert | รวมทุก concept |
 
 **ไฟล์สำคัญ: ADC และ PWM (Important: ADC and PWM):**
 | ไฟล์ | คำอธิบาย | เตรียมพร้อมสำหรับ |
 |------|----------|------------------|
-| `07_ADC/01_adc_basics.py` | อ่านค่า ADC 0-4095 | เซ็นเซอร์ pH ใน Week 2 |
-| `07_ADC/02_adc_averaging.py` | การหาค่าเฉลี่ย (ลด noise) | ความแม่นยำการวัด pH |
-| `07_PWM/01_pwm_led_brightness.py` | Duty cycle กับความสว่าง | ความเร็วปั๊มใน Week 2 |
-| `07_PWM/04_pwm_pump_preview.py` | ตัวอย่างควบคุมปั๊ม | การไทเทรต Week 3 |
+| `core/03_adc_ph_basics.py` | ADC 0-4095, สมการ Nernst | เซ็นเซอร์ pH ใน Week 2-3 |
+| `core/04_pwm_pump_basics.py` | PWM Duty cycle, กลยุทธ์ไทเทรชัน | ควบคุมปั๊มใน Week 3 |
+| `core/05_pot_led_dimming.py` | ADC+PWM รวมกัน, value mapping | pH → Pump control loop |
 
 **ไฟล์เสริม (Supplementary Files):**
 | โฟลเดอร์ | คำอธิบาย |
 |----------|----------|
 | `extras/01_procedural/` | ตัวอย่างแบบ Procedural (ไม่ใช้ OOP) - เปรียบเทียบกับ OOP |
+| `extras/02_advanced_oop/` | ตัวอย่าง OOP ขั้นสูง - หลาย object, Buzzer class |
+| `extras/03_exercises/` | แบบฝึกหัดพร้อมเฉลย (starter และ solution) |
 | `extras/04_hardware/DS18B20/` | ตัวอย่างเซ็นเซอร์อุณหภูมิเพิ่มเติม |
 | `extras/04_hardware/TFT/` | ตัวอย่างจอ TFT เพิ่มเติม |
 | `extras/04_hardware/Buzzer/` | ตัวอย่าง Buzzer - แจ้งเตือนจุดสมมูล |
+| `extras/04_hardware/SDCard/` | ตัวอย่าง SD Card - บันทึกข้อมูลการไทเทรต |
 | `extras/04_hardware/DAC/` | [เสริม] พื้นฐาน DAC |
+| `extras/05_reference/` | เอกสารอ้างอิง - อธิบาย self, common mistakes |
+| `extras/archive/07_ADC/` | [เก็บถาวร] ตัวอย่าง ADC แบบละเอียด |
+| `extras/archive/07_PWM/` | [เก็บถาวร] ตัวอย่าง PWM แบบละเอียด |
 
 ---
 
-## เชื่อมต่อสัปดาห์ที่ 2 (Connection to Week 2)
+## สรุปการเชื่อมต่อ Week 1 ไป Week 2 และ Week 3 (Summary: Week 1 to Week 2-3 Connections)
 
 ในสัปดาห์ที่ 2 นิสิตจะนำความรู้จาก Week 1 ไปใช้ในการ **สอบเทียบ (Calibration)**:
 
-### วัตถุประสงค์หลักของ Week 2: การสอบเทียบ
+### Week 1 -> Week 2: การสอบเทียบ (Calibration)
 
 | Week 1 (พื้นฐาน) | Week 2 (การประยุกต์ใช้) |
 |------------------|------------------------|
@@ -973,7 +1006,46 @@ Week 2: วัด flow rate 3-5 ครั้ง, คำนวณ %RSD
 ผลลัพธ์: flow_rate (mL/s), %RSD < 5%
 ```
 
-> **หมายเหตุ**: ดูรายละเอียดเพิ่มเติมที่หัวข้อ "เชื่อมต่อกับสัปดาห์ที่ 2: การประยุกต์ใช้ ADC และ PWM" ด้านบน
+> **หมายเหตุ**: ดูรายละเอียดทางเทคนิคเพิ่มเติมที่หัวข้อ "เชื่อมต่อกับสัปดาห์ที่ 2: การประยุกต์ใช้ ADC และ PWM" ด้านบน (หลังหัวข้อ DAC)
+
+### Week 1 -> Week 3: ระบบเต็มรูปแบบ (Full System)
+
+ในสัปดาห์ที่ 3 นิสิตจะรวมทุกสิ่งที่เรียนมาเพื่อสร้าง **ระบบไทเทรตอัตโนมัติแบบสมบูรณ์**:
+
+In Week 3, students integrate all knowledge to build a **complete automated titration system**:
+
+### โครงสร้างระบบ Week 3 (Week 3 System Architecture)
+
+```
+Week_3/
+├── main.py                 # จุดเริ่มต้นโปรแกรม
+├── config.py               # ค่าคงที่ระบบ (GPIO pins, etc.)
+├── hardware/               # Hardware abstraction layer
+│   ├── ph_sensor.py        # คลาส PHSensor (ADC จาก Week 1)
+│   ├── pump.py             # คลาส Pump (PWM จาก Week 1)
+│   ├── temp_sensor.py      # คลาส TempSensor (DS18B20)
+│   └── display.py          # คลาส Display (TFT)
+├── core/                   # Business logic
+│   ├── titration.py        # ลูปไทเทรตอัตโนมัติ
+│   ├── calibrator.py       # สอบเทียบ pH และ flow rate
+│   └── data_manager.py     # บันทึกข้อมูลลง SD Card
+├── modes/                  # โหมดการทำงาน (State pattern)
+│   ├── mode_titration.py   # โหมดไทเทรต
+│   └── mode_calibrate_*.py # โหมดสอบเทียบ
+└── ui/                     # User interface
+    └── menu.py             # ระบบเมนู
+```
+
+### การนำความรู้ Week 1 ไปใช้ใน Week 3 (Week 1 Knowledge in Week 3)
+
+| Week 1 (พื้นฐาน) | Week 3 (ระบบเต็มรูปแบบ) |
+|------------------|------------------------|
+| LED Class | `hardware/leds.py` - แสดงสถานะระบบ |
+| Button Class | `hardware/buttons.py` - ควบคุมเมนู/การไทเทรต |
+| ADC Basics | `hardware/ph_sensor.py` - อ่านและแปลงค่า pH |
+| PWM Basics | `hardware/pump.py` - ควบคุมปั๊มอัตโนมัติ |
+| TFT Display | `hardware/display.py` - แสดงผลและกราฟ |
+| OOP (Class/Object) | ทุกโมดูลใช้ OOP - Hardware Abstraction |
 
 ---
 
@@ -1047,11 +1119,15 @@ finally:
 |----------------------|----------------|----------|
 | pH | พีเอช | ค่าความเป็นกรด-เบส (-log[H+]) |
 | Titration | ไทเทรชัน | การไทเทรต - การหาปริมาณสารด้วยการเติมสารไทแทรนต์ |
-| Titrant | สารไทแทรนต์ | สารละลายที่ใช้หยดลงไป |
-| Equivalence Point | จุดสมมูล | จุดที่สารทำปฏิกิริยาพอดีกัน |
+| Titrant | สารไทแทรนต์ | สารละลายที่ใช้หยดลงไป (เช่น NaOH) |
+| Analyte | สารตัวอย่าง | สารละลายที่ต้องการวิเคราะห์ (เช่น HCl) |
+| Equivalence Point | จุดสมมูล | จุดที่สารทำปฏิกิริยาพอดีกัน (pH เปลี่ยนเร็วมาก) |
+| Endpoint | จุดยุติ | จุดที่ตรวจวัดได้จริง (อาจต่างจากจุดสมมูลเล็กน้อย) |
 | Buffer Solution | สารละลายกันชน | สารละลายที่มี pH คงที่ ใช้สอบเทียบเซ็นเซอร์ |
 | Calibration | การสอบเทียบ | การปรับค่าเซ็นเซอร์ให้อ่านค่าถูกต้อง |
 | Nernst Equation | สมการเนิร์นสต์ | สมการความสัมพันธ์ระหว่างแรงดันไฟฟ้ากับ pH |
+| Slope | ความชัน | ค่า mV/pH จากการสอบเทียบ (ประมาณ -59.16 mV/pH ที่ 25C) |
+| Intercept | จุดตัดแกน | ค่าคงที่จากการสอบเทียบ |
 
 ---
 

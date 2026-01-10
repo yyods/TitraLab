@@ -1,5 +1,5 @@
 # ==============================================================================
-# 01_intro_oop.py - OOP Basics for Chemistry Students
+# 08_intro_oop.py - OOP Basics for Chemistry Students
 # ==============================================================================
 # Week 1 Core: Class, Object, __init__, self
 # Time: ~30 minutes

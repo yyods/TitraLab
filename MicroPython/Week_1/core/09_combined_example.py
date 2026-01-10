@@ -1,5 +1,5 @@
 # ==============================================================================
-# 06_combined_example.py - Integrated Titration Monitor
+# 09_combined_example.py - Integrated Titration Monitor
 # ==============================================================================
 # Week 1 Core: Combining LED + Button + TempSensor + Display
 # Demonstrates "Composition" - combining multiple objects
