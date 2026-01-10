@@ -261,7 +261,7 @@ purge_mode.set_duration(5000)  # ตั้งเวลา 5 วินาที
 3. เมื่อใกล้จุดสมมูล → Slow Dosing (50% duty)
 4. ตรวจจับจุดสมมูล (|dpH/dV| สูงสุด)
 5. หยุดปั๊มและแสดงผลลัพธ์
-6. บันทึกข้อมูลลง SD Card
+6. บันทึกข้อมูลลง ESP32 flash (ดาวน์โหลดผ่าน Thonny IDE)
 ```
 
 **State Machine ภายใน TitrationMode**:
@@ -286,7 +286,7 @@ purge_mode.set_duration(5000)  # ตั้งเวลา 5 วินาที
     'equivalence_ph': 7.02,
     'total_volume': 25.5,         # mL
     'total_time': 312,            # seconds
-    'data_file': '/sd/titration_20260110_143022.csv'
+    'data_file': 'titration_data_R1.csv'  # บน ESP32 flash
 }
 ```
 

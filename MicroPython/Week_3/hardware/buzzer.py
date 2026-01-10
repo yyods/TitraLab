@@ -67,7 +67,7 @@ class Buzzer:
 
         Args:
             pin (int): หมายเลขขา GPIO (GPIO pin number)
-                       ค่าเริ่มต้น: GPIO22
+                       ค่าเริ่มต้น: GPIO26
             default_freq (int): ความถี่เริ่มต้น (default frequency in Hz)
                                 ค่าเริ่มต้น: 2000 Hz
             default_duty (int): Duty cycle เริ่มต้น (default duty cycle)

@@ -661,10 +661,13 @@ class TitrationMode(BaseMode):
         Returns:
             str: ชื่อไฟล์ (Filename)
         """
-        # หาหมายเลขรันถัดไป (Find next run number)
+        # หาหมายเลขรันถัดไปจาก ESP32 flash storage
+        # Find next run number from ESP32 flash storage
         run_number = 1
         try:
-            files = os.listdir('/sd') if self._sd_available() else os.listdir('.')
+            # ไฟล์บันทึกใน ESP32 flash storage (root directory)
+            # Files saved in ESP32 flash storage (root directory)
+            files = os.listdir('.')
             for f in files:
                 if f.startswith('titration_data_R') and f.endswith('.csv'):
                     try:
@@ -677,29 +680,19 @@ class TitrationMode(BaseMode):
 
         return f"titration_data_R{run_number}.csv"
 
-    def _sd_available(self):
-        """
-        ตรวจสอบว่า SD Card พร้อมใช้งานหรือไม่ (Check if SD card available)
-
-        Returns:
-            bool: True ถ้าพร้อม (True if available)
-        """
-        try:
-            os.listdir('/sd')
-            return True
-        except:
-            return False
-
     def _save_csv(self):
         """
-        บันทึกข้อมูลลงไฟล์ CSV (Save data to CSV file)
+        บันทึกข้อมูลลงไฟล์ CSV ใน ESP32 flash storage
+        Save data to CSV file in ESP32 flash storage
+
+        หมายเหตุ: ไม่ใช้ SD Card - ข้อมูลบันทึกใน ESP32 flash storage
+        Note: SD Card NOT USED - data saved to ESP32 flash storage
+        ดาวน์โหลดไฟล์ผ่าน Thonny IDE (Download files via Thonny IDE)
         """
         try:
-            # กำหนด path (Determine path)
-            if self._sd_available():
-                filepath = f"/sd/{self.csv_filename}"
-            else:
-                filepath = self.csv_filename
+            # บันทึกใน ESP32 flash storage (root directory)
+            # Save to ESP32 flash storage (root directory)
+            filepath = self.csv_filename
 
             # เขียนไฟล์ (Write file)
             with open(filepath, 'w') as f:
@@ -710,7 +703,9 @@ class TitrationMode(BaseMode):
                 for timestamp, volume, ph, temp in self.data_log:
                     f.write(f"{timestamp:.2f},{volume:.3f},{ph:.3f},{temp:.2f}\n")
 
-            print(f"บันทึกข้อมูล {len(self.data_log)} จุดลง {filepath} (Saved {len(self.data_log)} points)")
+            print(f"บันทึกข้อมูล {len(self.data_log)} จุดลง {filepath}")
+            print(f"Saved {len(self.data_log)} points to {filepath}")
+            print(f"ดาวน์โหลดไฟล์ผ่าน Thonny IDE (Download via Thonny IDE)")
 
         except Exception as e:
             print(f"ข้อผิดพลาดการบันทึก (Save error): {e}")

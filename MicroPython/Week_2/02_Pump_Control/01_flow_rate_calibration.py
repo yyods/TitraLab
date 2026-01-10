@@ -1,5 +1,5 @@
 # ==============================================================================
-# 01_flowRate.py - การสอบเทียบอัตราการไหลของปั๊ม (Pump Flow Rate Calibration)
+# 01_flow_rate_calibration.py - การสอบเทียบอัตราการไหลของปั๊ม (Pump Flow Rate Calibration)
 # ==============================================================================
 # โปรแกรมนี้ช่วยนิสิตสอบเทียบ (calibrate) ปั๊มเพื่อหาอัตราการไหลที่แท้จริง
 # This program helps students calibrate the pump to find actual flow rate

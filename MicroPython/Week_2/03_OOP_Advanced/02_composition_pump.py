@@ -1,5 +1,5 @@
 # ==============================================================================
-# 02_composition_basics.py - พื้นฐาน Composition (Composition Basics)
+# 02_composition_pump.py - พื้นฐาน Composition (Composition Basics)
 # ==============================================================================
 # เวลาในการสอน: ~30-35 นาที (Teaching time: ~30-35 minutes)
 #

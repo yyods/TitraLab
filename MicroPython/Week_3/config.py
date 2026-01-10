@@ -98,7 +98,7 @@ NERNST_THEORETICAL_SLOPE = -59.16  # mV/pH ที่ 25 C (mV/pH at 25 C)
 # ขา GPIO สำหรับ Buzzer (Buzzer GPIO)
 # ==============================================================================
 # Buzzer ใช้ PWM สำหรับสร้างเสียง (Buzzer uses PWM for sound generation)
-BUZZER_PIN = 22  # GPIO22 - Buzzer (PWM output)
+BUZZER_PIN = 26  # GPIO26 - Buzzer (PWM output)
 
 # ความถี่เสียงสำหรับ Buzzer (Buzzer sound frequencies)
 BUZZER_FREQ_LOW = 1000     # เสียงต่ำ (Low tone) - Hz
@@ -149,16 +149,19 @@ FONT_WIDTH = 18
 FONT_HEIGHT = 24
 
 # ==============================================================================
-# ขา GPIO สำหรับ SD Card (SD Card GPIO)
+# ขา GPIO สำหรับ SD Card (SD Card GPIO) - ไม่ใช้งาน (NOT USED)
 # ==============================================================================
-# SD Card ใช้ SPI (SoftSPI) (SD Card uses SPI)
-SD_MISO = 19              # GPIO19 - SD Card MISO (Master In Slave Out)
-SD_MOSI = 23              # GPIO23 - SD Card MOSI (Master Out Slave In)
-SD_SCK = 18               # GPIO18 - SD Card SCK (Clock)
-SD_CS = 5                 # GPIO5  - SD Card CS (Chip Select)
-
-# ความเร็ว SPI สำหรับ SD Card (SD Card SPI speed)
-SD_BAUDRATE = 1000000     # 1 MHz
+# หมายเหตุ: ไม่ใช้ SD Card เนื่องจากบอร์ดเชื่อมต่อกับ laptop ตลอดเวลาผ่าน USB
+# Note: SD Card NOT USED - board is always connected to laptop via USB
+# ไฟล์ CSV บันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
+# CSV files are saved to ESP32 flash storage and downloaded via Thonny IDE
+#
+# เก็บค่าไว้สำหรับอ้างอิงเท่านั้น (Kept for reference only):
+# SD_MISO = 19              # GPIO19 - SD Card MISO
+# SD_MOSI = 23              # GPIO23 - SD Card MOSI
+# SD_SCK = 18               # GPIO18 - SD Card SCK
+# SD_CS = 5                 # GPIO5  - SD Card CS
+# SD_BAUDRATE = 1000000     # 1 MHz
 
 # ==============================================================================
 # ขา GPIO เพิ่มเติม: Potentiometers (Additional GPIO: Potentiometers)
@@ -166,6 +169,14 @@ SD_BAUDRATE = 1000000     # 1 MHz
 # Potentiometers สำหรับปรับค่า (Potentiometers for value adjustment)
 POT1_PIN = 32             # GPIO32 - Potentiometer 1
 POT2_PIN = 33             # GPIO33 - Potentiometer 2
+
+# ==============================================================================
+# ขา GPIO เพิ่มเติม: อุปกรณ์ควบคุมเสริม (Additional GPIO: Secondary Controls)
+# ==============================================================================
+# ช่องควบคุมเสริมสำหรับปั๊มตัวที่ 2 หรืออุปกรณ์อื่น
+# Secondary control channels for additional pump or equipment
+CONTROL_2 = 22            # GPIO22 - ช่องควบคุมเสริม (Secondary control output)
+RELAY_PIN = 17            # GPIO17 - รีเลย์ (Relay control output)
 
 # ==============================================================================
 # ชื่อไฟล์สำหรับบันทึกข้อมูล (Data File Names)
@@ -230,10 +241,11 @@ def validate_pins():
         'TFT_DC': TFT_DC,
         'TFT_CS': TFT_CS,
         'TFT_RST': TFT_RST,
-        'SD_MISO': SD_MISO,
-        'SD_MOSI': SD_MOSI,
-        'SD_SCK': SD_SCK,
-        'SD_CS': SD_CS,
+        # SD Card pins removed - ไม่ใช้งาน (not used)
+        'POT1_PIN': POT1_PIN,
+        'POT2_PIN': POT2_PIN,
+        'CONTROL_2': CONTROL_2,
+        'RELAY_PIN': RELAY_PIN,
     }
 
     # ตรวจสอบการซ้ำซ้อน (Check for duplicates)
@@ -268,6 +280,8 @@ if __name__ == "__main__":
         print(f"Buzzer: GPIO{BUZZER_PIN}")
         print(f"Pump: GPIO{PUMP_PIN}")
         print(f"TFT: SCK={TFT_SCK}, MOSI={TFT_MOSI}, DC={TFT_DC}, CS={TFT_CS}, RST={TFT_RST}")
-        print(f"SD Card: MISO={SD_MISO}, MOSI={SD_MOSI}, SCK={SD_SCK}, CS={SD_CS}")
+        print("SD Card: ไม่ใช้งาน (NOT USED) - ไฟล์บันทึกใน ESP32 flash")
+        print(f"Potentiometers: POT1={POT1_PIN}, POT2={POT2_PIN}")
+        print(f"Additional: CONTROL_2={CONTROL_2}, RELAY={RELAY_PIN}")
     except ValueError as e:
         print(e)

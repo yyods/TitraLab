@@ -29,7 +29,7 @@ hardware/
 ├── buttons.py        # คลาสจัดการปุ่มกด (Button management)
 ├── buzzer.py         # คลาส Buzzer (Buzzer control)
 ├── leds.py           # คลาสจัดการ LED (LED management)
-└── sd_card.py        # คลาส SD Card (SD card management)
+└── sd_card.py        # [DEPRECATED] คลาส SD Card - ไม่ใช้งาน
 ```
 
 ---
@@ -164,7 +164,7 @@ if buttons.is_long_pressed('down', 3000):  # กดค้าง 3 วินา�
 
 ### buzzer.py - คลาส Buzzer (Buzzer Control Class)
 
-**GPIO**: 22 (PWM Output)
+**GPIO**: 26 (PWM Output)
 
 **หน้าที่**: สร้างเสียงเตือนด้วย PWM
 
@@ -203,24 +203,26 @@ leds.all_off()                          # ปิด LED ทั้งหมด
 
 ---
 
-### sd_card.py - คลาส SD Card (SD Card Management Class)
+### sd_card.py - [DEPRECATED] ไม่ใช้งาน (NOT USED)
 
-**GPIO**: SoftSPI (MISO=19, MOSI=23, SCK=18, CS=5)
-
-**หน้าที่**: อ่าน/เขียนไฟล์บน SD Card
-
-**ความเชื่อมโยงกับเคมี**: บันทึกข้อมูลการไทเทรต (Volume, pH, Temperature) ลงไฟล์ CSV
+> **⚠️ หมายเหตุสำคัญ**: ไฟล์นี้ถูกยกเลิกการใช้งาน
+>
+> บอร์ด TitraLab เชื่อมต่อกับ laptop ตลอดเวลาผ่าน USB ดังนั้น:
+> - ไฟล์ CSV บันทึกใน **ESP32 flash storage** แทน SD Card
+> - นิสิตดาวน์โหลดไฟล์ผ่าน **Thonny IDE**
+> - วิเคราะห์ข้อมูลด้วย **EquivPoint tool** บน laptop
+>
+> สำหรับการบันทึกข้อมูล ใช้ `core/titration.py` แทน
 
 ```python
-# ตัวอย่างการใช้งาน (Usage Example)
-from hardware.sd_card import SDCardManager
+# การบันทึกข้อมูลใหม่ (New data saving method)
+# ไฟล์ CSV บันทึกใน ESP32 flash โดยตรง
+# เช่น: titration_data_R1.csv, titration_data_R2.csv
 
-sd = SDCardManager()
-if sd.init():                           # Mount SD Card
-    sd.write_file('/sd/data.csv', 'Volume,pH\n')
-    content = sd.read_file('/sd/data.csv')
-    sd.append_file('/sd/data.csv', '1.0,7.02\n')
-sd.deinit()                             # Unmount
+# ดาวน์โหลดไฟล์ผ่าน Thonny IDE:
+# 1. เชื่อมต่อ ESP32 กับ Thonny
+# 2. คลิกขวาที่ไฟล์ในหน้าต่าง Files
+# 3. เลือก "Download to..." เพื่อบันทึกลงคอมพิวเตอร์
 ```
 
 ---
@@ -255,14 +257,14 @@ with HardwareHub() as hw:
 | Pump | 21 | Output | PWM |
 | PHSensor | 25 | Input | ADC |
 | TemperatureSensor | 16 | Input | OneWire |
-| Buzzer | 22 | Output | PWM |
+| Buzzer | 26 | Output | PWM |
 | LED (Red) | 2 | Output | Digital |
 | LED (Green) | 4 | Output | Digital |
 | Button (Select) | 34 | Input-only | Digital |
 | Button (Up) | 35 | Input-only | Digital |
 | Button (Down) | 39 | Input-only | Digital |
 | TFT Display | 14,13,27,15,0 | Output | SPI Bus 1 |
-| SD Card | 19,23,18,5 | I/O | SoftSPI |
+| ~~SD Card~~ | ~~19,23,18,5~~ | ~~I/O~~ | ~~SoftSPI~~ (NOT USED) |
 
 ---
 
@@ -286,8 +288,9 @@ with HardwareHub() as hw:
 5. `ph_sensor.py` - ADC Input พร้อม calibration
 6. `temp_sensor.py` - OneWire Protocol
 7. `display.py` - SPI Communication
-8. `sd_card.py` - File I/O
-9. `__init__.py` - HardwareHub pattern
+8. `__init__.py` - HardwareHub pattern
+
+> หมายเหตุ: `sd_card.py` ถูกยกเลิกการใช้งาน - ดู `core/titration.py` แทน
 
 ---
 

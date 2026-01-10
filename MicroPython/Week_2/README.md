@@ -74,7 +74,7 @@
        [60 นาที]                  [45 นาที]                  [60 นาที]
 
        ต่อยอดจาก:                  ต่อยอดจาก:                  ต่อยอดจาก:
-       Week_1/core/07_ADC         Week_1/core/07_PWM         Week_1 OOP basics
+       03_adc_ph_basics.py        04_pwm_pump_basics.py      Week_1 OOP basics
 ```
 
 ---
@@ -83,25 +83,25 @@
 
 Week 2 ต่อยอดจากความรู้ที่เรียนใน Week 1 โดยเฉพาะ:
 
-### 1. ADC (Analog-to-Digital Converter) - จาก `Week_1/core/07_ADC/`
+### 1. ADC (Analog-to-Digital Converter) - จาก `Week_1/core/03_adc_ph_basics.py`
 
 | Week 1 Content | Week 2 Application |
 |----------------|-------------------|
-| `01_adc_basics.py` - อ่านค่า ADC 12-bit (0-4095) | ใช้อ่านค่าจาก pH Sensor ที่ GPIO25 |
-| `02_adc_averaging.py` - การหาค่าเฉลี่ย | ลดสัญญาณรบกวน (noise) ในการอ่าน pH |
-| `03_adc_attenuation.py` - การตั้งค่าย่านวัด | ตั้ง ATTN_11DB สำหรับ 0-3.3V จาก pH probe |
+| ADC 12-bit (0-4095) | ใช้อ่านค่าจาก pH Sensor ที่ GPIO25 |
+| การตั้ง ATTN_11DB | ตั้งค่าย่านวัด 0-3.3V สำหรับ pH probe |
+| การแปลงเป็น mV | ใช้สมการ Nernst คำนวณ pH |
 
 **การเชื่อมโยงทางเคมี:**
 ```
 pH Probe (mV) --> ADC (0-4095) --> แปลงเป็น mV --> ใช้สมการ Nernst --> ค่า pH
 ```
 
-### 2. PWM (Pulse Width Modulation) - จาก `Week_1/core/07_PWM/`
+### 2. PWM (Pulse Width Modulation) - จาก `Week_1/core/04_pwm_pump_basics.py`
 
 | Week 1 Content | Week 2 Application |
 |----------------|-------------------|
-| `01_pwm_led_brightness.py` - Duty Cycle พื้นฐาน | ใช้ควบคุมความเร็วปั๊มที่ GPIO21 |
-| `04_pwm_pump_preview.py` - ตัวอย่างปั๊ม | พื้นฐานสำหรับ Flow Rate Calibration |
+| PWM Duty Cycle 10-bit (0-1023) | ใช้ควบคุมความเร็วปั๊มที่ GPIO21 |
+| ตัวอย่างควบคุมปั๊มเบื้องต้น | พื้นฐานสำหรับ Flow Rate Calibration |
 
 **การเชื่อมโยงทางเคมี:**
 ```
@@ -112,8 +112,8 @@ Duty Cycle (0-1023) --> ความเร็วปั๊ม --> อัตรา
 
 | Week 1 Content | Week 2 Application |
 |----------------|-------------------|
-| `01_intro_oop.py` - Class และ Object | ขยายเป็น Inheritance และ Composition |
-| `02_led_class.py` - สร้าง Class เบื้องต้น | ใช้เป็นแม่แบบสำหรับ Sensor classes |
+| `08_intro_oop.py` - Class และ Object | ขยายเป็น Inheritance และ Composition |
+| `01_led_class.py` - สร้าง Class เบื้องต้น | ใช้เป็นแม่แบบสำหรับ Sensor classes |
 
 ---
 
@@ -214,7 +214,7 @@ E (mV) = m x pH + b
 ```
 Week_2/
 ├── README.md                   # เอกสารนี้
-├── pins.py                     # ค่าคงที่ขา GPIO (จาก Week_1)
+├── pins.py                     # Wrapper นำเข้าจาก Week_1/pins.py
 │
 ├── 01_pH_Sensor/               # [ปฏิบัติการ 1] การวัดและสอบเทียบ pH
 │   ├── 01_basic_ph_read.py         # การวัดค่า pH แบบต่อเนื่อง

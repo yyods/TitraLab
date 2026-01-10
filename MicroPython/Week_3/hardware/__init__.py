@@ -26,7 +26,8 @@ from .ph_sensor import pHSensor
 from .temp_sensor import TempSensor
 from .display import Display, Colors
 from .leds import LED, LEDManager
-from .sd_card import SDCardManager
+# หมายเหตุ: ไม่นำเข้า SDCardManager เนื่องจากไม่ใช้งาน
+# Note: SDCardManager not imported - not used (board connected to laptop via USB)
 
 # กำหนดสิ่งที่ export เมื่อใช้ from hardware import *
 # Define what to export when using from hardware import *
@@ -41,7 +42,6 @@ __all__ = [
     'Colors',
     'LED',
     'LEDManager',
-    'SDCardManager',
     'HardwareHub'
 ]
 
@@ -95,7 +95,8 @@ class HardwareHub:
         self._buzzer = None
         self._ph_sensor = None
         self._temp_sensor = None
-        self._sd_card = None
+        # หมายเหตุ: ไม่ใช้ SD Card - บอร์ดเชื่อมต่อ laptop ตลอดเวลาผ่าน USB
+        # Note: SD Card NOT USED - board always connected to laptop via USB
 
         # ติดตาม hardware ที่ initialized สำเร็จ
         # Track successfully initialized hardware
@@ -104,8 +105,7 @@ class HardwareHub:
             'buttons': False,
             'buzzer': False,
             'ph_sensor': False,
-            'temp_sensor': False,
-            'sd_card': False
+            'temp_sensor': False
         }
 
         # Initialize ถ้ากำหนด (Initialize if requested)
@@ -119,13 +119,14 @@ class HardwareHub:
     def init_all(self):
         """
         Initialize hardware ทั้งหมด (Initialize all hardware)
+        หมายเหตุ: ไม่รวม SD Card - ข้อมูลบันทึกใน ESP32 flash
+        Note: SD Card excluded - data saved to ESP32 flash storage
         """
         self.init_pump()
         self.init_buttons()
         self.init_buzzer()
         self.init_ph_sensor()
         self.init_temp_sensor()
-        self.init_sd_card()
 
     def init_pump(self):
         """Initialize ปั๊ม (Initialize pump)"""
@@ -177,20 +178,10 @@ class HardwareHub:
             if not self._skip_missing:
                 raise
 
-    def init_sd_card(self):
-        """Initialize SD Card (Initialize SD Card)"""
-        try:
-            self._sd_card = SDCardManager()
-            if self._sd_card.init():
-                self._initialized['sd_card'] = True
-            else:
-                print("SD Card ไม่พร้อมใช้งาน (SD Card not available)")
-                if not self._skip_missing:
-                    raise RuntimeError("SD Card initialization failed")
-        except Exception as e:
-            print(f"ข้อผิดพลาดเริ่มต้น SD Card (SD Card init error): {e}")
-            if not self._skip_missing:
-                raise
+    # หมายเหตุ: init_sd_card() ถูกลบแล้ว - ไม่ใช้ SD Card
+    # Note: init_sd_card() removed - SD Card NOT USED
+    # ไฟล์ CSV จะบันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
+    # CSV files saved to ESP32 flash storage and downloaded via Thonny IDE
 
     # === Properties สำหรับเข้าถึง hardware ===
     # === Properties for accessing hardware ===
@@ -255,17 +246,10 @@ class HardwareHub:
             raise RuntimeError("Temp sensor ยังไม่ได้ initialize (Temp sensor not initialized)")
         return self._temp_sensor
 
-    @property
-    def sd_card(self):
-        """
-        เข้าถึง SD Card Manager (Access SD Card Manager)
-
-        Returns:
-            SDCardManager: SDCardManager object
-        """
-        if self._sd_card is None:
-            raise RuntimeError("SD Card ยังไม่ได้ initialize (SD Card not initialized)")
-        return self._sd_card
+    # หมายเหตุ: sd_card property ถูกลบแล้ว - ไม่ใช้ SD Card
+    # Note: sd_card property removed - SD Card NOT USED
+    # ข้อมูลบันทึกใน ESP32 flash storage แทน
+    # Data saved to ESP32 flash storage instead
 
     # === Utility Methods ===
 
@@ -332,14 +316,8 @@ class HardwareHub:
             self._buzzer = None
             self._initialized['buzzer'] = False
 
-        # ปิด SD Card (Deinitialize SD Card)
-        if self._sd_card is not None:
-            try:
-                self._sd_card.deinit()
-            except Exception as e:
-                print(f"ข้อผิดพลาดปิด SD Card (Error closing SD Card): {e}")
-            self._sd_card = None
-            self._initialized['sd_card'] = False
+        # หมายเหตุ: SD Card deinit ถูกลบแล้ว - ไม่ใช้ SD Card
+        # Note: SD Card deinit removed - SD Card NOT USED
 
         # ปุ่มและเซ็นเซอร์ไม่ต้อง deinit เพราะเป็น input-only
         # Buttons and sensors don't need deinit (input-only)

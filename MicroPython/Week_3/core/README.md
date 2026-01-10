@@ -149,13 +149,13 @@ calibrator.test_flow_rate()
 **ไฟล์ที่จัดการ**:
 - `data_calibrate.txt` - ค่าสอบเทียบ pH (slope, intercept)
 - `data_flowrate.txt` - อัตราการไหลของปั๊ม
-- `/sd/titration_*.csv` - ข้อมูลการไทเทรต
+- `titration_data_R*.csv` - ข้อมูลการไทเทรต (บันทึกใน ESP32 flash)
 
 ```python
 # ตัวอย่างการใช้งาน (Usage Example)
 from core.data_manager import DataManager
 
-dm = DataManager(sd_card=sd_card)
+dm = DataManager()  # ใช้ ESP32 flash storage
 
 # บันทึก/โหลด ค่าสอบเทียบ pH
 dm.save_ph_calibration(slope=-5.79, intercept=16.77)
@@ -189,10 +189,10 @@ titration = TitrationController(
     pump=pump,
     ph_sensor=ph_sensor,
     temp_sensor=temp_sensor,
-    sd_card=sd_card,
     display=display,
     buzzer=buzzer
 )
+# ข้อมูล CSV บันทึกใน ESP32 flash storage (ดาวน์โหลดผ่าน Thonny IDE)
 
 # เริ่มไทเทรตอัตโนมัติ
 result = titration.run_titration()

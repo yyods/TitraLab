@@ -444,15 +444,18 @@ def create_display_update_task(display, data_provider, interval=0.5):
     return (update_display, Task.PRIORITY_LOW, interval)
 
 
-def create_data_logging_task(sd_card, data_provider, filename, interval=1.0):
+def create_data_logging_task(data_provider, filename, interval=1.0):
     """
-    สร้าง task สำหรับบันทึกข้อมูล
-    Create data logging task
+    สร้าง task สำหรับบันทึกข้อมูลลง ESP32 flash storage
+    Create data logging task for ESP32 flash storage
+
+    หมายเหตุ: ไม่ใช้ SD Card - ข้อมูลบันทึกใน ESP32 flash storage
+    Note: SD Card NOT USED - data saved to ESP32 flash storage
 
     Args:
-        sd_card: SDCardManager object
         data_provider: async function() ที่คืนค่าข้อมูลสำหรับบันทึก
-        filename: ชื่อไฟล์ CSV
+                       Should return a list of values to log
+        filename: ชื่อไฟล์ CSV (filename in ESP32 flash)
         interval: ช่วงเวลาบันทึก (seconds)
 
     Returns:
@@ -460,14 +463,22 @@ def create_data_logging_task(sd_card, data_provider, filename, interval=1.0):
                Use with add_task_from_factory()
 
     Example:
-        factory_result = create_data_logging_task(sd, get_data, "log.csv", 1.0)
+        factory_result = create_data_logging_task(get_data, "log.csv", 1.0)
         scheduler.add_task_from_factory("logging", factory_result)
     """
     async def log_data():
-        if data_provider and sd_card:
+        if data_provider:
             data = await data_provider()
             if data:
-                sd_card.append_csv_row(filename, data)
+                try:
+                    # บันทึกลง ESP32 flash storage (Log to ESP32 flash)
+                    with open(filename, 'a') as f:
+                        if isinstance(data, (list, tuple)):
+                            f.write(','.join(str(x) for x in data) + '\n')
+                        else:
+                            f.write(str(data) + '\n')
+                except Exception as e:
+                    print(f"ข้อผิดพลาดบันทึกข้อมูล (Logging error): {e}")
 
     return (log_data, Task.PRIORITY_BACKGROUND, interval)
 

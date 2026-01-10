@@ -1,5 +1,5 @@
 # ==============================================================================
-# 01_pH.py - การวัดค่า pH และอุณหภูมิ (pH and Temperature Measurement)
+# 01_basic_ph_read.py - การวัดค่า pH และอุณหภูมิ (pH and Temperature Measurement)
 # ==============================================================================
 # โปรแกรมนี้สาธิตการอ่านค่า pH จากเซ็นเซอร์และแสดงผลบนจอ TFT
 # พร้อมการชดเชยอุณหภูมิตามสมการ Nernst
@@ -70,6 +70,7 @@ R_CONSTANT = 8.314       # ค่าคงที่ของก๊าซ (Gas co
 F_CONSTANT = 96485       # ค่าคงที่ฟาราเดย์ (Faraday constant) C/mol
 N_ELECTRONS = 1          # จำนวนอิเล็กตรอนสำหรับ H+ (Electrons for H+)
 KELVIN_OFFSET = 273.15   # แปลง Celsius เป็น Kelvin
+DEFAULT_TEMP = 25.0      # อุณหภูมิเริ่มต้นเมื่อไม่มีเซ็นเซอร์ (Default when no sensor)
 
 # ==============================================================================
 # การตั้งค่าเซ็นเซอร์อุณหภูมิ DS18B20
@@ -82,8 +83,19 @@ ds = ds18x20.DS18X20(onewire.OneWire(dat))
 
 # สแกนหาเซ็นเซอร์ที่เชื่อมต่อ (Scan for connected sensors)
 sensors = ds.scan()
+use_fallback_temp = False  # ใช้อุณหภูมิเริ่มต้นหรือไม่ (Using fallback temperature?)
+
 if not sensors:
-    print("ไม่พบเซ็นเซอร์ DS18B20 (DS18B20 sensor not found)")
+    use_fallback_temp = True
+    print("=" * 50)
+    print("คำเตือน: ไม่พบเซ็นเซอร์ DS18B20!")
+    print("Warning: DS18B20 sensor not found!")
+    print(f"ใช้อุณหภูมิเริ่มต้น {DEFAULT_TEMP}C สำหรับการชดเชย")
+    print(f"Using default temperature {DEFAULT_TEMP}C for compensation")
+    print("=" * 50)
+else:
+    print(f"พบเซ็นเซอร์ DS18B20 จำนวน {len(sensors)} ตัว")
+    print(f"Found {len(sensors)} DS18B20 sensor(s)")
 
 # ==============================================================================
 # การตั้งค่าจอแสดงผล TFT ILI9341
@@ -414,7 +426,7 @@ def record_ph(t):
         voltage_mv = read_voltage_mv()
 
         # คำนวณ pH พร้อมชดเชยอุณหภูมิ (Calculate pH with temperature compensation)
-        temp = last_temp if last_temp else 25.0
+        temp = last_temp if last_temp else DEFAULT_TEMP
         ph = calculate_ph_with_temp_compensation(voltage_mv, temp)
 
         show_ph(ph)
@@ -530,7 +542,17 @@ display.draw_text(text5_x, text5_y, 'Voltage:', font,
                  color565(255, 251, 104), background=0, landscape=False, spacing=1)
 
 # ตัวแปรเก็บอุณหภูมิล่าสุด (Store last temperature)
-last_temp = 25.0
+last_temp = DEFAULT_TEMP
+
+# แสดงคำเตือนบน TFT ถ้าใช้อุณหภูมิเริ่มต้น (Show warning on TFT if using fallback)
+if use_fallback_temp:
+    show_temperature(DEFAULT_TEMP)
+    # แสดงข้อความเตือน (Display warning message)
+    warn_text = "(Default)"
+    warn_x = 160 - int(font.measure_text(warn_text, spacing=1) / 2)
+    display.draw_text(warn_x, text2_y + 25, warn_text, font,
+                     color565(255, 150, 0), background=color565(0, 0, 0),
+                     landscape=False, spacing=1)
 
 # ==============================================================================
 # Main loop - อ่านและแสดงค่าอุณหภูมิและ pH

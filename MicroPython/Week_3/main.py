@@ -28,7 +28,10 @@ from hardware.ph_sensor import PHSensor
 from hardware.temp_sensor import TemperatureSensor
 from hardware.buzzer import Buzzer
 from hardware.leds import LEDManager
-from hardware.sd_card import SDCardManager
+# หมายเหตุ: ไม่ใช้ SD Card เนื่องจากบอร์ดเชื่อมต่อกับ laptop ตลอดเวลา
+# Note: SD Card not used - board is always connected to laptop via USB
+# ไฟล์ CSV จะบันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
+# CSV files are saved to ESP32 flash storage and downloaded via Thonny IDE
 
 # นำเข้า Core Modules (Import Core Modules)
 from core.calibrator import Calibrator
@@ -58,7 +61,6 @@ class HardwareHub:
         self.temp_sensor = TemperatureSensor()
         self.buzzer = Buzzer()
         self.leds = LEDManager()
-        self.sd_card = SDCardManager()
 
     def init_all(self):
         """
@@ -70,49 +72,43 @@ class HardwareHub:
         print("=" * 50)
 
         # เริ่มต้นจอแสดงผล (Initialize display)
-        print("[1/8] จอแสดงผล (Display)...", end=" ")
+        print("[1/7] จอแสดงผล (Display)...", end=" ")
         self.display.init()
         print("OK")
 
         # เริ่มต้นปุ่มกด (Initialize buttons)
-        print("[2/8] ปุ่มกด (Buttons)...", end=" ")
+        print("[2/7] ปุ่มกด (Buttons)...", end=" ")
         self.buttons.init()
         print("OK")
 
         # เริ่มต้น LED (Initialize LEDs)
-        print("[3/8] LED...", end=" ")
+        print("[3/7] LED...", end=" ")
         self.leds.init()
         print("OK")
 
         # เริ่มต้น Buzzer (Initialize buzzer)
-        print("[4/8] Buzzer...", end=" ")
+        print("[4/7] Buzzer...", end=" ")
         self.buzzer.init()
         print("OK")
 
         # เริ่มต้นเซ็นเซอร์ pH (Initialize pH sensor)
-        print("[5/8] เซ็นเซอร์ pH (pH Sensor)...", end=" ")
+        print("[5/7] เซ็นเซอร์ pH (pH Sensor)...", end=" ")
         self.ph_sensor.init()
         print("OK")
 
         # เริ่มต้นเซ็นเซอร์อุณหภูมิ (Initialize temperature sensor)
-        print("[6/8] เซ็นเซอร์อุณหภูมิ (Temperature Sensor)...", end=" ")
+        print("[6/7] เซ็นเซอร์อุณหภูมิ (Temperature Sensor)...", end=" ")
         self.temp_sensor.init()
         print("OK")
 
         # เริ่มต้นปั๊ม (Initialize pump)
-        print("[7/8] ปั๊ม (Pump)...", end=" ")
+        print("[7/7] ปั๊ม (Pump)...", end=" ")
         self.pump.init()
         print("OK")
 
-        # เริ่มต้น SD Card (Initialize SD Card)
-        print("[8/8] SD Card...", end=" ")
-        if self.sd_card.init():
-            print("OK")
-        else:
-            print("ไม่พบ (Not found)")
-
         print("=" * 50)
         print("Hardware พร้อมใช้งาน (Hardware Ready)")
+        print("ไฟล์ข้อมูลบันทึกใน ESP32 (Data files saved on ESP32)")
         print("=" * 50)
 
         # ส่งเสียง Buzzer (Beep buzzer)
@@ -139,10 +135,6 @@ class HardwareHub:
             self.leds.all_off()
             self.leds.deinit()
 
-        # ปิด SD Card (Unmount SD Card)
-        if self.sd_card:
-            self.sd_card.deinit()
-
         # ปิดจอแสดงผล (Clear display)
         if self.display:
             self.display.clear()
@@ -167,7 +159,8 @@ def main():
         hardware.init_all()
 
         # สร้าง Data Manager (Create Data Manager)
-        data_manager = DataManager(sd_card=hardware.sd_card)
+        # บันทึกข้อมูลใน ESP32 flash storage (Save data to ESP32 flash storage)
+        data_manager = DataManager()
 
         # สร้าง Calibrator (Create Calibrator)
         calibrator = Calibrator(
@@ -180,11 +173,11 @@ def main():
         )
 
         # สร้าง Titration Controller (Create Titration Controller)
+        # บันทึก CSV ใน ESP32 flash (CSV saved to ESP32 flash)
         titration = TitrationController(
             pump=hardware.pump,
             ph_sensor=hardware.ph_sensor,
             temp_sensor=hardware.temp_sensor,
-            sd_card=hardware.sd_card,
             display=hardware.display,
             buzzer=hardware.buzzer,
             led_indicator=hardware.leds.green

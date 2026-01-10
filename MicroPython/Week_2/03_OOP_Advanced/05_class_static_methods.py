@@ -1,5 +1,5 @@
 # ==============================================================================
-# class_static_methods.py - Class Methods และ Static Methods
+# 05_class_static_methods.py - Class Methods และ Static Methods
 #                           (Class Methods and Static Methods)
 # ==============================================================================
 # (เนื้อหาเสริม / Supplementary Material)

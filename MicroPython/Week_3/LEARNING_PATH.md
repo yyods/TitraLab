@@ -64,9 +64,11 @@ main.main()
 
 | ข้อมูล | ไฟล์ | ตำแหน่ง |
 |-------|-----|---------|
-| ค่า pH calibration | `data_calibrate.txt` | SD Card |
-| ค่า flow rate | `data_flowrate.txt` | SD Card |
-| ผลไทเทรชัน | `titration_data_R1.csv`, `R2.csv`, ... | SD Card |
+| ค่า pH calibration | `data_calibrate.txt` | ESP32 flash |
+| ค่า flow rate | `data_flowrate.txt` | ESP32 flash |
+| ผลไทเทรชัน | `titration_data_R1.csv`, `R2.csv`, ... | ESP32 flash |
+
+> **หมายเหตุ**: ดาวน์โหลดไฟล์ผ่าน **Thonny IDE** แล้ววิเคราะห์ด้วย **EquivPoint** tool
 
 ---
 
@@ -77,7 +79,7 @@ main.main()
 | R² < 0.99 | ล้าง pH probe, ใช้ buffer ใหม่ |
 | ค่า pH อ่านไม่ได้ | ตรวจสอบการต่อสาย GPIO25 |
 | ปั๊มไม่ทำงาน | ตรวจสอบ GPIO21, ท่อปั๊มอุดตัน? |
-| SD Card error | ตรวจสอบการ format (FAT32) |
+| ไฟล์ไม่พบ | ตรวจสอบ ESP32 flash ผ่าน Thonny |
 | จอไม่แสดงผล | กดปุ่ม Reset |
 
 ---

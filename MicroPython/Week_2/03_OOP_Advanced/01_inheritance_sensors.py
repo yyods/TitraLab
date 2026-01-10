@@ -1,5 +1,5 @@
 # ==============================================================================
-# 01_inheritance_basics.py - พื้นฐาน Inheritance (Inheritance Basics)
+# 01_inheritance_sensors.py - พื้นฐาน Inheritance (Inheritance Basics)
 # ==============================================================================
 # เวลาในการสอน: ~45 นาที (Teaching time: ~45 minutes)
 #

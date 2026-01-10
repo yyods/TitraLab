@@ -27,7 +27,10 @@ class TitrationController:
     - ควบคุมปั๊มเติมสารละลาย (Titrant pump control)
     - อ่านค่า pH แบบเรียลไทม์ (Real-time pH reading)
     - หาจุดสมมูลด้วยวิธี derivative (Equivalence point by derivative method)
-    - บันทึกข้อมูลลง SD Card (Data logging to SD Card)
+    - บันทึกข้อมูลลง ESP32 flash storage (Data logging to ESP32 flash)
+
+    หมายเหตุ: ไฟล์ CSV บันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
+    Note: CSV files saved to ESP32 flash storage and downloaded via Thonny IDE
     """
 
     # ค่าคงที่สำหรับการไทเทรชัน (Titration constants)
@@ -39,7 +42,7 @@ class TitrationController:
     # CSV Header สำหรับบันทึกข้อมูล (CSV Header for data logging)
     CSV_HEADERS = ['Cycle', 'Time(s)', 'Volume(mL)', 'pH', 'Temperature(C)']
 
-    def __init__(self, pump, ph_sensor, temp_sensor=None, sd_card=None,
+    def __init__(self, pump, ph_sensor, temp_sensor=None,
                  display=None, buzzer=None, led_indicator=None):
         """
         กำหนดค่าเริ่มต้น TitrationController
@@ -49,10 +52,12 @@ class TitrationController:
             pump: ออบเจ็กต์ควบคุมปั๊ม (Pump controller object)
             ph_sensor: ออบเจ็กต์เซ็นเซอร์ pH (pH sensor object)
             temp_sensor: ออบเจ็กต์เซ็นเซอร์อุณหภูมิ (Temperature sensor, optional)
-            sd_card: ออบเจ็กต์ SD Card Manager (SD Card manager, optional)
             display: ออบเจ็กต์จอแสดงผล (Display object, optional)
             buzzer: ออบเจ็กต์ Buzzer (Buzzer object, optional)
             led_indicator: ออบเจ็กต์ LED แสดงสถานะ (LED indicator, optional)
+
+        หมายเหตุ: ไม่ใช้ SD Card - ข้อมูลบันทึกใน ESP32 flash storage
+        Note: SD Card NOT USED - data saved to ESP32 flash storage
         """
         # อุปกรณ์หลัก (Main hardware)
         self.pump = pump
@@ -60,7 +65,6 @@ class TitrationController:
         self.temp_sensor = temp_sensor
 
         # อุปกรณ์เสริม (Optional hardware)
-        self.sd_card = sd_card
         self.display = display
         self.buzzer = buzzer
         self.led = led_indicator
@@ -181,11 +185,14 @@ class TitrationController:
             'temperature': temperature
         })
 
-        # บันทึกลง SD Card (Log to SD Card)
-        if self.sd_card and self._current_filename:
-            data_row = [cycle, f"{elapsed_time:.2f}", f"{volume:.3f}",
-                       f"{ph:.3f}", f"{temperature:.2f}"]
-            self.sd_card.append_csv_row(self._current_filename, data_row)
+        # บันทึกลง ESP32 flash storage (Log to ESP32 flash storage)
+        if self._current_filename:
+            try:
+                data_row = f"{cycle},{elapsed_time:.2f},{volume:.3f},{ph:.3f},{temperature:.2f}\n"
+                with open(self._current_filename, 'a') as f:
+                    f.write(data_row)
+            except Exception as e:
+                print(f"ข้อผิดพลาดบันทึกข้อมูล (Data logging error): {e}")
 
     def _update_display(self, cycle, volume, ph, temperature, derivative=None):
         """
@@ -286,10 +293,34 @@ class TitrationController:
 
         return None
 
+    def _get_next_filename(self, base_name='titration_data'):
+        """
+        สร้างชื่อไฟล์ใหม่โดยเพิ่มหมายเลขเวอร์ชัน
+        Generate new filename with version number
+
+        Args:
+            base_name: ชื่อไฟล์พื้นฐาน (base filename)
+
+        Returns:
+            str: ชื่อไฟล์ใหม่ เช่น titration_data_R1.csv
+        """
+        import os
+        version = 1
+        while True:
+            filename = f"{base_name}_R{version}.csv"
+            try:
+                os.stat(filename)
+                version += 1
+            except OSError:
+                return filename
+
     def save_results(self, filename=None):
         """
-        บันทึกผลลัพธ์การไทเทรชันลงไฟล์ CSV
-        Save titration results to CSV file
+        บันทึกผลลัพธ์การไทเทรชันลงไฟล์ CSV ใน ESP32 flash storage
+        Save titration results to CSV file in ESP32 flash storage
+
+        หมายเหตุ: ไฟล์บันทึกใน ESP32 flash และดาวน์โหลดผ่าน Thonny IDE
+        Note: Files saved to ESP32 flash and downloaded via Thonny IDE
 
         Args:
             filename: ชื่อไฟล์ (optional, auto-generated if not provided)
@@ -297,40 +328,38 @@ class TitrationController:
         Returns:
             str: ชื่อไฟล์ที่บันทึก หรือ None ถ้าล้มเหลว
         """
-        if not self.sd_card:
-            print("ข้อผิดพลาด: ไม่มี SD Card (Error: No SD Card)")
-            return None
-
         if not self.data_points:
             print("ข้อผิดพลาด: ไม่มีข้อมูลให้บันทึก (Error: No data to save)")
             return None
 
         # สร้างชื่อไฟล์อัตโนมัติ (Auto-generate filename)
         if filename is None:
-            filename = self.sd_card.get_next_version('titration_data')
+            filename = self._get_next_filename('titration_data')
 
-        # เขียน header (Write header)
-        if not self.sd_card.write_csv_header(filename, self.CSV_HEADERS):
+        try:
+            # เขียน header และข้อมูลทั้งหมด (Write header and all data)
+            with open(filename, 'w') as f:
+                # เขียน header (Write header)
+                f.write(','.join(self.CSV_HEADERS) + '\n')
+
+                # เขียนข้อมูลทั้งหมด (Write all data)
+                for point in self.data_points:
+                    data_row = f"{point['cycle']},{point['time']:.2f},{point['volume']:.3f},"
+                    data_row += f"{point['ph']:.3f},{point['temperature']:.2f}\n"
+                    f.write(data_row)
+
+                # เพิ่มบรรทัดสรุป (Add summary line)
+                if self.equivalence_point:
+                    summary = f"# Equivalence Point: Volume={self.equivalence_point[0]:.3f}mL, pH={self.equivalence_point[1]:.3f}\n"
+                    f.write(summary)
+
+            print(f"บันทึกผลลัพธ์ที่: {filename} (Results saved to: {filename})")
+            print(f"ดาวน์โหลดไฟล์ผ่าน Thonny IDE (Download via Thonny IDE)")
+            return filename
+
+        except Exception as e:
+            print(f"ข้อผิดพลาดบันทึกไฟล์ (Error saving file): {e}")
             return None
-
-        # เขียนข้อมูลทั้งหมด (Write all data)
-        for point in self.data_points:
-            data_row = [
-                point['cycle'],
-                f"{point['time']:.2f}",
-                f"{point['volume']:.3f}",
-                f"{point['ph']:.3f}",
-                f"{point['temperature']:.2f}"
-            ]
-            self.sd_card.append_csv_row(filename, data_row)
-
-        # เพิ่มบรรทัดสรุป (Add summary line)
-        if self.equivalence_point:
-            summary = f"# Equivalence Point: Volume={self.equivalence_point[0]:.3f}mL, pH={self.equivalence_point[1]:.3f}"
-            self.sd_card.append_csv_row(filename, [summary])
-
-        print(f"บันทึกผลลัพธ์ที่: {filename} (Results saved to: {filename})")
-        return filename
 
     def stop(self):
         """
@@ -367,10 +396,16 @@ class TitrationController:
         self._is_running = True
         self.start_time = time.ticks_ms()
 
-        # สร้างไฟล์บันทึกข้อมูล (Create data file)
-        if self.sd_card:
-            self._current_filename = self.sd_card.get_next_version('titration_data')
-            self.sd_card.write_csv_header(self._current_filename, self.CSV_HEADERS)
+        # สร้างไฟล์บันทึกข้อมูลใน ESP32 flash storage
+        # Create data file in ESP32 flash storage
+        try:
+            self._current_filename = self._get_next_filename('titration_data')
+            with open(self._current_filename, 'w') as f:
+                f.write(','.join(self.CSV_HEADERS) + '\n')
+            print(f"สร้างไฟล์: {self._current_filename} (File created: {self._current_filename})")
+        except Exception as e:
+            print(f"ไม่สามารถสร้างไฟล์ (Cannot create file): {e}")
+            self._current_filename = None
 
         print("=" * 50)
         print("เริ่มการไทเทรชันอัตโนมัติ (Starting Automatic Titration)")
@@ -535,12 +570,14 @@ if __name__ == '__main__':
     print("=" * 50)
     print("\nโมดูลนี้ต้องการ hardware จริงในการทำงาน")
     print("This module requires actual hardware to run")
+    print("\nหมายเหตุ: ไฟล์ CSV บันทึกใน ESP32 flash storage")
+    print("Note: CSV files saved to ESP32 flash storage")
+    print("ดาวน์โหลดผ่าน Thonny IDE (Download via Thonny IDE)")
     print("\nตัวอย่างการใช้งาน (Usage example):")
     print("""
     from hardware.pump import Pump
     from hardware.ph_sensor import PHSensor
     from hardware.temp_sensor import TemperatureSensor
-    from hardware.sd_card import SDCardManager
     from core.titration import TitrationController
 
     # สร้าง hardware objects (Create hardware objects)
@@ -553,15 +590,13 @@ if __name__ == '__main__':
     temp_sensor = TemperatureSensor()
     temp_sensor.init()
 
-    sd_card = SDCardManager()
-    sd_card.init()
-
     # สร้าง TitrationController (Create TitrationController)
+    # หมายเหตุ: ไม่ต้องใช้ SD Card - ข้อมูลบันทึกใน ESP32 flash
+    # Note: No SD Card needed - data saved to ESP32 flash
     titration = TitrationController(
         pump=pump,
         ph_sensor=ph_sensor,
-        temp_sensor=temp_sensor,
-        sd_card=sd_card
+        temp_sensor=temp_sensor
     )
 
     # ตั้งค่าพารามิเตอร์ (Configure parameters)
@@ -575,10 +610,19 @@ if __name__ == '__main__':
     results = titration.run_titration(auto_detect=True)
 
     # บันทึกผลลัพธ์ (Save results)
+    # ไฟล์จะบันทึกใน ESP32 flash เช่น titration_data_R1.csv
+    # File saved to ESP32 flash e.g. titration_data_R1.csv
     titration.save_results()
 
     # แสดงจุดสมมูล (Show equivalence point)
     if results['equivalence_point']:
         vol, ph = results['equivalence_point']
         print(f"จุดสมมูล: {vol:.3f} mL, pH {ph:.3f}")
+
+    # ดาวน์โหลดไฟล์ CSV ผ่าน Thonny IDE:
+    # Download CSV file via Thonny IDE:
+    # 1. เชื่อมต่อ ESP32 กับ Thonny (Connect ESP32 to Thonny)
+    # 2. คลิกขวาที่ไฟล์ titration_data_R1.csv
+    # 3. เลือก "Download to..." เพื่อบันทึกลงคอมพิวเตอร์
+    # 4. วิเคราะห์ด้วย EquivPoint tool
     """)
