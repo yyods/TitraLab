@@ -1,0 +1,25 @@
+# Claude Code configuration
+.claude/
+CLAUDE.md
+
+# Agent specifications and documentation
+docs/
+MicroPython/Week_3/async_support/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

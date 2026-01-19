@@ -15,7 +15,7 @@ spi = SPI(1, baudrate=40000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, dc=Pin(27), cs=Pin(15), rst=Pin(0), width=320, height=240, rotation=90)
 
 # โหลดฟอนต์สำหรับแสดงข้อความบนจอ
-font = XglcdFont('EspressoDolce18x24.c', 18, 24)
+font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
 
 # ตั้งค่าเซ็นเซอร์อุณหภูมิ DS18B20
 one_wire_pin = Pin(16)
@@ -60,7 +60,7 @@ def calibrate_pH():
             sleep_ms(50)
 
         # เริ่มนับถอยหลัง
-        countdown_time = 1
+        countdown_time = 10
         display.clear()
         display.draw_text(50, 70, f"Calibrating pH {buffer_pH:.2f}", font, color565(255, 255, 255))
         display.draw_text(50, 140, "Time Left:", font, color565(255, 255, 255))

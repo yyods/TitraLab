@@ -17,7 +17,7 @@ spi = SPI(1, baudrate=10000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, cs=Pin(15), dc=Pin(27), rst=Pin(0), width=240, height=320, rotation=90)
 
 # โหลดฟอนต์ EspressoDolce18x24
-font = XglcdFont("EspressoDolce18x24.c", 18, 24)
+font = XglcdFont("fonts/EspressoDolce18x24.c", 18, 24)
 
 # กำหนดขา ADC สำหรับเซ็นเซอร์ pH
 adc = ADC(Pin(25))
