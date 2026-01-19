@@ -34,15 +34,15 @@
 # ==============================================================================
 # หัววัด pH ให้สัญญาณแรงดันไฟฟ้า (mV) ตามสมการ Nernst:
 #
-#     E = E0 - (2.303RT/nF) x pH
+#     E_probe = E0 - (2.303RT/nF) x pH
 #
 # โดย:
-#   E   = ศักย์ไฟฟ้าที่วัดได้ (mV)
-#   E0  = ศักย์ไฟฟ้ามาตรฐาน (mV) - ค่าที่ pH = 0
-#   R   = ค่าคงที่ของก๊าซ = 8.314 J/(mol.K)
-#   T   = อุณหภูมิสัมบูรณ์ (K) = C + 273.15
-#   n   = จำนวนอิเล็กตรอนที่ถ่ายเท = 1 สำหรับ H+
-#   F   = ค่าคงที่ฟาราเดย์ = 96485 C/mol
+#   E_probe = ศักย์ไฟฟ้าจากหัววัด (mV) - ค่าบวกสำหรับกรด, ลบสำหรับเบส
+#   E0      = ศักย์ไฟฟ้ามาตรฐาน (mV) - ค่าที่ pH = 0
+#   R       = ค่าคงที่ของก๊าซ = 8.314 J/(mol.K)
+#   T       = อุณหภูมิสัมบูรณ์ (K) = C + 273.15
+#   n       = จำนวนอิเล็กตรอนที่ถ่ายเท = 1 สำหรับ H+
+#   F       = ค่าคงที่ฟาราเดย์ = 96485 C/mol
 #
 # ความชันทฤษฎี (Theoretical slope) ที่อุณหภูมิต่างๆ:
 #   20C (293.15K): -58.17 mV/pH
@@ -50,8 +50,31 @@
 #   30C (303.15K): -60.15 mV/pH
 #
 # ==============================================================================
+# วงจร pH ของ TitraLab: LMC6482 Op-Amp with Offset
+# ==============================================================================
+# ปัญหา: หัววัด pH ให้แรงดันบวก (กรด) และลบ (เบส) แต่ ADC อ่านได้เฉพาะ 0-3.3V
+# Problem: pH probe outputs positive (acid) and negative (base) voltages,
+#          but ADC can only read 0-3.3V
+#
+# วิธีแก้: ใช้ LMC6482 op-amp เลื่อน (offset) สัญญาณ +1650 mV (3.3V/2)
+# Solution: Use LMC6482 op-amp to offset the signal by +1650 mV (3.3V/2)
+#
+#     E_measured = E_probe + OFFSET_MV
+#
+# ผลลัพธ์ที่ 25C (Results at 25C):
+#   pH 4 (กรด/acidic):  E_probe = +177 mV  → E_measured = 1827 mV
+#   pH 7 (กลาง/neutral): E_probe =   0 mV  → E_measured = 1650 mV  ← จุดกึ่งกลาง
+#   pH 10 (เบส/basic):  E_probe = -177 mV  → E_measured = 1473 mV
+#
+# สมการเส้นตรงสำหรับการสอบเทียบ (Linear equation for calibration):
+#     E_measured = slope_m × pH + intercept_b
+#
+# โดย intercept_b = OFFSET_MV + 7 × |slope| ≈ 1650 + 414 = 2064 mV (ที่ pH=0)
+#
+# ==============================================================================
 # Hardware Configuration:
-# - GPIO 25: pH Sensor (ADC)
+# ==============================================================================
+# - GPIO 25: pH Sensor (ADC) - สัญญาณจาก LMC6482 (0-3.3V, กึ่งกลางที่ 1.65V)
 # - GPIO 16: DS18B20 Temperature Sensor
 # - GPIO 34: Button 1 (Start/Stop recording)
 # ==============================================================================
@@ -71,6 +94,13 @@ F_CONSTANT = 96485       # ค่าคงที่ฟาราเดย์ (Far
 N_ELECTRONS = 1          # จำนวนอิเล็กตรอนสำหรับ H+ (Electrons for H+)
 KELVIN_OFFSET = 273.15   # แปลง Celsius เป็น Kelvin
 DEFAULT_TEMP = 25.0      # อุณหภูมิเริ่มต้นเมื่อไม่มีเซ็นเซอร์ (Default when no sensor)
+
+# ==============================================================================
+# ค่าคงที่วงจร LMC6482 (LMC6482 Circuit Constants)
+# ==============================================================================
+# วงจร op-amp เลื่อนสัญญาณ pH probe ให้ 0 mV (pH 7) อยู่ที่กึ่งกลาง ADC
+# Op-amp circuit offsets pH probe signal so 0 mV (pH 7) is at ADC midpoint
+OFFSET_MV = 1650.0       # แรงดัน offset ที่ pH 7 (Offset voltage at pH 7) = 3.3V / 2
 
 # ==============================================================================
 # การตั้งค่าเซ็นเซอร์อุณหภูมิ DS18B20
@@ -105,7 +135,7 @@ spi = SPI(1, baudrate=10000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, cs=Pin(15), dc=Pin(27), rst=Pin(0), width=240, height=320, rotation=90)
 
 # โหลดฟอนต์ (Load font)
-font = XglcdFont("EspressoDolce18x24.c", 18, 24)
+font = XglcdFont("fonts/EspressoDolce18x24.c", 18, 24)
 
 # ==============================================================================
 # การตั้งค่า ADC สำหรับเซ็นเซอร์ pH
@@ -132,12 +162,19 @@ button_1 = Pin(34, Pin.IN)
 # ค่าเหล่านี้จะถูกโหลดจากไฟล์ data_calibrate.txt ถ้ามี
 # These values will be loaded from data_calibrate.txt if available
 #
-# slope_m: ความชันของเส้นสอบเทียบ (mV/pH)
-# intercept_b: จุดตัดแกน Y (mV ที่ pH = 0)
-# r_squared: ค่า R^2 จากการถดถอยเชิงเส้น
+# สมการเส้นตรง (Linear equation): E_measured = slope_m × pH + intercept_b
+#
+# slope_m: ความชันของเส้นสอบเทียบ (mV/pH) - ค่าลบเพราะ pH สูง = แรงดันต่ำ
+# intercept_b: จุดตัดแกน Y (mV ที่ pH = 0) - รวม offset จากวงจร LMC6482
+# r_squared: ค่า R^2 จากการถดถอยเชิงเส้น (ควร > 0.99)
 # cal_temp: อุณหภูมิขณะสอบเทียบ (C)
+#
+# การคำนวณ intercept_b เริ่มต้น (Default intercept_b calculation):
+#   ที่ pH 7: E_measured = 1650 mV (OFFSET_MV)
+#   intercept_b = OFFSET_MV - slope_m × 7 = 1650 - (-59.16 × 7) = 1650 + 414.12 = 2064.12 mV
+#
 slope_m = -59.16         # ความชันทฤษฎีที่ 25C (Theoretical slope at 25C)
-intercept_b = 414.12     # ค่าเริ่มต้นโดยประมาณ (Approximate default)
+intercept_b = 2064.12    # OFFSET_MV + 7×|slope| (ค่าที่ pH=0 รวม offset)
 r_squared = 0.0          # ยังไม่ได้สอบเทียบ (Not calibrated yet)
 cal_temp = 25.0          # อุณหภูมิสอบเทียบ (Calibration temperature)
 
@@ -151,7 +188,11 @@ def load_calibration():
 
     รูปแบบไฟล์ (File format):
     slope_m,intercept_b,r_squared,cal_temp
-    -58.5,420.3,0.9985,25.2
+    -58.5,2050.3,0.9985,25.2
+
+    หมายเหตุ (Note):
+    - intercept_b ควรอยู่ในช่วง ~2000-2100 mV (รวม offset 1650 mV จากวงจร)
+    - intercept_b should be ~2000-2100 mV (includes 1650 mV circuit offset)
 
     Returns:
         bool: True ถ้าโหลดสำเร็จ (True if loaded successfully)
@@ -221,13 +262,20 @@ def calculate_nernst_slope(temp_celsius):
     return slope * 1000
 
 # ==============================================================================
-# ฟังก์ชันอ่านแรงดันไฟฟ้า (mV) จากเซ็นเซอร์ pH
-# Read Voltage Function (mV) from pH Sensor
+# ฟังก์ชันอ่านแรงดันไฟฟ้า (mV) จากวงจร pH
+# Read Voltage Function (mV) from pH Circuit
 # ==============================================================================
 def read_voltage_mv():
     """
     อ่านค่า ADC และแปลงเป็นมิลลิโวลต์ (mV)
     Read ADC value and convert to millivolts (mV)
+
+    หมายเหตุวงจร LMC6482 (LMC6482 Circuit Note):
+    - ค่าที่อ่านได้รวม offset 1650 mV จากวงจร op-amp แล้ว
+    - The reading already includes 1650 mV offset from op-amp circuit
+    - ที่ pH 7: ควรอ่านได้ประมาณ 1650 mV (At pH 7: should read ~1650 mV)
+    - ที่ pH 4: ควรอ่านได้ประมาณ 1827 mV (At pH 4: should read ~1827 mV)
+    - ที่ pH 10: ควรอ่านได้ประมาณ 1473 mV (At pH 10: should read ~1473 mV)
 
     การคำนวณ (Calculation):
     - ADC 12-bit: 0-4095
@@ -235,7 +283,7 @@ def read_voltage_mv():
     - voltage_mv = (ADC_value / 4095) x 3300
 
     Returns:
-        float: แรงดันไฟฟ้าเป็น mV (Voltage in mV)
+        float: แรงดันไฟฟ้าเป็น mV รวม offset (Voltage in mV including offset)
     """
     adc_value = adc.read()
     voltage_mv = adc_value * 3300 / 4095
@@ -251,20 +299,26 @@ def calculate_ph_with_temp_compensation(voltage_mv, current_temp):
     Calculate pH from voltage with temperature compensation
 
     หลักการ (Principle):
-    1. ความชัน Nernst เปลี่ยนตามอุณหภูมิ
-    2. ใช้อัตราส่วนความชันเพื่อชดเชย
+    1. แรงดันที่อ่านได้รวม offset 1650 mV จากวงจร LMC6482 แล้ว
+       (Voltage reading already includes 1650 mV offset from LMC6482)
+    2. ความชัน Nernst เปลี่ยนตามอุณหภูมิ (Nernst slope varies with temperature)
+    3. ใช้อัตราส่วนความชันเพื่อชดเชย (Use slope ratio for compensation)
 
-    สูตร (Formula):
-    pH = (E - E0) / slope_corrected
+    สมการ (Equation):
+    E_measured = slope_m × pH + intercept_b
+    ดังนั้น: pH = (E_measured - intercept_b) / slope_corrected
 
-    โดย slope_corrected = slope_m * (slope_at_current_T / slope_at_cal_T)
+    โดย:
+    - E_measured = แรงดันที่อ่านได้ (รวม offset) / Measured voltage (with offset)
+    - intercept_b = OFFSET_MV + 7×|slope| ≈ 2064 mV / Includes circuit offset
+    - slope_corrected = slope_m × (slope_at_current_T / slope_at_cal_T)
 
     Args:
-        voltage_mv: แรงดันที่วัดได้ (mV)
-        current_temp: อุณหภูมิปัจจุบัน (C)
+        voltage_mv: แรงดันที่วัดได้รวม offset (mV) / Measured voltage with offset
+        current_temp: อุณหภูมิปัจจุบัน (C) / Current temperature
 
     Returns:
-        float: ค่า pH ที่ชดเชยอุณหภูมิแล้ว
+        float: ค่า pH ที่ชดเชยอุณหภูมิแล้ว / Temperature-compensated pH value
     """
     # คำนวณความชัน Nernst ที่อุณหภูมิปัจจุบันและขณะสอบเทียบ
     # Calculate Nernst slope at current and calibration temperatures

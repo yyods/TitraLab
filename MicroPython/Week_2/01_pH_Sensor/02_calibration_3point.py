@@ -36,9 +36,12 @@
 # วัตถุประสงค์การเรียนรู้ด้านโปรแกรม (Programming Learning Objectives):
 # ==============================================================================
 # 1. เรียนรู้การคำนวณการถดถอยเชิงเส้น (Linear Regression) แบบ manual
-# 2. เข้าใจการบันทึกข้อมูลการสอบเทียบลงไฟล์
+# 2. เข้าใจการบันทึกข้อมูลการสอบเทียบลงไฟล์ (File I/O with exception handling)
 # 3. ใช้ state machine ในการควบคุมขั้นตอนการสอบเทียบ
 # 4. การแสดงผล real-time บนจอ TFT
+# 5. การคำนวณทางสถิติ: ค่าเฉลี่ย, ค่าเบี่ยงเบนมาตรฐาน (Statistics: mean, std dev)
+# 6. การใช้ tuple unpacking เช่น voltage, std = read_average_voltage()
+# 7. การใช้ list comprehension และ generator expression
 #
 # ==============================================================================
 # หลักการทางเคมี: สมการ Nernst (Nernst Equation)
@@ -60,9 +63,38 @@
 # - หัววัด pH ที่ดีควรมี efficiency 95-105%
 # - Efficiency < 90% หรือ > 110% บ่งบอกว่าหัววัดเสื่อมสภาพ
 #
+# ค่า Efficiency ตามอายุของหัววัด (Efficiency by probe age):
+# - หัววัดใหม่ (New probe): 97-100%
+# - หัววัดอายุ 1-2 ปี (1-2 years old): 90-97%
+# - หัววัดที่ควรเปลี่ยน (Should replace): < 85%
+#
+# ==============================================================================
+# วงจร pH ของ TitraLab: LMC6482 Op-Amp with Offset
+# ==============================================================================
+# ปัญหา: หัววัด pH ให้แรงดันบวก (กรด) และลบ (เบส) แต่ ADC อ่านได้เฉพาะ 0-3.3V
+# Problem: pH probe outputs positive (acid) and negative (base) voltages,
+#          but ADC can only read 0-3.3V
+#
+# วิธีแก้: ใช้ LMC6482 op-amp เลื่อน (offset) สัญญาณ +1650 mV (3.3V/2)
+# Solution: Use LMC6482 op-amp to offset the signal by +1650 mV (3.3V/2)
+#
+#     E_measured = E_probe + OFFSET_MV
+#
+# ผลลัพธ์ที่ 25C (Results at 25C):
+#   pH 4 (กรด/acidic):  E_probe = +177 mV  -> E_measured = 1827 mV
+#   pH 7 (กลาง/neutral): E_probe =   0 mV  -> E_measured = 1650 mV  <- จุดกึ่งกลาง
+#   pH 10 (เบส/basic):  E_probe = -177 mV  -> E_measured = 1473 mV
+#
+# สมการเส้นตรงสำหรับการสอบเทียบ (Linear equation for calibration):
+#     E_measured = slope_m x pH + intercept_b
+#
+# โดย intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV (ที่ pH=0)
+# where intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV (at pH=0)
+#
 # ==============================================================================
 # Hardware Configuration:
-# - GPIO 25: pH Sensor (ADC)
+# - GPIO 25: pH Sensor (ADC) - รับสัญญาณจาก LMC6482 (0-3.3V, จุดกึ่งกลางที่ 1.65V)
+#            Receives signal from LMC6482 (0-3.3V, midpoint at 1.65V)
 # - GPIO 16: DS18B20 Temperature Sensor
 # - GPIO 34: Button 1 (Confirm calibration point)
 # ==============================================================================
@@ -83,6 +115,13 @@ N_ELECTRONS = 1          # จำนวนอิเล็กตรอนสำ�
 KELVIN_OFFSET = 273.15   # แปลง Celsius เป็น Kelvin
 
 # ==============================================================================
+# ค่าคงที่วงจร LMC6482 (LMC6482 Circuit Constants)
+# ==============================================================================
+# วงจร op-amp เลื่อนสัญญาณ pH probe ให้ 0 mV (pH 7) อยู่ที่กึ่งกลาง ADC
+# Op-amp circuit offsets pH probe signal so 0 mV (pH 7) is at ADC midpoint
+OFFSET_MV = 1650.0       # แรงดัน offset ที่ pH 7 (Offset voltage at pH 7) = 3.3V / 2
+
+# ==============================================================================
 # การตั้งค่า ADC สำหรับเซ็นเซอร์ pH
 # ADC Setup for pH Sensor
 # ==============================================================================
@@ -100,7 +139,7 @@ spi = SPI(1, baudrate=40000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, dc=Pin(27), cs=Pin(15), rst=Pin(0), width=320, height=240, rotation=90)
 
 # โหลดฟอนต์ (Load font)
-font = XglcdFont('EspressoDolce18x24.c', 18, 24)
+font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
 
 # ==============================================================================
 # การตั้งค่าเซ็นเซอร์อุณหภูมิ DS18B20
@@ -175,13 +214,23 @@ def read_voltage_mv():
     อ่านค่า ADC และแปลงเป็นมิลลิโวลต์ (mV)
     Read ADC value and convert to millivolts (mV)
 
+    หมายเหตุสำคัญ (Important Note):
+    ค่าที่อ่านได้รวม offset จากวงจร LMC6482 แล้ว (+1650 mV)
+    The reading includes the offset from the LMC6482 circuit (+1650 mV)
+
+    ตัวอย่างค่าที่คาดหวัง (Expected values):
+    - pH 4 (กรด):  ~1827 mV (1650 + 177)
+    - pH 7 (กลาง): ~1650 mV (1650 + 0)
+    - pH 10 (เบส): ~1473 mV (1650 - 177)
+
     การคำนวณ (Calculation):
     - ADC 12-bit: 0-4095
     - แรงดันอ้างอิง: 3300 mV (3.3V)
     - voltage_mv = (ADC_value / 4095) x 3300
 
     Returns:
-        float: แรงดันไฟฟ้าเป็น mV (Voltage in mV)
+        float: แรงดันไฟฟ้าเป็น mV (รวม offset แล้ว)
+               Voltage in mV (includes LMC6482 offset)
     """
     adc_value = pH_adc.read()
     voltage_mv = adc_value * 3300 / 4095
@@ -320,11 +369,18 @@ def save_calibration_data(slope, intercept, r_squared, avg_temp):
 
     รูปแบบไฟล์ (File format):
     slope_m,intercept_b,r_squared,cal_temp
-    -58.5,420.3,0.9985,25.2
+    -59.0,2060.5,0.9985,25.2
+
+    หมายเหตุเกี่ยวกับ intercept_b (Note about intercept_b):
+    เนื่องจากวงจร LMC6482 offset +1650 mV ค่า intercept_b จะอยู่ประมาณ 2000-2100 mV
+    Due to LMC6482 circuit offset of +1650 mV, intercept_b will be around 2000-2100 mV
+
+    การคำนวณ: intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV
+    Calculation: intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV
 
     Args:
-        slope: ความชันที่คำนวณได้ (mV/pH)
-        intercept: จุดตัดแกน y (mV)
+        slope: ความชันที่คำนวณได้ (mV/pH) - ค่าลบประมาณ -59 mV/pH
+        intercept: จุดตัดแกน y (mV) - ค่าประมาณ 2000-2100 mV (รวม offset)
         r_squared: ค่า R-squared
         avg_temp: อุณหภูมิเฉลี่ยขณะสอบเทียบ (C)
 
@@ -355,9 +411,17 @@ def save_calibration_log(slope, intercept, r_squared, efficiency):
     บันทึกรายละเอียดการสอบเทียบลงไฟล์ log
     Save detailed calibration log to file
 
+    หมายเหตุเกี่ยวกับค่าที่คาดหวัง (Expected values note):
+    - slope: ประมาณ -59 mV/pH (ค่าลบ เพราะ pH เพิ่ม -> แรงดันลด)
+    - intercept: ประมาณ 2000-2100 mV (รวม OFFSET_MV = 1650 mV จาก LMC6482)
+
+    สูตร: E_measured = slope x pH + intercept
+    ที่ pH = 0: E_measured = intercept ≈ 2064 mV
+    ที่ pH = 7: E_measured = -59 x 7 + 2064 ≈ 1651 mV (ใกล้ OFFSET_MV)
+
     Args:
-        slope: ความชันที่คำนวณได้
-        intercept: จุดตัดแกน y
+        slope: ความชันที่คำนวณได้ (mV/pH) - ค่าลบประมาณ -59
+        intercept: จุดตัดแกน y (mV) - ค่าประมาณ 2000-2100 mV
         r_squared: ค่า R-squared
         efficiency: Nernst slope efficiency (%)
     """
@@ -575,7 +639,9 @@ def calibrate_pH():
 
         # แสดงการรอให้ค่าเสถียร (Display stabilization countdown)
         # นิสิตควรสังเกตว่าค่าค่อยๆ เสถียรอย่างไร
-        stabilization_time = 10  # วินาที (seconds) - เวลารอให้ค่าเสถียร
+        # หมายเหตุ: นิสิตรอ 30-60 วินาทีก่อนกดปุ่ม แล้วโปรแกรมรออีก 10 วินาที
+        # Note: Student waits 30-60s before pressing, then program waits 10s more
+        stabilization_time = 10  # วินาทีหลังกดปุ่ม (seconds after button press)
 
         display.clear()
         display.draw_text(30, 30, f"Measuring pH {buffer_pH:.2f}", font, color565(255, 255, 255))
