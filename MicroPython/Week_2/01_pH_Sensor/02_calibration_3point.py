@@ -92,11 +92,12 @@
 # where intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV (at pH=0)
 #
 # ==============================================================================
-# Hardware Configuration:
-# - GPIO 25: pH Sensor (ADC) - รับสัญญาณจาก LMC6482 (0-3.3V, จุดกึ่งกลางที่ 1.65V)
-#            Receives signal from LMC6482 (0-3.3V, midpoint at 1.65V)
-# - GPIO 16: DS18B20 Temperature Sensor
-# - GPIO 34: Button 1 (Confirm calibration point)
+# Hardware Configuration (นิสิตกำหนดขา GPIO เอง / Student assigns GPIO pins):
+# - MY_PH_PIN (GPIO 32): pH Sensor (ADC) - รับสัญญาณจาก LMC6482 (0-3.3V)
+#                        Receives signal from LMC6482 (0-3.3V, midpoint at 1.65V)
+#                        แนะนำ ADC1: GPIO 32, 33, 34, 35, 36, 39
+# - GPIO 16: DS18B20 Temperature Sensor (fixed for this example)
+# - GPIO 34: Button 1 (Confirm calibration point) - input-only pin
 # ==============================================================================
 
 from time import sleep_ms, ticks_ms, ticks_diff
@@ -125,10 +126,15 @@ OFFSET_MV = 1650.0       # แรงดัน offset ที่ pH 7 (Offset volt
 # การตั้งค่า ADC สำหรับเซ็นเซอร์ pH
 # ADC Setup for pH Sensor
 # ==============================================================================
+# นิสิตกำหนดขา GPIO ตามการต่อสายจัมเปอร์ของตนเอง
+# Students define GPIO pins based on their own jumper wire connections
+# pH Sensor: ต้องการ ADC -> เลือก GPIO ที่รองรับ ADC
+# แนะนำ ADC1 (32, 33, 34, 35, 36, 39) เพราะไม่ conflict กับ WiFi
+MY_PH_PIN = 32               # ตัวอย่าง: เลือก GPIO32 สำหรับ PH_PROBE
+
 # ADC แปลงสัญญาณแอนะล็อก (0-3.3V) เป็นค่าดิจิทัล (0-4095)
 # ADC converts analog signal (0-3.3V) to digital value (0-4095)
-adc_pin = 25
-pH_adc = ADC(Pin(adc_pin))
+pH_adc = ADC(Pin(MY_PH_PIN))
 pH_adc.atten(ADC.ATTN_11DB)  # ตั้งค่าให้อ่านแรงดัน 0-3.3V
 
 # ==============================================================================
@@ -476,6 +482,189 @@ def save_calibration_log(slope, intercept, r_squared, efficiency):
         print(f"ข้อผิดพลาดในการบันทึก log: {e}")
 
 # ==============================================================================
+# ฟังก์ชันแสดงข้อมูลดิบก่อนคำนวณ
+# Display Raw Calibration Data Before Calculation
+# ==============================================================================
+def display_raw_calibration_data():
+    """
+    แสดงข้อมูลดิบที่เก็บได้จากการสอบเทียบก่อนแสดงผลลัพธ์
+    Display raw calibration data before showing calculated results
+
+    วัตถุประสงค์การเรียนรู้ (Learning Objectives):
+    - นิสิตเห็นข้อมูลดิบที่ใช้ในการคำนวณ
+    - นิสิตสามารถลองคำนวณสมการถดถอยเชิงเส้นด้วยตัวเอง
+    - เข้าใจความสัมพันธ์ระหว่าง pH และแรงดันไฟฟ้า
+
+    ข้อมูลที่แสดง (Data displayed):
+    - ค่า pH ของสารละลายกันชน: 4.00, 7.00, 10.00
+    - ค่าแรงดันที่วัดได้ (mV)
+    - ค่าอุณหภูมิขณะวัดแต่ละจุด
+    """
+    # ==============================================================================
+    # แสดงบน Serial Console (Print to Serial Console)
+    # ==============================================================================
+    print("\n")
+    print("=" * 70)
+    print("ข้อมูลดิบจากการสอบเทียบ (Raw Calibration Data)")
+    print("=" * 70)
+    print("")
+    print("นิสิตสามารถใช้ข้อมูลนี้คำนวณสมการถดถอยเชิงเส้นด้วยตัวเอง")
+    print("Students can use this data to calculate linear regression manually")
+    print("")
+    print("-" * 70)
+    print("  จุดที่  |   pH (x)   |   Voltage (y) mV   |   Temp (C)")
+    print("  Point   |            |                    |")
+    print("-" * 70)
+
+    for i, ph in enumerate(buffer_pH_values):
+        print(f"    {i+1}     |   {ph:6.2f}   |     {calibrated_voltages[i]:10.2f}     |    {temperatures[i]:5.1f}")
+
+    print("-" * 70)
+    print("")
+
+    # คำนวณค่าที่ต้องใช้ในสูตร (Calculate intermediate values for formula)
+    n = len(buffer_pH_values)
+    sum_x = sum(buffer_pH_values)
+    sum_y = sum(calibrated_voltages)
+    sum_xy = sum(x * y for x, y in zip(buffer_pH_values, calibrated_voltages))
+    sum_x2 = sum(x ** 2 for x in buffer_pH_values)
+
+    print("ค่าที่ใช้ในการคำนวณ (Values for calculation):")
+    print("-" * 70)
+    print(f"  n (จำนวนจุด)           = {n}")
+    print(f"  Sum(x)    = Sum(pH)    = {sum_x:.2f}")
+    print(f"  Sum(y)    = Sum(mV)    = {sum_y:.2f}")
+    print(f"  Sum(x*y)  = Sum(pH*mV) = {sum_xy:.2f}")
+    print(f"  Sum(x^2)  = Sum(pH^2)  = {sum_x2:.2f}")
+    print("-" * 70)
+    print("")
+
+    # แสดงสูตรการคำนวณ (Show calculation formulas)
+    print("สูตรการคำนวณ Linear Regression (Formulas):")
+    print("-" * 70)
+    print("")
+    print("  วิธีที่ 1: สูตรเต็ม (Full Formula)")
+    print("  --------------------------------------")
+    print("  Slope (m) = [n*Sum(xy) - Sum(x)*Sum(y)] / [n*Sum(x^2) - (Sum(x))^2]")
+    print("")
+    print(f"            = [{n}*{sum_xy:.2f} - {sum_x:.2f}*{sum_y:.2f}] / [{n}*{sum_x2:.2f} - ({sum_x:.2f})^2]")
+    print("")
+    print("  Intercept (b) = [Sum(y) - m*Sum(x)] / n")
+    print("")
+    print("-" * 70)
+    print("")
+    print("  วิธีที่ 2: แบบลัด 2 จุด (Simplified 2-Point Method)")
+    print("  --------------------------------------")
+    print("  ใช้จุด pH 4.00 และ pH 10.00:")
+    print("")
+    print("  Slope (m) = (y2 - y1) / (x2 - x1)")
+    print(f"            = ({calibrated_voltages[2]:.2f} - {calibrated_voltages[0]:.2f}) / (10.00 - 4.00)")
+    print(f"            = {calibrated_voltages[2] - calibrated_voltages[0]:.2f} / 6.00")
+    print("")
+    print("  Intercept (b) = y1 - m * x1")
+    print("                = ค่า mV ที่ pH 4 - (slope * 4.00)")
+    print("")
+    print("-" * 70)
+    print("")
+
+    # แสดงค่าทฤษฎีที่คาดหวัง (Show expected theoretical values)
+    avg_temp = sum(temperatures) / len(temperatures)
+    theoretical_slope = calculate_theoretical_nernst_slope(avg_temp)
+
+    print("ค่าที่คาดหวังทางทฤษฎี (Expected Theoretical Values):")
+    print("-" * 70)
+    print(f"  อุณหภูมิเฉลี่ย (Avg Temp): {avg_temp:.1f} C")
+    print(f"  ความชัน Nernst ทฤษฎี (Theoretical Nernst Slope): {theoretical_slope:.2f} mV/pH")
+    print(f"  จุดตัดแกน y ที่คาดหวัง (Expected Intercept): ~2060-2100 mV")
+    print("")
+    print("  หมายเหตุ: ค่า Intercept สูงเพราะวงจร LMC6482 offset +1650 mV")
+    print("  Note: High intercept due to LMC6482 circuit offset of +1650 mV")
+    print("-" * 70)
+    print("")
+
+    # ==============================================================================
+    # แสดงบนจอ TFT (Display on TFT)
+    # ==============================================================================
+    display.clear()
+    display.draw_text(20, 5, "Raw Calibration Data", font, color565(255, 255, 255))
+
+    # แสดงหัวตาราง (Table header)
+    display.draw_text(5, 35, "pH", font, color565(0, 255, 255))
+    display.draw_text(80, 35, "mV", font, color565(0, 255, 255))
+    display.draw_text(180, 35, "Temp", font, color565(0, 255, 255))
+
+    # แสดงเส้นแบ่ง (Separator line)
+    display.fill_rectangle(5, 55, 230, 2, color565(100, 100, 100))
+
+    # แสดงข้อมูลแต่ละจุด (Display each data point)
+    y_pos = 65
+    for i, ph in enumerate(buffer_pH_values):
+        display.draw_text(5, y_pos, f"{ph:.2f}", font, color565(255, 255, 255))
+        display.draw_text(60, y_pos, f"{calibrated_voltages[i]:.1f}", font, color565(255, 193, 34))
+        display.draw_text(170, y_pos, f"{temperatures[i]:.1f}C", font, color565(0, 191, 255))
+        y_pos += 30
+
+    # แสดงข้อความให้นิสิตคำนวณ (Prompt student to calculate)
+    display.draw_text(5, 170, "Calculate m,b", font, color565(0, 255, 0))
+    display.draw_text(5, 200, "Press BTN1 to verify", font, color565(255, 255, 0))
+
+
+# ==============================================================================
+# ฟังก์ชันรอให้นิสิตคำนวณด้วยตัวเอง
+# Wait for Student Manual Calculation Function
+# ==============================================================================
+def wait_for_manual_calculation():
+    """
+    รอให้นิสิตคำนวณสมการถดถอยเชิงเส้นด้วยตัวเองก่อนแสดงผลลัพธ์
+    Wait for students to manually calculate linear regression before showing results
+
+    วัตถุประสงค์ (Objectives):
+    - ให้เวลานิสิตลองคำนวณด้วยมือหรือเครื่องคิดเลข
+    - เปรียบเทียบคำตอบของนิสิตกับผลจากโปรแกรม
+    - เข้าใจกระบวนการคำนวณ Linear Regression
+    """
+    print("")
+    print("=" * 70)
+    print("แบบฝึกหัด: ลองคำนวณด้วยตัวเอง (Exercise: Calculate Manually)")
+    print("=" * 70)
+    print("")
+    print("ให้นิสิตคำนวณค่าต่อไปนี้โดยใช้ข้อมูลด้านบน:")
+    print("Students should calculate the following using the data above:")
+    print("")
+    print("  1. Slope (m) = ? mV/pH")
+    print("  2. Intercept (b) = ? mV")
+    print("")
+    print("สูตร (Formulas):")
+    print("  E (mV) = m * pH + b")
+    print("  หรือ (or): pH = (E - b) / m")
+    print("")
+    print("-" * 70)
+    print("เมื่อคำนวณเสร็จแล้ว กดปุ่ม 1 เพื่อดูคำตอบ")
+    print("When finished calculating, press Button 1 to see the answer")
+    print("-" * 70)
+    print("")
+
+    # แสดงข้อความบนจอ TFT (Display prompt on TFT)
+    # จอ TFT ยังแสดงข้อมูลดิบอยู่ - รอการกดปุ่ม
+    # TFT still shows raw data - waiting for button press
+
+    # รอให้นิสิตกดปุ่ม (Wait for button press)
+    print("รอการกดปุ่ม 1... (Waiting for Button 1...)")
+
+    # รอจนกว่าปุ่มจะถูกกด (Wait until button is pressed)
+    while button1.value() == 1:
+        sleep_ms(50)
+
+    # รอให้ปล่อยปุ่ม (Wait for button release)
+    while button1.value() == 0:
+        sleep_ms(50)
+
+    print("")
+    print("กำลังแสดงผลลัพธ์... (Showing results...)")
+    print("")
+
+
+# ==============================================================================
 # ฟังก์ชันแสดงผลการสอบเทียบ
 # Display Calibration Results Function
 # ==============================================================================
@@ -607,30 +796,74 @@ def calibrate_pH():
     print("-" * 60)
 
     for i, buffer_pH in enumerate(buffer_pH_values):
-        # แสดงข้อความเตรียมการสอบเทียบ
-        # Display calibration preparation message
+        # แสดงข้อความเตรียมการสอบเทียบ พร้อมค่า mV แบบ real-time
+        # Display calibration preparation message with real-time mV reading
         display.clear()
-        display.draw_text(20, 30, f"Calibration Point {i+1}/3", font, color565(255, 255, 255))
-        display.draw_text(20, 70, f"Buffer pH: {buffer_pH:.2f}", font, color565(0, 255, 255))
-        display.draw_text(20, 120, "Immerse probe in", font, color565(200, 200, 200))
-        display.draw_text(20, 150, "buffer solution", font, color565(200, 200, 200))
-        display.draw_text(20, 200, "Press BTN1 when ready", font, color565(0, 255, 0))
+        display.draw_text(20, 10, f"Calibration Point {i+1}/3", font, color565(255, 255, 255))
+        display.draw_text(20, 40, f"Buffer pH: {buffer_pH:.2f}", font, color565(0, 255, 255))
+
+        # คำนวณค่า mV ที่คาดหวังสำหรับ buffer นี้
+        # Calculate expected mV for this buffer
+        expected_mv_map = {4.00: 1827, 7.00: 1650, 10.00: 1473}
+        expected_mv = expected_mv_map.get(buffer_pH, 1650)
+
+        # แสดงค่า mV ที่คาดหวัง (Show expected mV)
+        display.draw_text(20, 70, f"Expected: ~{expected_mv} mV", font, color565(100, 255, 100))
+
+        # แสดงค่า mV ดิบแบบ real-time บนจอ TFT
+        # Show real-time raw mV value on TFT display
+        display.draw_text(20, 105, "Raw mV:", font, color565(200, 200, 200))
+        # ช่องแสดงค่า mV จะอัปเดตในลูป (mV value area will update in loop)
+
+        display.draw_text(20, 145, "Immerse probe in", font, color565(200, 200, 200))
+        display.draw_text(20, 170, "buffer solution", font, color565(200, 200, 200))
+        display.draw_text(20, 210, "Press BTN1 when ready", font, color565(0, 255, 0))
 
         print(f"\n--- จุดสอบเทียบที่ {i+1}/3 ---")
         print(f"แช่หัววัดในสารละลายกันชน pH {buffer_pH:.2f}")
         print(f"Immerse probe in pH {buffer_pH:.2f} buffer solution")
+
+        # แสดงค่า mV ที่คาดหวังสำหรับ buffer นี้
+        # Show expected mV for this buffer
+        expected_mv_values = {4.00: 1827, 7.00: 1650, 10.00: 1473}
+        expected_mv = expected_mv_values.get(buffer_pH, 1650)
+        print(f"ค่า mV ที่คาดหวัง (Expected mV): ~{expected_mv} mV (+/- 50 mV)")
+
         print("กดปุ่ม 1 เมื่อค่าเสถียรแล้ว (Press Button 1 when stable)")
 
         # แสดงค่า real-time ขณะรอ (Show real-time values while waiting)
-        print("\nค่า Real-time (กดปุ่มเมื่อเสถียร):")
+        # นิสิตสามารถดูค่า mV ดิบได้ทั้งบนจอ TFT และ Serial Console
+        # Students can see raw mV on both TFT display and Serial Console
+        print("\nค่า mV แบบ Real-time (สังเกตค่าให้เสถียรก่อนกดปุ่ม):")
+        print("Real-time mV readings (watch for stable values before pressing):")
+        print("-" * 40)
         last_print_time = ticks_ms()
+        reading_count = 0
 
         while button1.value() == 1:
-            # แสดงค่าทุก 1 วินาที (Show values every 1 second)
-            if ticks_diff(ticks_ms(), last_print_time) >= 1000:
+            # แสดงค่าทุก 500 ms บนจอ TFT และ 1 วินาทีบน Serial
+            # Update TFT every 500ms, Serial every 1 second
+            current_time = ticks_ms()
+
+            if ticks_diff(current_time, last_print_time) >= 500:
                 current_mv = read_voltage_mv()
-                print(f"  Voltage: {current_mv:.1f} mV", end='\r')
-                last_print_time = ticks_ms()
+
+                # อัปเดตค่า mV บนจอ TFT (Update mV value on TFT)
+                # ล้างพื้นที่แสดงค่า mV แล้วเขียนใหม่
+                display.fill_rectangle(120, 105, 180, 30, color565(0, 0, 0))
+                display.draw_text(120, 105, f"{current_mv:.1f} mV", font, color565(255, 193, 34))
+
+                # แสดงบน Serial Console ทุกวินาที (Print to Serial every second)
+                if ticks_diff(current_time, last_print_time) >= 1000:
+                    reading_count += 1
+                    print(f"  [{reading_count:3d}] Raw mV: {current_mv:7.1f} mV")
+                    last_print_time = current_time
+                elif reading_count == 0:
+                    # แสดงค่าแรก (Show first value)
+                    reading_count += 1
+                    print(f"  [{reading_count:3d}] Raw mV: {current_mv:7.1f} mV")
+                    last_print_time = current_time
+
             sleep_ms(50)
 
         # รอให้ปล่อยปุ่ม (Wait for button release)
@@ -696,6 +929,18 @@ def calibrate_pH():
         sleep_ms(3000)
 
     # ==============================================================================
+    # แสดงข้อมูลดิบก่อนคำนวณ (Display Raw Data Before Calculation)
+    # ==============================================================================
+    # นิสิตจะได้เห็นข้อมูลที่เก็บได้ และลองคำนวณสมการเส้นตรงด้วยตัวเอง
+    # Students will see collected data and try calculating linear equation manually
+
+    display_raw_calibration_data()
+
+    # รอให้นิสิตคำนวณเสร็จก่อนแสดงผลลัพธ์
+    # Wait for students to finish manual calculation before showing results
+    wait_for_manual_calculation()
+
+    # ==============================================================================
     # คำนวณการถดถอยเชิงเส้น (Calculate Linear Regression)
     # ==============================================================================
     print("\n" + "-" * 60)
@@ -744,6 +989,23 @@ try:
     print("  1. หาค่าความชัน (slope) จริงของหัววัด")
     print("  2. ตรวจสอบ linearity ของหัววัด")
     print("  3. ประเมินสภาพของหัววัด (Slope Efficiency)")
+    print("-" * 60)
+
+    # แสดงค่า mV ที่คาดหวังจากวงจร LMC6482
+    # Show expected mV values from LMC6482 circuit
+    print("\nค่า mV ที่คาดหวังจากวงจร LMC6482 (Expected mV from LMC6482 circuit):")
+    print("-" * 60)
+    print("วงจร op-amp เลื่อนสัญญาณ +1650 mV (3.3V/2) เพื่อให้ pH 7 อยู่ตรงกลาง ADC")
+    print("Op-amp circuit adds +1650 mV offset so pH 7 is at ADC midpoint")
+    print("")
+    print("  Buffer pH  |  E_probe (mV)  |  E_measured (mV)")
+    print("  -----------|----------------|------------------")
+    print("    pH 4.00  |     +177       |    ~1827 mV")
+    print("    pH 7.00  |       0        |    ~1650 mV  <- จุดกึ่งกลาง")
+    print("   pH 10.00  |     -177       |    ~1473 mV")
+    print("-" * 60)
+    print("หมายเหตุ: ค่าจริงอาจต่างกัน +/- 50 mV ขึ้นอยู่กับหัววัดและอุณหภูมิ")
+    print("Note: Actual values may vary +/- 50 mV depending on probe and temperature")
     print("-" * 60)
 
     # ทำการสอบเทียบ (Perform calibration)
