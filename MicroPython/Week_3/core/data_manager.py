@@ -11,8 +11,8 @@
 #   3. ประยุกต์ใช้ pattern สำหรับ data persistence
 #
 # ไฟล์ที่จัดการ (Managed Files):
-#   - data_calibrate.txt: ข้อมูลสอบเทียบ pH (slope, intercept, date)
-#   - data_flowrate.txt: ข้อมูลอัตราการไหล (flow_rate, date)
+#   - data_calibrate.txt: ข้อมูลสอบเทียบ pH (CSV: slope_m, intercept_b, r_squared, cal_temp)
+#   - data_flowrate.txt: ข้อมูลอัตราการไหล (flow_rate in mL/s, 4 decimal places)
 #
 # ==============================================================================
 
@@ -47,21 +47,22 @@ class DataManager:
         - รองรับการสำรองข้อมูล
 
     รูปแบบไฟล์ (File Format):
-        data_calibrate.txt:
-            line 1: slope (float)
-            line 2: intercept (float)
-            line 3: Last saved: YYYY-MM-DD
+        data_calibrate.txt (CSV format):
+            header: slope_m,intercept_b,r_squared,cal_temp
+            data:   -0.016911,34.9800,0.999500,25.20
+
+            slope_m = pH/mV, intercept_b = pH, r_squared = unitless, cal_temp = Celsius
 
         data_flowrate.txt:
-            line 1: flow_rate (float, mL/s)
-            line 2: Last saved: YYYY-MM-DD
+            line 1: flow_rate (float, mL/s, 4 decimal places)
 
     ตัวอย่างการใช้งาน (Usage Example):
         >>> dm = DataManager()
-        >>> dm.save_ph_calibration(-5.79, 16.77)
-        >>> slope, intercept, date = dm.load_ph_calibration()
+        >>> dm.save_ph_calibration(slope_m=-0.016911, intercept_b=34.98,
+        ...                        r_squared=0.9995, cal_temp=25.2)
+        >>> slope_m, intercept_b, r_squared, cal_temp = dm.load_ph_calibration()
         >>> dm.save_flow_rate(0.2772)
-        >>> flow_rate, date = dm.load_flow_rate()
+        >>> flow_rate = dm.load_flow_rate()
     """
 
     def __init__(self, calibration_file=None, flowrate_file=None):
@@ -113,31 +114,38 @@ class DataManager:
     # pH Calibration Data
     # ===========================================================================
 
-    def save_ph_calibration(self, slope, intercept, r_squared=None):
+    def save_ph_calibration(self, slope_m, intercept_b, r_squared=None, cal_temp=25.0):
         """
         บันทึกข้อมูลสอบเทียบ pH (Save pH calibration data)
 
+        รูปแบบไฟล์ CSV (File format):
+            slope_m,intercept_b,r_squared,cal_temp
+            -0.016911,34.9800,0.999500,25.20
+
         Args:
-            slope (float): ค่า slope ของสมการ
-            intercept (float): ค่า intercept ของสมการ
-            r_squared (float): ค่า R-squared (optional)
+            slope_m (float): slope_m ของสมการ (pH/mV)
+            intercept_b (float): intercept_b ของสมการ (pH)
+            r_squared (float): ค่า R-squared (optional, default 0.0)
+            cal_temp (float): อุณหภูมิขณะสอบเทียบ (calibration temperature, C)
 
         Returns:
             bool: True ถ้าบันทึกสำเร็จ
         """
         try:
-            current_date = self._get_current_date()
+            if r_squared is None:
+                r_squared = 0.0
 
             with open(self._calibration_file, "w") as f:
-                f.write(f"{slope}\n")
-                f.write(f"{intercept}\n")
-                f.write(f"Last saved: {current_date}\n")
-                if r_squared is not None:
-                    f.write(f"R-squared: {r_squared}\n")
+                # บรรทัดที่ 1: header (Line 1: header)
+                f.write("slope_m,intercept_b,r_squared,cal_temp\n")
+                # บรรทัดที่ 2: ข้อมูล (Line 2: data)
+                # slope_m: 6 ทศนิยม, intercept_b: 4 ทศนิยม
+                # slope_m: 6 decimals, intercept_b: 4 decimals
+                f.write(f"{slope_m:.6f},{intercept_b:.4f},{r_squared:.6f},{cal_temp:.2f}\n")
 
             print(f"บันทึกข้อมูลสอบเทียบ pH สำเร็จ (pH calibration saved)")
-            print(f"  slope={slope:.4f}, intercept={intercept:.4f}")
-            print(f"  Date: {current_date}")
+            print(f"  slope_m={slope_m:.6f} pH/mV, intercept_b={intercept_b:.4f} pH")
+            print(f"  R2={r_squared:.6f}, Temp={cal_temp:.2f} C")
             return True
 
         except Exception as e:
@@ -148,49 +156,71 @@ class DataManager:
         """
         โหลดข้อมูลสอบเทียบ pH (Load pH calibration data)
 
+        รูปแบบไฟล์ CSV (File format):
+            slope_m,intercept_b,r_squared,cal_temp
+            -0.016911,34.9800,0.999500,25.20
+
         Returns:
-            tuple: (slope, intercept, last_saved_date)
-                   คืน (None, None, None) ถ้าไม่พบข้อมูล
+            tuple: (slope_m, intercept_b, r_squared, cal_temp)
+                   คืน (None, None, None, None) ถ้าไม่พบข้อมูล
         """
         if not self._file_exists(self._calibration_file):
             print(f"ไม่พบไฟล์สอบเทียบ: {self._calibration_file} "
                   f"(Calibration file not found)")
-            return None, None, None
+            return None, None, None, None
 
         try:
             with open(self._calibration_file, "r") as f:
                 lines = f.readlines()
 
-            slope = float(lines[0].strip())
-            intercept = float(lines[1].strip())
+            # ข้ามบรรทัด header (Skip header line)
+            # หาบรรทัดข้อมูล (Find data line)
+            data_line = None
+            for line in lines:
+                stripped = line.strip()
+                # ข้ามบรรทัดว่างและ header (Skip empty lines and header)
+                if stripped and not stripped.startswith("slope_m"):
+                    data_line = stripped
+                    break
 
-            # อ่านวันที่ (Read date)
-            last_saved = None
-            if len(lines) > 2:
-                date_line = lines[2].strip()
-                if date_line.startswith("Last saved:"):
-                    last_saved = date_line.replace("Last saved:", "").strip()
+            if data_line is None:
+                print("ไม่พบข้อมูลในไฟล์ (No data found in file)")
+                return None, None, None, None
+
+            # แยกค่าด้วยเครื่องหมายจุลภาค (Split by comma)
+            parts = data_line.split(",")
+            slope_m = float(parts[0])
+            intercept_b = float(parts[1])
+            r_squared = float(parts[2]) if len(parts) > 2 else 0.0
+            cal_temp = float(parts[3]) if len(parts) > 3 else 25.0
 
             print(f"โหลดข้อมูลสอบเทียบ pH สำเร็จ (pH calibration loaded)")
-            print(f"  slope={slope:.4f}, intercept={intercept:.4f}")
-            print(f"  Date: {last_saved or 'N/A'}")
+            print(f"  slope_m={slope_m:.6f} pH/mV, intercept_b={intercept_b:.4f} pH")
+            print(f"  R2={r_squared:.6f}, Temp={cal_temp:.2f} C")
 
-            return slope, intercept, last_saved
+            return slope_m, intercept_b, r_squared, cal_temp
 
         except Exception as e:
             print(f"ข้อผิดพลาดโหลดข้อมูล (Error loading data): {e}")
-            return None, None, None
+            return None, None, None, None
 
-    def get_ph_calibration_date(self):
+    def get_ph_calibration_info(self):
         """
-        รับเฉพาะวันที่สอบเทียบ pH ล่าสุด
-        Get only the last pH calibration date
+        รับข้อมูลสรุปการสอบเทียบ pH
+        Get pH calibration summary info
 
         Returns:
-            str: วันที่สอบเทียบ หรือ "N/A"
+            dict: ข้อมูลสอบเทียบ หรือ None ถ้าไม่พบ
         """
-        _, _, date = self.load_ph_calibration()
-        return date or "N/A"
+        slope_m, intercept_b, r_squared, cal_temp = self.load_ph_calibration()
+        if slope_m is not None:
+            return {
+                'slope_m': slope_m,
+                'intercept_b': intercept_b,
+                'r_squared': r_squared,
+                'cal_temp': cal_temp
+            }
+        return None
 
     # ===========================================================================
     # Flow Rate Data
@@ -378,17 +408,18 @@ class DataManager:
         Returns:
             dict: สถานะการสอบเทียบ
         """
-        # โหลดข้อมูล pH
-        ph_slope, ph_intercept, ph_date = self.load_ph_calibration()
+        # โหลดข้อมูล pH (4 ค่า: slope_m, intercept_b, r_squared, cal_temp)
+        ph_slope_m, ph_intercept_b, ph_r_squared, ph_cal_temp = self.load_ph_calibration()
 
         # โหลดข้อมูล flow rate
         flow_rate, flow_date = self.load_flow_rate()
 
         return {
-            'ph_calibrated': ph_slope is not None,
-            'ph_slope': ph_slope,
-            'ph_intercept': ph_intercept,
-            'ph_date': ph_date,
+            'ph_calibrated': ph_slope_m is not None,
+            'ph_slope_m': ph_slope_m,
+            'ph_intercept_b': ph_intercept_b,
+            'ph_r_squared': ph_r_squared,
+            'ph_cal_temp': ph_cal_temp,
             'flow_rate_calibrated': flow_rate is not None,
             'flow_rate': flow_rate,
             'flow_rate_date': flow_date
@@ -405,8 +436,8 @@ class DataManager:
         # pH calibration
         if status['ph_calibrated']:
             print(f"[OK] pH Calibration:")
-            print(f"     slope={status['ph_slope']:.4f}, intercept={status['ph_intercept']:.4f}")
-            print(f"     Last saved: {status['ph_date'] or 'N/A'}")
+            print(f"     สมการ: pH = {status['ph_slope_m']:.6f} * mV + {status['ph_intercept_b']:.4f}")
+            print(f"     R2={status['ph_r_squared']:.6f}, Temp={status['ph_cal_temp']:.2f} C")
         else:
             print("[--] pH Calibration: ยังไม่ได้สอบเทียบ (Not calibrated)")
 
@@ -440,13 +471,14 @@ if __name__ == "__main__":
     # แสดงสถานะปัจจุบัน
     dm.print_calibration_status()
 
-    # ทดสอบบันทึก pH calibration
+    # ทดสอบบันทึก pH calibration (direct-use form: pH = slope_m * mV + intercept_b)
     print("\n--- ทดสอบบันทึก pH Calibration ---")
-    dm.save_ph_calibration(-5.7901, 16.769, 0.9999)
+    dm.save_ph_calibration(slope_m=-0.016911, intercept_b=34.98,
+                           r_squared=0.9995, cal_temp=25.2)
 
     # ทดสอบโหลด pH calibration
     print("\n--- ทดสอบโหลด pH Calibration ---")
-    slope, intercept, date = dm.load_ph_calibration()
+    slope_m, intercept_b, r_squared, cal_temp = dm.load_ph_calibration()
 
     # ทดสอบบันทึก flow rate
     print("\n--- ทดสอบบันทึก Flow Rate ---")

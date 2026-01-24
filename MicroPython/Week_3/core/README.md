@@ -37,7 +37,9 @@ core/
 **หน้าที่**: ฟังก์ชันทางคณิตศาสตร์และสถิติสำหรับการสอบเทียบและวิเคราะห์ข้อมูล
 
 **ความเชื่อมโยงกับเคมี**:
-- Linear Regression ใช้สร้างสมการสอบเทียบ pH (pH = slope * mV + intercept)
+- Linear Regression ใช้สร้างสมการสอบเทียบ pH: `pH = slope_m * mV + intercept_b`
+  - slope_m มีหน่วย pH/mV (ประมาณ -0.0169 ที่ 25 C)
+  - intercept_b มีหน่วย pH (ประมาณ 34-36)
 - R-squared ใช้ประเมินคุณภาพการสอบเทียบ (>= 0.99 ผ่านเกณฑ์)
 
 #### คลาส LinearRegression
@@ -56,11 +58,11 @@ lr.add_point(2.500, 10.00)  # Buffer pH 10.00
 # คำนวณสมการ
 lr.calculate()
 
-print(f"สมการ: pH = {lr.slope:.4f} * V + {lr.intercept:.4f}")
-print(f"R-squared: {lr.r_squared:.4f}")
+print(f"สมการ: pH = {lr.slope:.6f} * mV + {lr.intercept:.4f}")
+print(f"R-squared: {lr.r_squared:.6f}")
 
 # ทำนายค่า
-ph = lr.predict(2.100)  # ทำนาย pH จากแรงดัน 2.1V
+ph = lr.predict(2010.0)  # ทำนาย pH จากแรงดัน 2010 mV
 ```
 
 #### ฟังก์ชัน Helper
@@ -91,8 +93,9 @@ std_ph = calculate_std([7.01, 7.02, 6.99, 7.00])    # = 0.013
 **หน้าที่**: จัดการการสอบเทียบเซ็นเซอร์ pH และอัตราการไหลของปั๊ม
 
 **ความเชื่อมโยงกับเคมี**:
-- **pH Calibration**: สร้างสมการ pH = slope * mV + intercept จากบัฟเฟอร์มาตรฐาน
-- **Flow Rate Calibration**: วัดอัตราการไหลจริงของปั๊ม (mL/s)
+- **pH Calibration**: สร้างสมการ `pH = slope_m * mV + intercept_b` จากบัฟเฟอร์มาตรฐาน
+  (direct-use form: slope_m in pH/mV, intercept_b in pH)
+- **Flow Rate Calibration**: วัดอัตราการไหลจริงของปั๊ม (mL/s, ทศนิยม 4 ตำแหน่ง)
 
 ```python
 # ตัวอย่างการใช้งาน (Usage Example)
@@ -110,11 +113,13 @@ calibrator = Calibrator(
 
 # สอบเทียบ pH (3-point calibration)
 result = calibrator.calibrate_ph()
-# result = {'slope': -5.79, 'intercept': 16.77, 'r_squared': 0.999, 'is_valid': True}
+# result = {'slope_m': -0.016911, 'intercept_b': 34.98, 'r_squared': 0.9995, 'is_valid': True}
+# สมการ: pH = slope_m * mV + intercept_b (direct-use form)
 
 # สอบเทียบอัตราการไหล
 flow_result = calibrator.calibrate_flow_rate()
-# flow_result = {'flow_rate': 0.277, 'volume': 5.0, 'time': 18.05}
+# flow_result = {'flow_rate': 0.2772, 'volume': 5.0, 'time': 18.05}
+# หมายเหตุ: flow_rate ใช้ 4 ทศนิยม เพื่อความแม่นยำในการคำนวณปริมาตร
 
 # ทดสอบ pH
 calibrator.test_ph_sensor()
@@ -147,9 +152,15 @@ calibrator.test_flow_rate()
 **หน้าที่**: บันทึกและโหลดข้อมูลการสอบเทียบและการไทเทรต
 
 **ไฟล์ที่จัดการ**:
-- `data_calibrate.txt` - ค่าสอบเทียบ pH (slope, intercept)
-- `data_flowrate.txt` - อัตราการไหลของปั๊ม
+- `data_calibrate.txt` - ค่าสอบเทียบ pH (CSV: slope_m,intercept_b,r_squared,cal_temp)
+- `data_flowrate.txt` - อัตราการไหลของปั๊ม (ทศนิยม 4 ตำแหน่ง)
 - `titration_data_R*.csv` - ข้อมูลการไทเทรต (บันทึกใน ESP32 flash)
+
+**รูปแบบไฟล์ `data_calibrate.txt`:**
+```
+slope_m,intercept_b,r_squared,cal_temp
+-0.016911,34.9800,0.999500,25.20
+```
 
 ```python
 # ตัวอย่างการใช้งาน (Usage Example)
@@ -157,12 +168,12 @@ from core.data_manager import DataManager
 
 dm = DataManager()  # ใช้ ESP32 flash storage
 
-# บันทึก/โหลด ค่าสอบเทียบ pH
-dm.save_ph_calibration(slope=-5.79, intercept=16.77)
-slope, intercept = dm.load_ph_calibration()
+# บันทึก/โหลด ค่าสอบเทียบ pH (direct-use form: pH = slope_m * mV + intercept_b)
+dm.save_ph_calibration(slope_m=-0.016911, intercept_b=34.98, r_squared=0.9995, cal_temp=25.2)
+slope_m, intercept_b, r_squared, cal_temp = dm.load_ph_calibration()
 
-# บันทึก/โหลด อัตราการไหล
-dm.save_flow_rate(0.277)
+# บันทึก/โหลด อัตราการไหล (4 ทศนิยม)
+dm.save_flow_rate(0.2772)
 flow_rate = dm.load_flow_rate()
 
 # บันทึกข้อมูลไทเทรต
@@ -177,9 +188,24 @@ dm.end_titration_log()
 
 **หน้าที่**: ควบคุมการไทเทรตอัตโนมัติและตรวจจับจุดสมมูล
 
+**อัลกอริทึม - Constant Dose Volume:**
+
+ใช้ปริมาตรคงที่ **0.2 mL** ต่อ step ตลอดทั้งการไทเทรต (ปั๊มที่ 100% เสมอ):
+
+```
+สูบ 0.2 mL → หยุด → รอ 2 วินาที → อ่าน pH → ทำซ้ำ
+```
+
+**เหตุผลทางการเรียนรู้ (Pedagogical Rationale):**
+- ทุกจุดบนกราฟห่างกัน 0.2 mL เท่ากัน ง่ายต่อการเข้าใจ
+- นิสิตตรวจสอบได้: `total_volume = dose_count x 0.2 mL`
+- เนื่องจาก dV คงที่ (0.2 mL) การหาจุดสมมูลเหลือเพียง "หา step ที่ |dpH| มากที่สุด"
+- เหมือนการไทเทรตมือ: หยดสารไทแทรนต์ทีละหยดแบบสม่ำเสมอ
+
 **ความเชื่อมโยงกับเคมี**:
 - ตรวจจับจุดสมมูล (equivalence point) ด้วยวิธี derivative
 - จุดสมมูลคือจุดที่ |dpH/dV| มีค่าสูงสุด
+- เนื่องจาก dV = 0.2 mL คงที่ จึงเทียบเท่ากับหา |dpH| สูงสุด
 
 ```python
 # ตัวอย่างการใช้งาน (Usage Example)
@@ -194,21 +220,31 @@ titration = TitrationController(
 )
 # ข้อมูล CSV บันทึกใน ESP32 flash storage (ดาวน์โหลดผ่าน Thonny IDE)
 
-# เริ่มไทเทรตอัตโนมัติ
+# ตั้งค่าปริมาตรคงที่ 0.2 mL ต่อ step (Configure constant dose volume)
+titration.configure(
+    dose_volume=0.2,      # 0.2 mL ต่อ step (fixed)
+    stabilize_time=2.0,   # รอ 2 วินาทีให้ pH เสถียร
+    max_volume=50.0       # สูงสุด 50 mL = 250 doses
+)
+
+# เริ่มไทเทรตอัตโนมัติ (Start auto titration)
 result = titration.run_titration()
 # result = {
-#     'equivalence_volume': 25.3,
+#     'equivalence_volume': 25.2,   # mL (= 126 doses x 0.2 mL)
 #     'equivalence_ph': 7.02,
-#     'total_volume': 25.5,
-#     'data_points': [(0.0, 2.1), (1.0, 2.5), ...]
+#     'total_volume': 25.4,
+#     'data_points': [(0.0, 2.1), (0.2, 2.15), (0.4, 2.2), ...]
 # }
 ```
 
 **อัลกอริทึมหาจุดสมมูล (Equivalence Point Detection)**:
 ```python
 # วิธี First Derivative (dpH/dV)
+# เนื่องจาก dose volume คงที่ (0.2 mL) ทุก step:
+#   dpH/dV = (pH[i] - pH[i-1]) / 0.2
+#   ดังนั้น หาจุดที่ |pH[i] - pH[i-1]| มากที่สุดก็พอ
 for i in range(1, len(data_points)):
-    delta_v = volume[i] - volume[i-1]
+    delta_v = 0.2  # คงที่ทุก step (constant dose volume)
     delta_ph = pH[i] - pH[i-1]
     derivative = delta_ph / delta_v
 
@@ -217,15 +253,19 @@ for i in range(1, len(data_points)):
         equivalence_point = (volume[i], pH[i])
 ```
 
-**เฟสการทำงาน (Operating Phases)**:
-| เฟส | Duty Cycle | เงื่อนไข |
-|-----|------------|----------|
-| Fast Dosing | 100% | ห่างจาก target pH > 1.5 unit |
-| Slow Dosing | 50% | ห่างจาก target pH < 1.5 unit |
-| Endpoint | หยุด | ห่างจาก target pH < 0.3 unit |
+**ขั้นตอนการทำงาน (Operation Steps)**:
+
+| ขั้นตอน | การทำงาน | รายละเอียด |
+|:-------:|----------|------------|
+| 1 | สูบ (Pump) | เปิดปั๊ม 100% เติม 0.2 mL แล้วหยุด |
+| 2 | รอ (Wait) | รอ 2 วินาทีให้ pH เสถียร |
+| 3 | วัด (Read) | อ่านค่า pH และอุณหภูมิ |
+| 4 | บันทึก (Log) | บันทึกข้อมูลลง CSV |
+| 5 | ตรวจสอบ (Check) | ตรวจจับจุดสมมูล (dpH/dV สูงสุด) |
+| 6 | ทำซ้ำ (Repeat) | กลับขั้นตอน 1 จนจบ |
 
 **Safety Limits**:
-- ปริมาตรสูงสุด: 50 mL
+- ปริมาตรสูงสุด: 50 mL (= 250 doses x 0.2 mL)
 - เวลาสูงสุด: 10 นาที
 
 ---
@@ -292,16 +332,25 @@ R² = 1 - (SS_residual / SS_total)
 ### Nernst Equation (ที่ 25 C)
 
 ```
-E = E0 - 59.16 mV * pH
-หรือ
-pH = slope * E + intercept
+E = E0 - 59.16 mV * pH    (slope ทฤษฎี = -59.16 mV/pH)
+
+สมการ direct-use (ใช้ใน TitraLab):
+pH = slope_m * mV + intercept_b
+   โดย slope_m ≈ -0.0169 pH/mV (= 1/(-59.16))
+       intercept_b ≈ 34-36 pH
 ```
 
-### Derivative สำหรับหาจุดสมมูล
+### Derivative สำหรับหาจุดสมมูล (Constant Dose Volume)
 
 ```
 dpH/dV = (pH[i] - pH[i-1]) / (V[i] - V[i-1])
-จุดสมมูล = จุดที่ |dpH/dV| สูงสุด
+
+เนื่องจาก TitraLab ใช้ constant dose volume (0.2 mL):
+  V[i] - V[i-1] = 0.2 mL (คงที่ทุก step)
+
+ดังนั้น:
+  dpH/dV = (pH[i] - pH[i-1]) / 0.2
+  จุดสมมูล = step ที่ |pH[i] - pH[i-1]| มากที่สุด
 ```
 
 ---

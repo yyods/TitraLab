@@ -11,9 +11,10 @@
 #
 # หลักการทางเคมี (Chemistry Principles):
 # - ใช้บัฟเฟอร์มาตรฐาน pH 4.00, 7.00, 10.00
-# - สร้างสมการ: pH = slope * voltage + intercept
+# - สร้างสมการ direct-use: pH = slope_m * mV + intercept_b
+#   (slope_m มีหน่วย pH/mV, intercept_b มีหน่วย pH)
 # - ตามสมการ Nernst: E = E0 - (2.303RT/nF) * pH
-# - ที่ 25°C: slope ทฤษฎี = -59.16 mV/pH
+# - ที่ 25°C: slope ทฤษฎี = -59.16 mV/pH → slope_m ≈ -0.0169 pH/mV
 #
 # การสอบเทียบ 3 จุดช่วยตรวจสอบ linearity ของหัววัด
 # 3-point calibration helps verify probe linearity
@@ -41,7 +42,8 @@ class CalibratePHMode(BaseMode):
     BUFFER_PH_VALUES = [4.00, 7.00, 10.00]
 
     # ระยะเวลารอให้ค่าคงที่ (Stabilization time in ms)
-    STABILIZATION_TIME_MS = 3000
+    # pH probe ต้องการ 10-20 วินาทีจึงจะเสถียร (pH probe needs 10-20s to stabilize)
+    STABILIZATION_TIME_MS = 10000
 
     def __init__(self, display, colors, ph_sensor, temp_sensor=None, buzzer=None):
         """
@@ -70,10 +72,10 @@ class CalibratePHMode(BaseMode):
         self.total_steps = len(self.buffer_values)
         self.state = 'waiting'  # 'waiting', 'measuring', 'done'
 
-        # ผลลัพธ์ (Results)
-        self.slope = 0.0
-        self.intercept = 0.0
-        self.r_squared = 0.0
+        # ผลลัพธ์ (Results): pH = slope_m * mV + intercept_b
+        self.slope = 0.0       # slope_m (pH/mV)
+        self.intercept = 0.0   # intercept_b (pH)
+        self.r_squared = 0.0   # R-squared (unitless)
 
     def on_enter(self):
         """
@@ -269,8 +271,8 @@ class CalibratePHMode(BaseMode):
         """
         คำนวณสมการสอบเทียบ (Calculate calibration equation)
 
-        ใช้ Linear Regression: pH = slope * voltage + intercept
-        Uses Linear Regression: pH = slope * voltage + intercept
+        ใช้ Linear Regression: pH = slope_m * mV + intercept_b
+        Uses Linear Regression: pH = slope_m * mV + intercept_b (direct-use form)
         """
         x = self.measured_voltages  # Voltage (mV)
         y = self.buffer_values      # pH
@@ -306,8 +308,9 @@ class CalibratePHMode(BaseMode):
         else:
             self.r_squared = 0
 
-        print(f"Calibration: pH = {self.slope:.4f} * V + {self.intercept:.4f}")
-        print(f"R-squared: {self.r_squared:.4f}")
+        print(f"Calibration: pH = {self.slope:.6f} * mV + {self.intercept:.4f}")
+        print(f"  (slope_m = {self.slope:.6f} pH/mV, intercept_b = {self.intercept:.4f} pH)")
+        print(f"R-squared: {self.r_squared:.6f}")
 
     def _show_results(self):
         """
@@ -318,15 +321,15 @@ class CalibratePHMode(BaseMode):
 
         y = 40
 
-        # แสดงสมการ (Display equation)
-        self.display.draw_text(20, y, "Linear Equation:", self.colors.WHITE)
+        # แสดงสมการ (Display equation: pH = slope_m * mV + intercept_b)
+        self.display.draw_text(20, y, "pH = slope_m*mV + intercept_b", self.colors.WHITE)
         y += 25
-        self.display.draw_text(20, y, f"pH = {self.slope:.4f}*V + {self.intercept:.4f}", self.colors.YELLOW)
+        self.display.draw_text(20, y, f"m={self.slope:.6f} b={self.intercept:.4f}", self.colors.YELLOW)
         y += 30
 
         # แสดงค่า R-squared (Display R-squared)
-        r2_color = self.colors.GREEN if self.r_squared >= 0.98 else self.colors.RED
-        self.display.draw_text(20, y, f"R-squared: {self.r_squared:.4f}", r2_color)
+        r2_color = self.colors.GREEN if self.r_squared >= 0.99 else self.colors.RED
+        self.display.draw_text(20, y, f"R2: {self.r_squared:.6f}", r2_color)
         y += 30
 
         # แสดงจุดสอบเทียบ (Display calibration points)
@@ -337,15 +340,17 @@ class CalibratePHMode(BaseMode):
             y += 20
 
         # แสดงสถานะ (Display status)
-        valid = self.r_squared >= 0.98
-        status = "Press SELECT to save" if valid else "Warning: R^2 < 0.98"
+        # ใช้เกณฑ์ R2 >= 0.99 ตามมาตรฐานการสอบเทียบ pH
+        # Use R2 >= 0.99 threshold per pH calibration standard
+        valid = self.r_squared >= 0.99
+        status = "Press SELECT to save" if valid else "Warning: R^2 < 0.99"
         status_color = self.colors.TEXT_INFO if valid else self.colors.RED
         self.display.draw_status_bar(status, status_color)
 
         # ตั้งค่าผลลัพธ์ (Set results)
         self.set_results(
-            slope=self.slope,
-            intercept=self.intercept,
+            slope_m=self.slope,
+            intercept_b=self.intercept,
             r_squared=self.r_squared,
             points=list(zip(self.buffer_values, self.measured_voltages)),
             temperatures=self.measured_temperatures,
@@ -354,17 +359,29 @@ class CalibratePHMode(BaseMode):
 
     def _save_calibration(self):
         """
-        บันทึกข้อมูลการสอบเทียบ (Save calibration data)
+        บันทึกข้อมูลการสอบเทียบในรูปแบบ CSV
+        Save calibration data in CSV format
+
+        รูปแบบไฟล์ (File format):
+            slope_m,intercept_b,r_squared,cal_temp
+            -0.016911,34.9800,0.999500,25.20
         """
         try:
-            # บันทึกลงไฟล์ (Save to file)
-            with open('data_calibrate.txt', 'w') as f:
-                f.write(f"{self.slope}\n")
-                f.write(f"{self.intercept}\n")
-                # บันทึกวันที่ถ้ามี RTC (Save date if RTC available)
-                f.write(f"Last saved: Manual calibration\n")
+            # อ่านอุณหภูมิขณะสอบเทียบ (Read calibration temperature)
+            cal_temp = 25.0
+            if self.measured_temperatures:
+                cal_temp = sum(self.measured_temperatures) / len(self.measured_temperatures)
 
-            print("บันทึกการสอบเทียบเรียบร้อย (Calibration saved)")
+            # บันทึกลงไฟล์ CSV (Save to CSV file)
+            with open('data_calibrate.txt', 'w') as f:
+                # บรรทัดที่ 1: header (Line 1: header)
+                f.write("slope_m,intercept_b,r_squared,cal_temp\n")
+                # บรรทัดที่ 2: ข้อมูล (Line 2: data)
+                f.write(f"{self.slope:.6f},{self.intercept:.4f},{self.r_squared:.6f},{cal_temp:.2f}\n")
+
+            print(f"บันทึกการสอบเทียบเรียบร้อย (Calibration saved)")
+            print(f"  slope_m={self.slope:.6f} pH/mV, intercept_b={self.intercept:.4f} pH")
+            print(f"  R2={self.r_squared:.6f}, Temp={cal_temp:.2f} C")
 
             # อัปเดตเซ็นเซอร์ pH (Update pH sensor)
             if self.ph_sensor:

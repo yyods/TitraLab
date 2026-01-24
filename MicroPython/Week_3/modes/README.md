@@ -134,7 +134,7 @@ class MyMode(BaseMode):
 
 **ไฟล์**: `mode_calibrate_ph.py`
 
-**วัตถุประสงค์**: สร้างสมการ `pH = slope * voltage + intercept` จากบัฟเฟอร์มาตรฐาน
+**วัตถุประสงค์**: สร้างสมการ `pH = slope_m * mV + intercept_b` จากบัฟเฟอร์มาตรฐาน (direct-use form)
 
 **ขั้นตอนการทำงาน**:
 ```
@@ -145,18 +145,25 @@ class MyMode(BaseMode):
 5. แสดงคำแนะนำ "แช่หัววัดในบัฟเฟอร์ pH 10.00"
 6. รอผู้ใช้กด SELECT เพื่อบันทึกค่า
 7. คำนวณ Linear Regression
-8. แสดงผล slope, intercept, R²
+8. แสดงผล slope_m (pH/mV), intercept_b (pH), R²
 9. บันทึกค่าถ้า R² >= 0.99
 ```
 
 **ผลลัพธ์**:
 ```python
 {
-    'slope': -5.7901,
-    'intercept': 16.769,
-    'r_squared': 0.9998,
+    'slope_m': -0.016911,     # pH/mV (direct-use: pH = slope_m * mV + intercept_b)
+    'intercept_b': 34.9800,   # pH
+    'r_squared': 0.9995,
+    'cal_temp': 25.20,        # อุณหภูมิขณะสอบเทียบ (C)
     'is_valid': True
 }
+```
+
+**ไฟล์ที่บันทึก** (`data_calibrate.txt`):
+```
+slope_m,intercept_b,r_squared,cal_temp
+-0.016911,34.9800,0.999500,25.20
 ```
 
 ---
@@ -248,43 +255,67 @@ purge_mode.set_duration(5000)  # ตั้งเวลา 5 วินาที
 
 ---
 
-### Mode 6: TitrationMode - ไทเทรชันอัตโนมัติ
+### Mode 6: TitrationMode - ไทเทรชันอัตโนมัติ (Constant Dose Volume)
 
 **ไฟล์**: `mode_titration.py`
 
 **วัตถุประสงค์**: ดำเนินการไทเทรตอัตโนมัติพร้อมตรวจจับจุดสมมูล
 
+**อัลกอริทึม - Constant Dose Volume:**
+
+ใช้ปริมาตรคงที่ **0.2 mL** ต่อ step ตลอดทั้งการไทเทรต (ปั๊มที่ 100% เสมอ):
+
+```
+สูบ 0.2 mL → หยุด → รอ pH เสถียร (2 วินาที) → อ่านค่า pH → ทำซ้ำ
+```
+
+**เหตุผลทางการเรียนรู้ (Pedagogical Rationale):**
+- ทุกจุดบนกราฟห่างกัน 0.2 mL เท่ากันหมด (uniform spacing)
+- นิสิตตรวจสอบได้: `total_volume = dose_count x 0.2 mL`
+- จุดสมมูลอยู่ระหว่างสอง step ที่ pH เปลี่ยนมากที่สุด
+- เหมือนการไทเทรตมือ: "หยดสารไทแทรนต์ทีละหยด" แบบสม่ำเสมอ
+- ปั๊มทำงานที่ 100% เสมอ ไม่มีการปรับ duty cycle (ลดความซับซ้อน)
+
 **ขั้นตอนการทำงาน**:
 ```
 1. แสดงคำแนะนำและตรวจสอบการสอบเทียบ
-2. เริ่ม Fast Dosing (100% duty)
-3. เมื่อใกล้จุดสมมูล → Slow Dosing (50% duty)
-4. ตรวจจับจุดสมมูล (|dpH/dV| สูงสุด)
-5. หยุดปั๊มและแสดงผลลัพธ์
-6. บันทึกข้อมูลลง ESP32 flash (ดาวน์โหลดผ่าน Thonny IDE)
+2. สูบ 0.2 mL (ปั๊มที่ 100%) แล้วหยุด
+3. รอ 2 วินาทีให้ pH เสถียร (stabilization time)
+4. อ่านค่า pH และอุณหภูมิ, บันทึกข้อมูล
+5. ตรวจจับจุดสมมูล (|dpH/dV| สูงสุด หรือ pH ถึงเป้าหมาย)
+6. ถ้ายังไม่ถึงจุดสมมูล → กลับขั้นตอน 2
+7. แสดงผลลัพธ์และบันทึก CSV ลง ESP32 flash
 ```
 
-**State Machine ภายใน TitrationMode**:
+**Stepwise Titration Cycle:**
 ```
-┌──────────────┐   pH ห่างจาก target   ┌──────────────┐
-│  FAST_DOSE   │ ──────────────────► │  SLOW_DOSE   │
-│   (100%)     │   < 1.5 units       │    (50%)     │
-└──────────────┘                      └──────┬───────┘
-                                             │
-                                             │ |dpH/dV| สูงสุด
-                                             ▼
-                                      ┌──────────────┐
-                                      │   ENDPOINT   │
-                                      │    (STOP)    │
-                                      └──────────────┘
+┌──────────────┐                     ┌──────────────┐
+│   DOSING     │────────────────────►│ STABILIZING  │
+│ สูบ 0.2 mL  │  ปั๊มหยุด           │  รอ 2 วินาที  │
+│ (100% duty)  │                     │              │
+└──────────────┘                     └──────┬───────┘
+       ▲                                    │
+       │                                    ▼
+       │   ยังไม่ถึง endpoint        ┌──────────────┐
+       └─────────────────────────────│   READING    │
+                                     │  อ่าน pH     │
+                                     │  + บันทึก    │
+                                     └──────┬───────┘
+                                            │
+                                            │ ถึง endpoint
+                                            ▼
+                                     ┌──────────────┐
+                                     │   ENDPOINT   │
+                                     │    (STOP)    │
+                                     └──────────────┘
 ```
 
 **ผลลัพธ์**:
 ```python
 {
-    'equivalence_volume': 25.3,   # mL
+    'equivalence_volume': 25.2,   # mL (= 126 doses x 0.2 mL)
     'equivalence_ph': 7.02,
-    'total_volume': 25.5,         # mL
+    'total_volume': 25.4,         # mL
     'total_time': 312,            # seconds
     'data_file': 'titration_data_R1.csv'  # บน ESP32 flash
 }
@@ -296,7 +327,7 @@ purge_mode.set_duration(5000)  # ตั้งเวลา 5 วินาที
 
 | โหมด | ไฟล์ | วัตถุประสงค์ | Output |
 |:----:|------|-------------|--------|
-| 1 | `mode_calibrate_ph.py` | สอบเทียบ pH 3 จุด | slope, intercept, R² |
+| 1 | `mode_calibrate_ph.py` | สอบเทียบ pH 3 จุด | slope_m, intercept_b, R² |
 | 2 | `mode_test_ph.py` | ทดสอบ pH real-time | pH, Voltage (display) |
 | 3 | `mode_calibrate_flow.py` | สอบเทียบ flow rate | flow_rate (mL/s) |
 | 4 | `mode_test_flow.py` | ทดสอบ flow rate | % error |

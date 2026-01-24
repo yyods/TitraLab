@@ -12,8 +12,8 @@
 #
 # การสอบเทียบ pH (pH Calibration):
 #   ใช้บัฟเฟอร์มาตรฐาน 3 จุด: pH 4.00, 7.00, 10.00
-#   วัดแรงดันที่แต่ละจุด แล้วสร้างสมการเส้นตรง
-#   pH = slope * voltage + intercept
+#   วัดแรงดัน (mV) ที่แต่ละจุด แล้วสร้างสมการเส้นตรง
+#   pH = slope_m * mV + intercept_b (x=mV, y=pH)
 #
 # การสอบเทียบอัตราการไหล (Flow Rate Calibration):
 #   สูบของเหลวปริมาตรที่ทราบ (เช่น 5 mL) แล้ววัดเวลา
@@ -55,10 +55,10 @@ class Calibrator:
         - บันทึกและโหลดข้อมูลสอบเทียบ
 
     หลักการสอบเทียบ pH (pH Calibration Principle):
-        1. แช่หัววัดในบัฟเฟอร์ pH 4.00 -> วัดแรงดัน V1
-        2. แช่หัววัดในบัฟเฟอร์ pH 7.00 -> วัดแรงดัน V2
-        3. แช่หัววัดในบัฟเฟอร์ pH 10.00 -> วัดแรงดัน V3
-        4. ใช้ linear regression หาสมการ pH = mV + b
+        1. แช่หัววัดในบัฟเฟอร์ pH 4.00 -> วัดแรงดัน mV1
+        2. แช่หัววัดในบัฟเฟอร์ pH 7.00 -> วัดแรงดัน mV2
+        3. แช่หัววัดในบัฟเฟอร์ pH 10.00 -> วัดแรงดัน mV3
+        4. ใช้ linear regression หาสมการ pH = slope_m * mV + intercept_b
         5. ตรวจสอบ R-squared >= 0.99
 
     หลักการสอบเทียบอัตราการไหล (Flow Rate Calibration Principle):
@@ -69,10 +69,10 @@ class Calibrator:
 
     ตัวอย่างการใช้งาน (Usage Example):
         >>> cal = Calibrator()
-        >>> # สอบเทียบ pH
-        >>> cal.add_ph_point(4.00, 1.5)   # buffer 4.00, voltage 1.5V
-        >>> cal.add_ph_point(7.00, 2.0)   # buffer 7.00, voltage 2.0V
-        >>> cal.add_ph_point(10.00, 2.5)  # buffer 10.00, voltage 2.5V
+        >>> # สอบเทียบ pH (buffer pH, voltage mV)
+        >>> cal.add_ph_point(4.00, 2068.0)   # buffer 4.00, 2068 mV
+        >>> cal.add_ph_point(7.00, 1650.0)   # buffer 7.00, 1650 mV
+        >>> cal.add_ph_point(10.00, 1290.0)  # buffer 10.00, 1290 mV
         >>> result = cal.calculate_ph_calibration()
         >>> # สอบเทียบ flow rate
         >>> flow_result = cal.calibrate_flow_rate(5.0, 18.05)  # 5mL in 18.05s
@@ -159,13 +159,13 @@ class Calibrator:
         self._ph_calibrated = False
         print("ล้างจุดสอบเทียบ pH แล้ว (pH calibration points cleared)")
 
-    def add_ph_point(self, buffer_ph, voltage):
+    def add_ph_point(self, buffer_ph, voltage_mv):
         """
         เพิ่มจุดสอบเทียบ pH (Add pH calibration point)
 
         Args:
             buffer_ph (float): ค่า pH ของสารละลายบัฟเฟอร์ (4.00, 7.00, หรือ 10.00)
-            voltage (float): แรงดันที่วัดได้ (V)
+            voltage_mv (float): แรงดันที่วัดได้ (mV)
 
         Returns:
             bool: True ถ้าเพิ่มสำเร็จ
@@ -175,11 +175,11 @@ class Calibrator:
             print(f"คำเตือน: ค่า pH {buffer_ph} ไม่ใช่ค่าบัฟเฟอร์มาตรฐาน "
                   f"(Warning: pH {buffer_ph} is not a standard buffer value)")
 
-        # เพิ่มจุด (Add point)
-        self._ph_points.append((buffer_ph, voltage))
-        self._ph_regression.add_point(voltage, buffer_ph)  # x=voltage, y=pH
+        # เพิ่มจุด (Add point): x=mV, y=pH
+        self._ph_points.append((buffer_ph, voltage_mv))
+        self._ph_regression.add_point(voltage_mv, buffer_ph)  # x=mV, y=pH
 
-        print(f"เพิ่มจุดสอบเทียบ: pH {buffer_ph:.2f} = {voltage:.4f} V "
+        print(f"เพิ่มจุดสอบเทียบ: pH {buffer_ph:.2f} = {voltage_mv:.1f} mV "
               f"(Added calibration point)")
         print(f"  รวม {len(self._ph_points)} จุด (Total {len(self._ph_points)} points)")
 
@@ -200,8 +200,8 @@ class Calibrator:
 
         Returns:
             dict: ผลการคำนวณ containing:
-                - slope (float): ค่า slope
-                - intercept (float): ค่า intercept
+                - slope_m (float): ค่า slope (pH/mV)
+                - intercept_b (float): ค่า intercept (pH)
                 - r_squared (float): ค่า R-squared
                 - is_valid (bool): ผ่านเกณฑ์หรือไม่
                 - message (str): ข้อความผลลัพธ์
@@ -234,7 +234,8 @@ class Calibrator:
 
         # แสดงผล (Display results)
         print(f"\nผลการคำนวณ (Results):")
-        print(f"  สมการ: pH = {self._ph_slope:.4f} * V + {self._ph_intercept:.4f}")
+        print(f"  สมการ: pH = {self._ph_slope:.6f} * mV + {self._ph_intercept:.4f}")
+        print(f"  (slope_m = {self._ph_slope:.6f} pH/mV, intercept_b = {self._ph_intercept:.4f} pH)")
         print(f"  R-squared: {self._ph_r_squared*100:.2f}%")
         print(f"  สถานะ: {message}")
 
@@ -246,9 +247,13 @@ class Calibrator:
             'message': message
         }
 
-    def save_ph_calibration(self):
+    def save_ph_calibration(self, cal_temp=25.0):
         """
-        บันทึกข้อมูลสอบเทียบ pH (Save pH calibration data)
+        บันทึกข้อมูลสอบเทียบ pH ในรูปแบบ CSV
+        Save pH calibration data in CSV format
+
+        Args:
+            cal_temp (float): อุณหภูมิขณะสอบเทียบ (calibration temperature, C)
 
         Returns:
             bool: True ถ้าบันทึกสำเร็จ
@@ -261,7 +266,8 @@ class Calibrator:
         return self._data_manager.save_ph_calibration(
             self._ph_slope,
             self._ph_intercept,
-            self._ph_r_squared
+            self._ph_r_squared,
+            cal_temp
         )
 
     def load_ph_calibration(self):
@@ -269,16 +275,18 @@ class Calibrator:
         โหลดข้อมูลสอบเทียบ pH (Load pH calibration data)
 
         Returns:
-            tuple: (slope, intercept, date) หรือ (None, None, None)
+            tuple: (slope_m, intercept_b, r_squared, cal_temp) หรือ (None, None, None, None)
+                slope_m: pH/mV, intercept_b: pH, r_squared: unitless, cal_temp: Celsius
         """
-        slope, intercept, date = self._data_manager.load_ph_calibration()
+        slope_m, intercept_b, r_squared, cal_temp = self._data_manager.load_ph_calibration()
 
-        if slope is not None:
-            self._ph_slope = slope
-            self._ph_intercept = intercept
+        if slope_m is not None:
+            self._ph_slope = slope_m
+            self._ph_intercept = intercept_b
+            self._ph_r_squared = r_squared
             self._ph_calibrated = True
 
-        return slope, intercept, date
+        return slope_m, intercept_b, r_squared, cal_temp
 
     # ===========================================================================
     # Flow Rate Calibration
@@ -400,12 +408,15 @@ class Calibrator:
     # Utility Methods
     # ===========================================================================
 
-    def predict_ph(self, voltage):
+    def predict_ph(self, voltage_mv):
         """
         ทำนายค่า pH จากแรงดัน (Predict pH from voltage)
 
+        สมการ: pH = slope_m * mV + intercept_b
+        Equation: pH = slope_m * mV + intercept_b
+
         Args:
-            voltage (float): แรงดัน V
+            voltage_mv (float): แรงดันเป็น mV (voltage in mV)
 
         Returns:
             float: ค่า pH ที่ทำนาย
@@ -416,7 +427,7 @@ class Calibrator:
                 "(pH not calibrated, please calibrate first)"
             )
 
-        return self._ph_slope * voltage + self._ph_intercept
+        return self._ph_slope * voltage_mv + self._ph_intercept
 
     def get_calibration_summary(self):
         """
@@ -448,7 +459,7 @@ class Calibrator:
         # pH calibration
         if self._ph_calibrated:
             print(f"[OK] pH Calibration:")
-            print(f"     สมการ: pH = {self._ph_slope:.4f} * V + {self._ph_intercept:.4f}")
+            print(f"     สมการ: pH = {self._ph_slope:.6f} * mV + {self._ph_intercept:.4f}")
             print(f"     R-squared: {self._ph_r_squared*100:.2f}%")
             print(f"     จุดสอบเทียบ: {len(self._ph_points)}")
         else:
@@ -486,10 +497,10 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # เพิ่มจุดสอบเทียบ (ข้อมูลตัวอย่าง)
-    # voltage -> pH
-    cal.add_ph_point(4.00, 1.500)   # Buffer pH 4.00
-    cal.add_ph_point(7.00, 2.000)   # Buffer pH 7.00
-    cal.add_ph_point(10.00, 2.500)  # Buffer pH 10.00
+    # buffer_ph, voltage_mv (x=mV, y=pH for regression)
+    cal.add_ph_point(4.00, 2068.0)   # Buffer pH 4.00 -> 2068 mV
+    cal.add_ph_point(7.00, 1650.0)   # Buffer pH 7.00 -> 1650 mV
+    cal.add_ph_point(10.00, 1290.0)  # Buffer pH 10.00 -> 1290 mV
 
     # คำนวณ
     result = cal.calculate_ph_calibration()
@@ -498,10 +509,10 @@ if __name__ == "__main__":
     if result['is_valid']:
         cal.save_ph_calibration()
 
-    # ทดสอบทำนาย
-    test_voltage = 1.75
-    predicted_ph = cal.predict_ph(test_voltage)
-    print(f"\nทดสอบทำนาย: {test_voltage:.3f}V -> pH {predicted_ph:.2f}")
+    # ทดสอบทำนาย (mV -> pH)
+    test_mv = 1850.0
+    predicted_ph = cal.predict_ph(test_mv)
+    print(f"\nทดสอบทำนาย: {test_mv:.1f} mV -> pH {predicted_ph:.2f}")
 
     # ======= ทดสอบสอบเทียบ Flow Rate =======
     print("\n" + "=" * 50)

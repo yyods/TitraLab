@@ -16,8 +16,9 @@
 # 4. คำนวณอัตราการไหลเฉลี่ย (mL/s)
 #
 # ความสำคัญในการไทเทรต (Importance in Titration):
-# - ต้องรู้อัตราการไหลเพื่อคำนวณปริมาตรที่จ่าย
-# - Flow Rate = Volume / Time (mL/s)
+# - ต้องรู้อัตราการไหลเพื่อคำนวณปริมาตรที่จ่าย: Volume = flow_rate * time
+# - Flow Rate = Volume / Time (mL/s, ใช้ 4 ทศนิยมเพื่อลดความคลาดเคลื่อน)
+# - ถ้าใช้ 3 ทศนิยม อาจเกิดความคลาดเคลื่อง ~1.2% ของปริมาตร
 # ==============================================================================
 
 from .base_mode import BaseMode
@@ -278,7 +279,7 @@ class CalibrateFlowMode(BaseMode):
 
         self.display.fill_rect(20, 180, 280, 50, self.colors.BLACK)
         self.display.draw_text(20, 180, f"Time: {elapsed_time:.2f} s", self.colors.WHITE)
-        self.display.draw_text(20, 205, f"Flow Rate: {flow_rate:.3f} mL/s", self.colors.GREEN)
+        self.display.draw_text(20, 205, f"Flow Rate: {flow_rate:.4f} mL/s", self.colors.GREEN)
 
     def _calculate_results(self):
         """
@@ -298,7 +299,7 @@ class CalibrateFlowMode(BaseMode):
             self.avg_flow_rate = 0
             self.std_dev = 0
 
-        print(f"Average Flow Rate: {self.avg_flow_rate:.3f} +/- {self.std_dev:.3f} mL/s")
+        print(f"Average Flow Rate: {self.avg_flow_rate:.4f} +/- {self.std_dev:.4f} mL/s")
 
     def _show_results(self):
         """
@@ -339,18 +340,23 @@ class CalibrateFlowMode(BaseMode):
 
     def _save_calibration(self):
         """
-        บันทึกการสอบเทียบ (Save calibration)
+        บันทึกการสอบเทียบอัตราการไหล (Save flow rate calibration)
+
+        ใช้ 4 ทศนิยมเพื่อลดความคลาดเคลื่อนปริมาตรสะสม
+        Uses 4 decimal places to minimize cumulative volume error
+        (Volume = flow_rate * time, error accumulates with each dose)
         """
         try:
             with open('data_flowrate.txt', 'w') as f:
-                f.write(f"{self.avg_flow_rate}\n")
+                # บันทึก 4 ทศนิยม (Save with 4 decimal places)
+                f.write(f"{self.avg_flow_rate:.4f}\n")
                 f.write(f"Last saved: Manual calibration\n")
 
             print(f"บันทึกอัตราการไหล: {self.avg_flow_rate:.4f} mL/s (Flow rate saved)")
 
             # อัปเดตปั๊ม (Update pump)
             if self.pump:
-                self.pump.set_flow_rate(self.avg_flow_rate)
+                self.pump.flow_rate = self.avg_flow_rate
 
         except Exception as e:
             print(f"ข้อผิดพลาดการบันทึก (Save error): {e}")

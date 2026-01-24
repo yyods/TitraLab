@@ -66,11 +66,22 @@ ADC_SAMPLES = 10            # จำนวนตัวอย่างสำห�
 PH_BUFFER_VALUES = [4.00, 7.00, 10.00]
 
 # ค่าเริ่มต้นสำหรับสมการเส้นตรง pH (Default linear equation for pH)
-# pH = slope * voltage + intercept
+# สมการ: pH = slope_m * mV + intercept_b
+# โดย:
+#   - slope_m มีหน่วยเป็น pH/mV (ค่าลบเพราะ pH สูง = mV ต่ำ)
+#   - intercept_b มีหน่วยเป็น pH (ค่า pH ที่ mV = 0)
+#   - mV คือแรงดันที่อ่านจาก ADC (0-3300 mV)
+#
+# Equation: pH = slope_m * mV + intercept_b
+# Where:
+#   - slope_m is in pH/mV units (negative because higher pH = lower mV)
+#   - intercept_b is in pH units (pH value at mV = 0)
+#   - mV is the voltage read from ADC (0-3300 mV)
+#
 # ค่านี้ควรถูกแทนที่ด้วยค่าจากการสอบเทียบจริง
 # These should be replaced with actual calibration values
-DEFAULT_PH_SLOPE = -5.7901      # ค่า slope เริ่มต้น (Default slope)
-DEFAULT_PH_INTERCEPT = 16.769   # ค่า intercept เริ่มต้น (Default intercept)
+DEFAULT_PH_SLOPE = -0.016911    # slope_m (pH/mV) - ค่าเริ่มต้น (Default slope)
+DEFAULT_PH_INTERCEPT = 34.9800  # intercept_b (pH) - ค่าเริ่มต้น (Default intercept)
 
 # ค่า R-squared ขั้นต่ำสำหรับการสอบเทียบที่ยอมรับได้ (Minimum R² for valid calibration)
 # ตามสมการ Nernst ความสัมพันธ์ระหว่าง mV และ pH ควรเป็นเส้นตรง
@@ -121,10 +132,43 @@ PUMP_PWM_MIN_DUTY = 0      # Duty cycle ต่ำสุด (Minimum duty cycle)
 # อัตราการไหลเริ่มต้น (Default flow rate)
 # ค่านี้ควรถูกแทนที่ด้วยค่าจากการสอบเทียบจริง
 # This should be replaced with actual calibration value
-DEFAULT_FLOW_RATE_ML_PER_SEC = 0.2772  # mL/วินาที ที่ 100% duty (mL/s at 100% duty)
+#
+# ใช้ทศนิยม 4 ตำแหน่งเพราะ:
+# - ปริมาตรที่จ่าย = flow_rate * time
+# - ความคลาดเคลื่อนสะสมจากทศนิยมน้อยอาจทำให้ปริมาตรผิดพลาดมาก
+# - เช่น 0.28 vs 0.2772: ที่ 60s ต่างกัน 0.17 mL (อาจมีผลต่อจุดสมมูล)
+#
+# Use 4 decimal places because:
+# - Volume dispensed = flow_rate * time
+# - Rounding errors accumulate and affect transferred volume precision
+# - e.g., 0.28 vs 0.2772: at 60s differs by 0.17 mL (affects equivalence point)
+DEFAULT_FLOW_RATE_ML_PER_SEC = 0.2772  # mL/s ที่ 100% duty (4 ทศนิยม / 4 decimals)
 
 # ปริมาตรเป้าหมายสำหรับการสอบเทียบอัตราการไหล (Target volume for flow rate calibration)
 FLOW_RATE_CALIBRATION_VOLUME_ML = 5.00  # mL
+
+# ปริมาตรคงที่ต่อครั้งสำหรับการไทเทรต (Fixed dose volume per titration step)
+# ใช้ปริมาตรคงที่ 0.2 mL ทุกครั้งเพื่อความเรียบง่ายในการเรียนรู้
+# Fixed 0.2 mL dose per step for pedagogical simplicity
+# - ทุกจุดบนกราฟห่างกัน 0.2 mL เท่ากัน ง่ายต่อการวิเคราะห์
+# - Every point on the curve is exactly 0.2 mL apart for easy analysis
+DEFAULT_DOSE_VOLUME_ML = 0.2  # mL ต่อ step (mL per step)
+
+# ปริมาตรสารตัวอย่างเริ่มต้น (Default sample volume)
+# สำหรับห้องปฏิบัติการเคมีทั่วไป ใช้ 5 mL (Typical teaching lab uses 5 mL)
+DEFAULT_SAMPLE_VOLUME_ML = 5.0  # mL ปริมาตรสารตัวอย่าง (sample volume)
+
+# ปริมาตรไทเทรตสูงสุด = 2 เท่าของปริมาตรตัวอย่าง เพื่อให้ได้กราฟไทเทรชันรูป S ที่สมบูรณ์
+# Max titration volume = 2x sample volume for a complete S-shaped titration curve
+# ตัวอย่าง: 5 mL ตัวอย่าง HCl 0.1M + NaOH 0.1M
+#   - จุดสมมูลอยู่ที่ ~5 mL → ต้องไทเทรตไปถึง 10 mL เพื่อเห็นส่วนหลังจุดสมมูล
+# Example: 5 mL of 0.1M HCl + 0.1M NaOH
+#   - Equivalence point at ~5 mL → titrate to 10 mL to see post-equivalence region
+DEFAULT_MAX_VOLUME_ML = 2 * DEFAULT_SAMPLE_VOLUME_ML  # = 10.0 mL (2x sample volume)
+
+# เวลารอให้ pH คงที่ระหว่างแต่ละ dose (Stabilization time between doses)
+# pH probe ต้องการ 10-20 วินาทีจึงจะเสถียร (pH probe needs 10-20s to stabilize)
+DEFAULT_STABILIZE_TIME_SEC = 10.0  # วินาที (seconds)
 
 # ==============================================================================
 # ขา GPIO สำหรับจอแสดงผล TFT ILI9341 (TFT Display GPIO)

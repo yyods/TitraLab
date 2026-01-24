@@ -35,7 +35,7 @@ class AsyncTitrationController:
 
     # ค่าคงที่สำหรับการไทเทรชัน (Titration constants)
     DEFAULT_DOSE_VOLUME = 0.1      # ปริมาตรต่อครั้ง (mL per dose)
-    DEFAULT_STABILIZE_TIME = 2.0  # เวลารอให้คงที่ (seconds to stabilize)
+    DEFAULT_STABILIZE_TIME = 10.0  # เวลารอให้คงที่ (seconds to stabilize, pH needs 10-20s)
     DEFAULT_MAX_VOLUME = 50.0     # ปริมาตรสูงสุด (maximum volume mL)
 
     # ค่าคงที่สำหรับตรวจจับจุดสมมูล (Equivalence detection thresholds)
@@ -535,7 +535,7 @@ if __name__ == '__main__':
     # ตั้งค่าพารามิเตอร์ (Configure parameters)
     titration.configure(
         dose_volume=0.1,
-        stabilize_time=2.0,
+        stabilize_time=10.0,
         max_volume=25.0
     )
 

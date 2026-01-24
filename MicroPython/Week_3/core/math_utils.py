@@ -27,7 +27,7 @@ class LinearRegression:
 
     ใช้สำหรับ:
         - สอบเทียบ pH sensor (3-point calibration)
-        - คำนวณความสัมพันธ์เชิงเส้นระหว่าง voltage และ pH
+        - คำนวณความสัมพันธ์เชิงเส้นระหว่าง mV (x) และ pH (y)
         - ประเมินคุณภาพการสอบเทียบด้วย R-squared
 
     หลักการทางสถิติ (Statistical Principles):
@@ -40,13 +40,19 @@ class LinearRegression:
         - R2 >= 0.95: acceptable
         - R2 < 0.95: poor, ควรสอบเทียบใหม่
 
+    สำหรับ pH calibration (For pH calibration):
+        x = mV (แรงดันจาก ADC, voltage from ADC)
+        y = pH (ค่า pH ของบัฟเฟอร์, buffer pH values)
+        สมการ: pH = slope_m * mV + intercept_b
+        Equation: pH = slope_m * mV + intercept_b
+
     ตัวอย่างการใช้งาน (Usage Example):
         >>> lr = LinearRegression()
-        >>> lr.add_point(1.5, 4.0)   # voltage=1.5V, pH=4.0
-        >>> lr.add_point(2.0, 7.0)   # voltage=2.0V, pH=7.0
-        >>> lr.add_point(2.5, 10.0)  # voltage=2.5V, pH=10.0
+        >>> lr.add_point(2068.0, 4.0)   # mV=2068, pH=4.0
+        >>> lr.add_point(1650.0, 7.0)   # mV=1650, pH=7.0
+        >>> lr.add_point(1290.0, 10.0)  # mV=1290, pH=10.0
         >>> slope, intercept, r_squared = lr.calculate()
-        >>> print(f"pH = {slope:.4f} * V + {intercept:.4f}, R2 = {r_squared:.4f}")
+        >>> print(f"pH = {slope:.6f} * mV + {intercept:.4f}, R2 = {r_squared:.4f}")
     """
 
     def __init__(self):
@@ -94,8 +100,8 @@ class LinearRegression:
         เพิ่มจุดข้อมูล (Add a data point)
 
         Args:
-            x (float): ค่า x (independent variable) เช่น voltage
-            y (float): ค่า y (dependent variable) เช่น pH
+            x (float): ค่า x (independent variable) เช่น mV จาก ADC
+            y (float): ค่า y (dependent variable) เช่น pH ของบัฟเฟอร์
 
         หมายเหตุ (Note):
             เมื่อเพิ่มจุดใหม่ ผลการคำนวณเดิมจะถูก invalidate
@@ -382,17 +388,20 @@ def calculate_linear_regression(x_list, y_list):
     ฟังก์ชันลัดสำหรับคำนวณ linear regression
     Shortcut function for calculating linear regression
 
+    สำหรับ pH calibration: x=mV, y=pH
+    For pH calibration: x=mV (from ADC), y=pH (buffer values)
+
     Args:
-        x_list (list): รายการค่า x
-        y_list (list): รายการค่า y
+        x_list (list): รายการค่า x (เช่น mV จาก ADC)
+        y_list (list): รายการค่า y (เช่น pH ของบัฟเฟอร์)
 
     Returns:
         tuple: (slope, intercept, r_squared)
 
     ตัวอย่าง (Example):
-        >>> voltages = [1.5, 2.0, 2.5]
+        >>> voltages_mv = [2068.0, 1650.0, 1290.0]
         >>> phs = [4.0, 7.0, 10.0]
-        >>> slope, intercept, r2 = calculate_linear_regression(voltages, phs)
+        >>> slope_m, intercept_b, r2 = calculate_linear_regression(voltages_mv, phs)
     """
     lr = LinearRegression()
     lr.add_points(x_list, y_list)
@@ -444,24 +453,27 @@ if __name__ == "__main__":
 
     # เพิ่มข้อมูลการสอบเทียบ pH (ตัวอย่าง)
     # Add pH calibration data (example)
+    # x = mV (จาก ADC), y = pH (ค่าบัฟเฟอร์)
+    # x = mV (from ADC), y = pH (buffer values)
     print("\n--- เพิ่มข้อมูลสอบเทียบ pH ---")
-    print("(Adding pH calibration data)")
+    print("(Adding pH calibration data: x=mV, y=pH)")
 
-    # ข้อมูลตัวอย่าง: voltage -> pH
+    # ข้อมูลตัวอย่าง: mV -> pH
     calibration_data = [
-        (1.500, 4.00),   # Buffer pH 4.00
-        (2.000, 7.00),   # Buffer pH 7.00
-        (2.500, 10.00),  # Buffer pH 10.00
+        (2068.0, 4.00),   # Buffer pH 4.00 -> 2068 mV
+        (1650.0, 7.00),   # Buffer pH 7.00 -> 1650 mV
+        (1290.0, 10.00),  # Buffer pH 10.00 -> 1290 mV
     ]
 
-    for voltage, ph in calibration_data:
-        lr.add_point(voltage, ph)
+    for mv, ph in calibration_data:
+        lr.add_point(mv, ph)
 
     # คำนวณ linear regression
     print("\n--- ผลการคำนวณ ---")
     slope, intercept, r_squared = lr.calculate()
 
     print(f"\nสมการ: {lr.get_equation_string()}")
+    print(f"หมายถึง: pH = {slope:.6f} * mV + {intercept:.4f}")
     print(f"R-squared: {r_squared * 100:.2f}%")
 
     # ตรวจสอบคุณภาพ
@@ -469,16 +481,16 @@ if __name__ == "__main__":
     is_valid, message = lr.validate(threshold=0.99)
     print(f"ผลการตรวจสอบ: {message}")
 
-    # ทดสอบการทำนาย
+    # ทดสอบการทำนาย (x=mV -> y=pH)
     print("\n--- ทดสอบการทำนาย ---")
-    test_voltage = 1.75
-    predicted_ph = lr.predict(test_voltage)
-    print(f"Voltage {test_voltage:.3f}V -> pH {predicted_ph:.2f}")
+    test_mv = 1850.0
+    predicted_ph = lr.predict(test_mv)
+    print(f"mV {test_mv:.1f} -> pH {predicted_ph:.2f}")
 
-    # Inverse prediction
+    # Inverse prediction (y=pH -> x=mV)
     test_ph = 5.5
-    predicted_voltage = lr.predict_inverse(test_ph)
-    print(f"pH {test_ph:.2f} -> Voltage {predicted_voltage:.3f}V")
+    predicted_mv = lr.predict_inverse(test_ph)
+    print(f"pH {test_ph:.2f} -> mV {predicted_mv:.1f}")
 
     # สรุป
     print("\n--- สรุป ---")

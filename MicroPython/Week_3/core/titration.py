@@ -23,8 +23,17 @@ class TitrationController:
     คลาสควบคุมการไทเทรชันอัตโนมัติ
     Automatic titration controller class
 
+    อัลกอริทึม - Constant Dose Volume (Algorithm):
+    ใช้ปริมาตรคงที่ 0.2 mL ต่อ step ตลอดทั้งการไทเทรต (ปั๊มที่ 100% เสมอ):
+      สูบ 0.2 mL → หยุด → รอ 2 วินาที → อ่าน pH → ทำซ้ำ
+
+    เหตุผลทางการเรียนรู้ (Pedagogical Rationale):
+    - ทุกจุดบนกราฟห่างกัน 0.2 mL เท่ากัน ง่ายต่อการอ่านกราฟ
+    - นิสิตตรวจสอบได้: total_volume = dose_count x 0.2 mL
+    - เหมือนการไทเทรตมือ: "หยดสารไทแทรนต์ทีละหยด" แบบสม่ำเสมอ
+
     คุณสมบัติ (Features):
-    - ควบคุมปั๊มเติมสารละลาย (Titrant pump control)
+    - ควบคุมปั๊มเติมสารละลายทีละ 0.2 mL (Stepwise titrant pump control)
     - อ่านค่า pH แบบเรียลไทม์ (Real-time pH reading)
     - หาจุดสมมูลด้วยวิธี derivative (Equivalence point by derivative method)
     - บันทึกข้อมูลลง ESP32 flash storage (Data logging to ESP32 flash)
@@ -34,10 +43,12 @@ class TitrationController:
     """
 
     # ค่าคงที่สำหรับการไทเทรชัน (Titration constants)
-    DEFAULT_DOSE_VOLUME = 0.1      # ปริมาตรต่อครั้ง (mL per dose)
-    DEFAULT_STABILIZE_TIME = 2.0  # เวลารอให้คงที่ (seconds to stabilize)
-    DEFAULT_MAX_VOLUME = 50.0     # ปริมาตรสูงสุด (maximum volume mL)
-    DEFAULT_PH_THRESHOLD = 0.01   # ค่า threshold สำหรับ pH คงที่
+    # ใช้ปริมาตรคงที่ 0.2 mL ทุกครั้งเพื่อความเรียบง่ายในการเรียนรู้
+    # Fixed 0.2 mL dose per step for pedagogical simplicity
+    DEFAULT_DOSE_VOLUME = 0.2      # ปริมาตรคงที่ต่อครั้ง (Fixed mL per dose)
+    DEFAULT_STABILIZE_TIME = 10.0  # เวลารอให้คงที่ (seconds to stabilize, pH needs 10-20s)
+    DEFAULT_SAMPLE_VOLUME = 5.0    # ปริมาตรสารตัวอย่าง (sample volume mL)
+    DEFAULT_PH_THRESHOLD = 0.01    # ค่า threshold สำหรับ pH คงที่
 
     # CSV Header สำหรับบันทึกข้อมูล (CSV Header for data logging)
     CSV_HEADERS = ['Cycle', 'Time(s)', 'Volume(mL)', 'pH', 'Temperature(C)']
@@ -82,34 +93,50 @@ class TitrationController:
         # ค่าตั้งการทำงาน (Operation settings)
         self.dose_volume = self.DEFAULT_DOSE_VOLUME
         self.stabilize_time = self.DEFAULT_STABILIZE_TIME
-        self.max_volume = self.DEFAULT_MAX_VOLUME
+        self.sample_volume = self.DEFAULT_SAMPLE_VOLUME
+        # ปริมาตรสูงสุด = 2 เท่าของปริมาตรตัวอย่าง (Max = 2x sample volume)
+        # เพื่อให้ได้กราฟ S-curve ที่สมบูรณ์ทั้งก่อนและหลังจุดสมมูล
+        # For a complete S-curve with data before and after equivalence point
+        self.max_volume = 2 * self.sample_volume
 
         # สถานะการทำงาน (Operation state)
         self._is_running = False
         self._should_stop = False
         self._current_filename = None
 
-    def configure(self, dose_volume=None, stabilize_time=None, max_volume=None):
+    def configure(self, dose_volume=None, stabilize_time=None, sample_volume=None):
         """
         ตั้งค่าพารามิเตอร์การไทเทรชัน
         Configure titration parameters
 
+        หมายเหตุ: max_volume คำนวณอัตโนมัติจาก 2 * sample_volume เสมอ
+        Note: max_volume is always auto-calculated as 2 * sample_volume
+
         Args:
             dose_volume: ปริมาตรต่อครั้ง (mL per dose)
             stabilize_time: เวลารอให้คงที่ (seconds)
-            max_volume: ปริมาตรสูงสุด (maximum mL)
+            sample_volume: ปริมาตรสารตัวอย่าง (sample volume mL)
+                          max_volume จะถูกคำนวณเป็น 2 * sample_volume
+                          max_volume is auto-calculated as 2 * sample_volume
         """
         if dose_volume is not None:
             self.dose_volume = dose_volume
         if stabilize_time is not None:
             self.stabilize_time = stabilize_time
-        if max_volume is not None:
-            self.max_volume = max_volume
+        if sample_volume is not None:
+            self.sample_volume = sample_volume
+            # ปริมาตรสูงสุด = 2 เท่าของปริมาตรตัวอย่าง (Max = 2x sample volume)
+            self.max_volume = 2 * self.sample_volume
+
+        # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
+        total_steps = int(self.max_volume / self.dose_volume)
 
         print(f"ตั้งค่าการไทเทรชัน (Titration configured):")
+        print(f"  - ปริมาตรตัวอย่าง (Sample volume): {self.sample_volume} mL")
+        print(f"  - ปริมาตรสูงสุด (Max volume): {self.max_volume} mL (2x sample)")
         print(f"  - ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
+        print(f"  - จำนวน step ทั้งหมด (Total steps): {total_steps}")
         print(f"  - เวลารอ (Stabilize): {self.stabilize_time} s")
-        print(f"  - ปริมาตรสูงสุด (Max volume): {self.max_volume} mL")
 
     def reset(self):
         """
@@ -410,8 +437,10 @@ class TitrationController:
         print("=" * 50)
         print("เริ่มการไทเทรชันอัตโนมัติ (Starting Automatic Titration)")
         print("=" * 50)
+        print(f"ปริมาตรตัวอย่าง (Sample): {self.sample_volume} mL")
+        print(f"ปริมาตรสูงสุด (Max): {self.max_volume} mL (2x sample)")
         print(f"ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
-        print(f"ปริมาตรสูงสุด (Max): {self.max_volume} mL")
+        print(f"จำนวน step (Total steps): {int(self.max_volume / self.dose_volume)}")
         print("-" * 50)
 
         # เปิด LED แสดงสถานะทำงาน (Turn on working status LED)
@@ -600,10 +629,13 @@ if __name__ == '__main__':
     )
 
     # ตั้งค่าพารามิเตอร์ (Configure parameters)
+    # ใช้ปริมาตรคงที่ 0.2 mL ทุกครั้ง (Fixed 0.2 mL dose per step)
+    # ปริมาตรสูงสุด = 2 เท่าปริมาตรตัวอย่าง (Max = 2x sample volume)
     titration.configure(
-        dose_volume=0.1,      # 0.1 mL ต่อครั้ง
-        stabilize_time=2.0,   # รอ 2 วินาที
-        max_volume=25.0       # สูงสุด 25 mL
+        dose_volume=0.2,       # 0.2 mL ต่อครั้ง (fixed dose volume)
+        stabilize_time=10.0,   # รอ 10 วินาที (wait 10 seconds for stable pH)
+        sample_volume=5.0      # ตัวอย่าง 5 mL → ไทเทรตสูงสุด 10 mL
+                               # sample 5 mL → max titration 10 mL (2x)
     )
 
     # เริ่มการไทเทรชัน (Start titration)

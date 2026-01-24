@@ -318,7 +318,7 @@ class TitrationScreen(BaseScreen):
     Displays real-time data during automatic titration
 
     Attributes:
-        phase (str): เฟสปัจจุบัน 'fast', 'slow', 'endpoint'
+        phase (str): เฟสปัจจุบัน 'dosing', 'stabilizing', 'reading', 'endpoint'
     """
 
     def __init__(self, display, colors):
@@ -400,8 +400,9 @@ class TitrationScreen(BaseScreen):
         """
         phase_colors = {
             'ready': self.colors.HEADER_BG,
-            'fast': self.colors.ORANGE,
-            'slow': self.colors.YELLOW,
+            'dosing': self.colors.ORANGE,
+            'stabilizing': self.colors.YELLOW,
+            'reading': self.colors.CYAN,
             'endpoint': self.colors.GREEN,
             'complete': self.colors.GREEN,
             'error': self.colors.RED
@@ -420,9 +421,10 @@ class TitrationScreen(BaseScreen):
         """
         phase_texts = {
             'ready': 'Ready',
-            'fast': 'Fast Dosing (100%)',
-            'slow': 'Slow Dosing (50%)',
-            'endpoint': 'Near Endpoint',
+            'dosing': 'Dosing (0.2 mL)',
+            'stabilizing': 'Stabilizing...',
+            'reading': 'Reading pH',
+            'endpoint': 'Endpoint Reached',
             'complete': 'Complete!',
             'error': 'Error!'
         }
@@ -437,9 +439,10 @@ class TitrationScreen(BaseScreen):
         """
         status_messages = {
             'ready': 'Press SELECT to start',
-            'fast': 'Fast dosing in progress...',
-            'slow': 'Approaching endpoint...',
-            'endpoint': 'Fine adjustment...',
+            'dosing': 'Pumping 0.2 mL...',
+            'stabilizing': 'Waiting for pH...',
+            'reading': 'Reading sensors...',
+            'endpoint': 'Endpoint detected!',
             'complete': 'Titration complete!',
             'error': 'Error occurred!'
         }
@@ -505,8 +508,8 @@ class ResultScreen(BaseScreen):
         Args:
             **results: ผลลัพธ์ที่จะแสดง (Results to display)
                 สำหรับ calibration:
-                    slope (float): ค่า slope
-                    intercept (float): ค่า intercept
+                    slope_m (float): ค่า slope (pH/mV)
+                    intercept_b (float): ค่า intercept (pH)
                     r_squared (float): ค่า R^2
                     points (list): จุดสอบเทียบ [(ph, voltage), ...]
 
@@ -558,7 +561,7 @@ class ResultScreen(BaseScreen):
         elif calibration_type == 'flow':
             # แสดง Flow Rate (Display flow rate)
             flow_rate = kwargs.get('flow_rate', 0)
-            self.display.draw_text(20, y, f"Flow Rate: {flow_rate:.3f} mL/s", self.colors.YELLOW)
+            self.display.draw_text(20, y, f"Flow Rate: {flow_rate:.4f} mL/s", self.colors.YELLOW)
             y += 30
 
             # แสดงค่าเฉลี่ย (Display average)
@@ -567,7 +570,7 @@ class ResultScreen(BaseScreen):
                 y += 25
                 for i, (time_sec, volume) in enumerate(points):
                     rate = volume / time_sec if time_sec > 0 else 0
-                    self.display.draw_text(30, y, f"Run {i+1}: {rate:.3f} mL/s", self.colors.CYAN)
+                    self.display.draw_text(30, y, f"Run {i+1}: {rate:.4f} mL/s", self.colors.CYAN)
                     y += 22
 
         # แสดงสถานะการบันทึก (Display save status)

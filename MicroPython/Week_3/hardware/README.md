@@ -42,17 +42,16 @@ hardware/
 
 **หน้าที่**: ควบคุมปั๊มเพอริสตาลติกสำหรับหยดสารไทแทรนต์ (titrant)
 
-**ความเชื่อมโยงกับเคมี**: ปั๊มหยดสารไทแทรนต์ลงในสารละลายตัวอย่าง โดยควบคุมอัตราการไหลด้วย PWM duty cycle
+**ความเชื่อมโยงกับเคมี**: ปั๊มหยดสารไทแทรนต์ลงในสารละลายตัวอย่าง โดยสูบทีละ 0.2 mL (constant dose volume)
 
 ```python
 # ตัวอย่างการใช้งาน (Usage Example)
 from hardware.pump import Pump
 
 pump = Pump()
-pump.start(duty_percent=100)    # เริ่มปั๊มที่ 100%
-pump.set_duty(50)               # ลดเป็น 50% ใกล้จุดสมมูล
+pump.start(duty_percent=100)    # เริ่มปั๊มที่ 100% (ใช้ 100% เสมอสำหรับการไทเทรต)
 result = pump.stop()            # หยุดและรับข้อมูลเวลา/ปริมาตร
-pump.run_for_volume(2.0)        # สูบ 2 mL แล้วหยุดอัตโนมัติ
+pump.run_for_volume(0.2)        # สูบ 0.2 mL (1 dose) แล้วหยุดอัตโนมัติ
 pump.purge(duration_ms=3000)    # ล้างท่อ 3 วินาที
 pump.deinit()                   # คืนทรัพยากร PWM
 ```
@@ -78,8 +77,10 @@ pump.deinit()                   # คืนทรัพยากร PWM
 **ความเชื่อมโยงกับเคมี**: ใช้สมการ Nernst ในการแปลงแรงดันเป็นค่า pH
 
 ```
-สมการ (Equation): pH = slope * voltage + intercept
-โดย slope และ intercept ได้จากการสอบเทียบ (calibration)
+สมการ (Equation): pH = slope_m * mV + intercept_b
+โดย:
+  - slope_m (pH/mV) และ intercept_b (pH) ได้จากการสอบเทียบ (calibration)
+  - ใช้รูปแบบ direct-use: ป้อนค่า mV ได้ pH ทันที ไม่ต้อง invert สมการ
 ```
 
 ```python
@@ -89,7 +90,7 @@ from hardware.ph_sensor import PHSensor
 ph_sensor = PHSensor()
 voltage, ph = ph_sensor.read()          # อ่านค่าแรงดันและ pH
 voltage = ph_sensor.read_voltage()      # อ่านเฉพาะแรงดัน
-ph_sensor.set_calibration(slope, intercept)  # ตั้งค่าสอบเทียบ
+ph_sensor.set_calibration(slope_m, intercept_b)  # ตั้งค่าสอบเทียบ (pH/mV, pH)
 ```
 
 **Methods สำคัญ**:
@@ -98,7 +99,7 @@ ph_sensor.set_calibration(slope, intercept)  # ตั้งค่าสอบเ
 | `read()` | คืนค่า (voltage, pH) |
 | `read_voltage()` | อ่านค่าแรงดัน mV |
 | `read_ph()` | คำนวณค่า pH จากแรงดัน |
-| `set_calibration(slope, intercept)` | ตั้งค่าสมการสอบเทียบ |
+| `set_calibration(slope_m, intercept_b)` | ตั้งค่าสมการสอบเทียบ (pH/mV, pH) |
 
 ---
 

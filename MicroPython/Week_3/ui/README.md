@@ -198,12 +198,12 @@ from ui.screens import TitrationScreen
 
 titration_screen = TitrationScreen(display, colors)
 
-# อัปเดตค่า
+# อัปเดตค่า (Update values)
 titration_screen.update(
-    volume=15.3,
+    volume=15.4,
     ph=6.23,
     temperature=25.1,
-    phase="Slow Dosing"
+    phase="dosing"        # เฟส: dosing / stabilizing / reading / endpoint
 )
 
 # แสดงจุดสมมูล

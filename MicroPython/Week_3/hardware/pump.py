@@ -31,6 +31,9 @@ except ImportError:
     PUMP_PWM_FREQ = 1000
     PUMP_PWM_MAX_DUTY = 1023
     PUMP_PWM_MIN_DUTY = 0
+    # ใช้ 4 ทศนิยมเพื่อลดความคลาดเคลื่อนของปริมาตรสะสม
+    # Use 4 decimal places to minimize cumulative volume error
+    # (3 ทศนิยมอาจให้ error ~1.2% ของปริมาตร)
     DEFAULT_FLOW_RATE_ML_PER_SEC = 0.2772
 
 
@@ -112,6 +115,9 @@ class Pump:
     def flow_rate(self, value):
         """
         กำหนดอัตราการไหลใหม่ (Set new flow rate)
+
+        ใช้ 4 ทศนิยม (.4f) เพื่อรักษาความแม่นยำในการคำนวณปริมาตร
+        Uses 4 decimal places (.4f) to maintain precision in volume calculation
 
         Args:
             value (float): อัตราการไหล mL/s ที่ 100% duty (flow rate at 100% duty)

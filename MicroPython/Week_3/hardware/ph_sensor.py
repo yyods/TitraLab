@@ -41,9 +41,11 @@ except ImportError:
     ADC_REFERENCE_MV = 3300
     ADC_SAMPLES = 10
     PH_BUFFER_VALUES = [4.00, 7.00, 10.00]
-    DEFAULT_PH_SLOPE = -5.7901
-    DEFAULT_PH_INTERCEPT = 16.769
-    NERNST_THEORETICAL_SLOPE = -59.16
+    # สมการ: pH = slope_m * mV + intercept_b
+    # Equation: pH = slope_m * mV + intercept_b
+    DEFAULT_PH_SLOPE = -0.016911       # slope_m (pH/mV)
+    DEFAULT_PH_INTERCEPT = 34.9800     # intercept_b (pH)
+    NERNST_THEORETICAL_SLOPE = -59.16  # mV/pH ที่ 25 C (theoretical)
 
 
 class pHSensor:
@@ -56,9 +58,9 @@ class pHSensor:
         - รองรับการสอบเทียบ 3 จุด
 
     หลักการทำงาน (Working Principle):
-        1. ADC อ่านแรงดันจาก pH electrode (0-3.3V)
+        1. ADC อ่านแรงดันจาก pH electrode (0-3.3V = 0-3300 mV)
         2. แปลงค่า ADC เป็นมิลลิโวลต์ (mV)
-        3. ใช้สมการเส้นตรง pH = slope * voltage + intercept
+        3. ใช้สมการเส้นตรง pH = slope_m * mV + intercept_b
            เพื่อแปลง mV เป็น pH
 
     การกรองสัญญาณ (Signal Filtering):
@@ -68,21 +70,26 @@ class pHSensor:
 
     ตัวอย่างการใช้งาน (Usage Example):
         >>> ph_sensor = pHSensor()
-        >>> voltage, ph = ph_sensor.read()
-        >>> print(f"Voltage: {voltage:.3f} V, pH: {ph:.2f}")
+        >>> voltage_mv, ph = ph_sensor.read()
+        >>> print(f"Voltage: {voltage_mv:.1f} mV, pH: {ph:.2f}")
     """
 
     def __init__(self, pin=None, slope=None, intercept=None):
         """
         สร้าง pHSensor object (Create pHSensor object)
 
+        สมการ: pH = slope_m * mV + intercept_b
+        Equation: pH = slope_m * mV + intercept_b
+
         Args:
             pin (int): หมายเลขขา GPIO (GPIO pin number)
                        ค่าเริ่มต้น: GPIO25
-            slope (float): ค่า slope ของสมการสอบเทียบ
-                           ค่าเริ่มต้น: -5.7901
-            intercept (float): ค่า intercept ของสมการสอบเทียบ
-                               ค่าเริ่มต้น: 16.769
+            slope (float): slope_m ของสมการสอบเทียบ หน่วย pH/mV
+                           (Calibration slope in pH/mV units)
+                           ค่าเริ่มต้น: -0.016911
+            intercept (float): intercept_b ของสมการสอบเทียบ หน่วย pH
+                               (Calibration intercept in pH units)
+                               ค่าเริ่มต้น: 34.9800
         """
         # กำหนดค่า (Set values)
         self._pin_number = pin if pin is not None else PH_PIN
@@ -106,8 +113,8 @@ class pHSensor:
 
         print(f"pH Sensor พร้อมใช้งานที่ GPIO{self._pin_number} "
               f"(pH Sensor ready on GPIO{self._pin_number})")
-        print(f"สมการ: pH = {self._slope:.4f} * V + {self._intercept:.4f} "
-              f"(Equation: pH = {self._slope:.4f} * V + {self._intercept:.4f})")
+        print(f"สมการ: pH = {self._slope:.6f} * mV + {self._intercept:.4f} "
+              f"(Equation: pH = {self._slope:.6f} * mV + {self._intercept:.4f})")
 
     @property
     def slope(self):
@@ -135,14 +142,17 @@ class pHSensor:
         """
         กำหนดค่าสอบเทียบใหม่ (Set new calibration values)
 
+        สมการ: pH = slope_m * mV + intercept_b
+        Equation: pH = slope_m * mV + intercept_b
+
         Args:
-            slope (float): ค่า slope
-            intercept (float): ค่า intercept
+            slope (float): slope_m (pH/mV)
+            intercept (float): intercept_b (pH)
         """
         self._slope = slope
         self._intercept = intercept
-        print(f"สมการใหม่: pH = {slope:.4f} * V + {intercept:.4f} "
-              f"(New equation: pH = {slope:.4f} * V + {intercept:.4f})")
+        print(f"สมการใหม่: pH = {slope:.6f} * mV + {intercept:.4f} "
+              f"(New equation: pH = {slope:.6f} * mV + {intercept:.4f})")
 
     def read_raw(self):
         """
@@ -169,8 +179,8 @@ class pHSensor:
 
     def read_voltage(self):
         """
-        อ่านแรงดันเป็นโวลต์พร้อมการกรองสัญญาณ
-        Read voltage in volts with signal filtering
+        อ่านแรงดันเป็นมิลลิโวลต์พร้อมการกรองสัญญาณ
+        Read voltage in millivolts with signal filtering
 
         วิธีการกรอง (Filtering Method):
             1. อ่านค่า 10 ครั้ง
@@ -179,7 +189,7 @@ class pHSensor:
             4. เฉลี่ยค่าตรงกลาง (index 2-7)
 
         Returns:
-            float: แรงดันเป็นโวลต์ (voltage in V)
+            float: แรงดันเป็นมิลลิโวลต์ (voltage in mV)
         """
         # เก็บค่าหลายตัวอย่าง (Collect multiple samples)
         samples = []
@@ -195,25 +205,25 @@ class pHSensor:
         trimmed_samples = samples[2:8]  # index 2 to 7
         avg_adc = sum(trimmed_samples) / len(trimmed_samples)
 
-        # แปลงเป็นโวลต์ (Convert to volts)
-        voltage = (avg_adc / ADC_MAX_VALUE) * (ADC_REFERENCE_MV / 1000)
-        return voltage
+        # แปลงเป็นมิลลิโวลต์ (Convert to millivolts)
+        voltage_mv = (avg_adc / ADC_MAX_VALUE) * ADC_REFERENCE_MV
+        return voltage_mv
 
     def read(self):
         """
         อ่านค่า pH พร้อมแรงดัน (Read pH with voltage)
 
         การคำนวณ (Calculation):
-            pH = slope * voltage + intercept
+            pH = slope_m * mV + intercept_b
 
         Returns:
-            tuple: (voltage, pH)
-                - voltage (float): แรงดันเป็นโวลต์
+            tuple: (voltage_mv, pH)
+                - voltage_mv (float): แรงดันเป็นมิลลิโวลต์ (voltage in mV)
                 - pH (float): ค่า pH ที่คำนวณได้
         """
-        voltage = self.read_voltage()
-        ph_value = self._slope * voltage + self._intercept
-        return voltage, ph_value
+        voltage_mv = self.read_voltage()
+        ph_value = self._slope * voltage_mv + self._intercept
+        return voltage_mv, ph_value
 
     def read_ph(self):
         """
@@ -234,7 +244,7 @@ class pHSensor:
             delay_ms (int): เวลาหน่วงระหว่างการอ่าน (delay between readings in ms)
 
         Returns:
-            tuple: (avg_voltage, avg_pH)
+            tuple: (avg_voltage_mv, avg_pH)
         """
         voltages = []
         phs = []
@@ -245,10 +255,27 @@ class pHSensor:
             phs.append(p)
             sleep_ms(delay_ms)
 
-        avg_voltage = sum(voltages) / len(voltages)
+        avg_voltage_mv = sum(voltages) / len(voltages)
         avg_ph = sum(phs) / len(phs)
 
-        return avg_voltage, avg_ph
+        return avg_voltage_mv, avg_ph
+
+    def read_voltage_averaged(self, num_samples=10):
+        """
+        อ่านแรงดันเฉลี่ยจากหลายตัวอย่าง (Read averaged voltage from multiple samples)
+
+        Args:
+            num_samples (int): จำนวนตัวอย่าง (Number of samples)
+
+        Returns:
+            float: แรงดันเฉลี่ยเป็น mV (Averaged voltage in mV)
+        """
+        readings = []
+        for _ in range(num_samples):
+            readings.append(self.read_voltage())
+            sleep_ms(50)
+
+        return sum(readings) / len(readings)
 
     def add_calibration_point(self, buffer_ph, voltage):
         """
@@ -342,17 +369,21 @@ class pHSensor:
         เปรียบเทียบ slope ที่สอบเทียบกับ slope ทฤษฎี
         Compare calibrated slope with theoretical slope
 
+        slope ทฤษฎี (theoretical slope):
+            Nernst: -59.16 mV/pH -> inverted: -0.016903 pH/mV (at 25 C)
+
         Returns:
             float: ประสิทธิภาพเป็นเปอร์เซ็นต์ (efficiency as percentage)
         """
         if self._slope == 0:
             return 0
 
-        # Theoretical slope at 25 C = -59.16 mV/pH = -0.05916 V/pH
-        theoretical_slope_v = NERNST_THEORETICAL_SLOPE / 1000
+        # Theoretical slope at 25 C:
+        # Nernst = -59.16 mV/pH -> inverted = 1/(-59.16) = -0.016903 pH/mV
+        theoretical_slope_ph_per_mv = 1.0 / NERNST_THEORETICAL_SLOPE
 
         # คำนวณประสิทธิภาพ (Calculate efficiency)
-        efficiency = (self._slope / theoretical_slope_v) * 100
+        efficiency = (self._slope / theoretical_slope_ph_per_mv) * 100
 
         return abs(efficiency)
 
@@ -381,14 +412,14 @@ if __name__ == "__main__":
     try:
         print("\n--- ทดสอบการอ่านค่า (Reading Test) ---")
         for i in range(5):
-            voltage, ph = ph_sensor.read()
+            voltage_mv, ph = ph_sensor.read()
             raw = ph_sensor.read_raw()
-            print(f"อ่านครั้งที่ {i+1}: Raw ADC={raw}, V={voltage:.4f}V, pH={ph:.2f}")
+            print(f"อ่านครั้งที่ {i+1}: Raw ADC={raw}, mV={voltage_mv:.1f}, pH={ph:.2f}")
             sleep_ms(1000)
 
         print("\n--- ทดสอบการอ่านเฉลี่ย (Averaged Reading Test) ---")
-        avg_v, avg_ph = ph_sensor.read_averaged(num_readings=3, delay_ms=500)
-        print(f"ค่าเฉลี่ย: V={avg_v:.4f}V, pH={avg_ph:.2f}")
+        avg_mv, avg_ph = ph_sensor.read_averaged(num_readings=3, delay_ms=500)
+        print(f"ค่าเฉลี่ย: mV={avg_mv:.1f}, pH={avg_ph:.2f}")
 
         print("\n--- ทดสอบ Nernst slope (Nernst Slope Test) ---")
         for temp in [20, 25, 30]:
