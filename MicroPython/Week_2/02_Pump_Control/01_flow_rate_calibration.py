@@ -40,9 +40,10 @@
 # 2. กดปุ่ม 1 เพื่อเริ่มปั๊ม - จับเวลาอัตโนมัติ
 # 3. ปั๊มน้ำลงกระบอกตวงประมาณ 10-20 วินาที
 # 4. กดปุ่ม 1 อีกครั้งเพื่อหยุดปั๊ม
-# 5. อ่านปริมาตรจากกระบอกตวง แล้วกดปุ่ม 2 เพื่อป้อนค่า
-# 6. ทำซ้ำ 3-5 ครั้งเพื่อหาค่าเฉลี่ย
-# 7. กดปุ่ม 3 เพื่อบันทึกค่า flow rate ลงไฟล์
+# 5. อ่านปริมาตรจากกระบอกตวง
+# 6. กดปุ่ม 2 แล้วพิมพ์ปริมาตรที่วัดได้ใน Thonny terminal
+# 7. ทำซ้ำ 3-5 ครั้งเพื่อหาค่าเฉลี่ย
+# 8. กดปุ่ม 3 เพื่อบันทึกค่า flow rate ลงไฟล์
 #
 # ==============================================================================
 # Hardware Configuration:
@@ -98,9 +99,8 @@ debounce_time_ms = 300         # เวลา debounce (ms)
 last_press_time = {34: 0, 35: 0, 39: 0}  # เวลากดปุ่มล่าสุดแต่ละปุ่ม
 
 # ค่าปริมาตรที่นิสิตป้อน (Volume input by student)
-# นิสิตต้องแก้ค่านี้หลังจากอ่านจากกระบอกตวง
-# Student must edit this value after reading from graduated cylinder
-MEASURED_VOLUME = 5.0  # mL - แก้ไขค่านี้ตามที่วัดได้จริง (Edit this to actual measured value)
+# นิสิตจะพิมพ์ค่าปริมาตรผ่าน Thonny terminal เมื่อกดปุ่ม 2
+# Student will type measured volume via Thonny terminal when pressing Button 2
 
 # ==============================================================================
 # ฟังก์ชันการสอบเทียบ (Calibration Functions)
@@ -146,8 +146,7 @@ def toggle_pump():
         print("-" * 50)
         print("ขั้นตอนถัดไป (Next steps):")
         print("1. อ่านปริมาตรจากกระบอกตวง (Read volume from graduated cylinder)")
-        print(f"2. แก้ไขค่า MEASURED_VOLUME = {MEASURED_VOLUME} เป็นค่าที่วัดได้")
-        print("3. กดปุ่ม 2 เพื่อบันทึกผล (Press Button 2 to record)")
+        print("2. กดปุ่ม 2 แล้วพิมพ์ปริมาตรที่วัดได้ (Press Button 2, then type volume)")
         print("=" * 50)
 
 
@@ -164,9 +163,19 @@ def record_measurement():
         print("\nข้อผิดพลาด: กรุณาปั๊มน้ำก่อน (Error: Please pump water first)")
         return
 
-    # ใช้ค่าจากตัวแปร MEASURED_VOLUME
-    # Use value from MEASURED_VOLUME variable
-    current_volume = MEASURED_VOLUME
+    # รับค่าปริมาตรจากนิสิตผ่าน Thonny terminal
+    # Get measured volume from student via Thonny terminal
+    print(f"\nเวลาที่ปั๊มทำงาน (Elapsed time): {elapsed_time:.3f} s")
+    try:
+        vol_str = input("พิมพ์ปริมาตรที่วัดได้ (Enter measured volume in mL): ")
+        current_volume = float(vol_str)
+    except ValueError:
+        print("ข้อผิดพลาด: กรุณาพิมพ์ตัวเลข เช่น 5.2 (Error: Please enter a number, e.g. 5.2)")
+        return
+
+    if current_volume <= 0:
+        print("ข้อผิดพลาด: ปริมาตรต้องมากกว่า 0 (Error: Volume must be > 0)")
+        return
 
     # คำนวณ flow rate (Calculate flow rate)
     flow_rate = current_volume / elapsed_time
@@ -237,6 +246,8 @@ def save_calibration():
             for i, (t, v, fr) in enumerate(calibration_data, 1):
                 f.write(f"# {i}: {t:.3f}, {v:.2f}, {fr:.4f}\n")
             f.write("#\n")
+            # บันทึกทศนิยม 4 ตำแหน่ง เพราะส่งผลต่อความแม่นยำของปริมาตรที่ปั๊ม
+            # Use 4 decimal places - critical for precise transferred volume calculation
             f.write(f"flow_rate={avg_flow_rate:.4f}\n")
 
         # แสดงผลสำเร็จ (Show success)
@@ -298,9 +309,8 @@ print("ขั้นตอนการสอบเทียบ (Calibration Steps
 print("  1. เตรียมกระบอกตวงและบีกเกอร์น้ำ")
 print("  2. กดปุ่ม 1 เริ่มปั๊ม → ปั๊ม 10-20 วินาที → กดปุ่ม 1 หยุด")
 print("  3. อ่านปริมาตรจากกระบอกตวง")
-print(f"  4. แก้ไข MEASURED_VOLUME = {MEASURED_VOLUME} ในโค้ด")
-print("  5. กดปุ่ม 2 บันทึกผล (ทำซ้ำ 3-5 ครั้ง)")
-print("  6. กดปุ่ม 3 บันทึกลงไฟล์")
+print("  4. กดปุ่ม 2 แล้วพิมพ์ปริมาตรที่วัดได้ (ทำซ้ำ 3-5 ครั้ง)")
+print("  5. กดปุ่ม 3 บันทึกลงไฟล์")
 print()
 print("การควบคุม (Controls):")
 print(f"  [ปุ่ม 1] เริ่ม/หยุดปั๊ม | Duty Cycle: {duty_cycle_percent}%")

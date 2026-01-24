@@ -49,10 +49,10 @@
 #
 #     E = E0 - (2.303RT/nF) x pH
 #
-# จัดรูปใหม่เป็นสมการเส้นตรง: E = m x pH + b
+# จัดรูปเป็นสมการใช้งานตรง: pH = slope_m x mV + intercept_b
 # โดย:
-#   m (slope) = -2.303RT/nF = ความชัน (mV/pH)
-#   b (intercept) = E0 = ศักย์ไฟฟ้าที่ pH = 0 (mV)
+#   slope_m = 1/(-2.303RT/nF) = ความชัน (pH/mV) ≈ -0.0169 pH/mV ที่ 25C
+#   intercept_b = จุดตัดแกน y (pH) ≈ 34-36 (ขึ้นอยู่กับ offset ของวงจร)
 #
 # ค่าความชันทฤษฎีที่อุณหภูมิต่างๆ:
 #   20C: -58.17 mV/pH (Nernst slope efficiency = 100%)
@@ -85,11 +85,11 @@
 #   pH 7 (กลาง/neutral): E_probe =   0 mV  -> E_measured = 1650 mV  <- จุดกึ่งกลาง
 #   pH 10 (เบส/basic):  E_probe = -177 mV  -> E_measured = 1473 mV
 #
-# สมการเส้นตรงสำหรับการสอบเทียบ (Linear equation for calibration):
-#     E_measured = slope_m x pH + intercept_b
+# สมการสอบเทียบสำหรับใช้งานตรง (Calibration equation for direct usage):
+#     pH = slope_m x E_measured + intercept_b
 #
-# โดย intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV (ที่ pH=0)
-# where intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV (at pH=0)
+# ตัวอย่าง: pH = -0.0169 x 1650 + 34.98 ≈ 7.09 (ที่ 1650 mV ≈ pH 7)
+# Example:  pH = -0.0169 x 1827 + 34.98 ≈ 4.09 (ที่ 1827 mV ≈ pH 4)
 #
 # ==============================================================================
 # Hardware Configuration (นิสิตกำหนดขา GPIO เอง / Student assigns GPIO pins):
@@ -308,11 +308,11 @@ def linear_regression(x_values, y_values):
     Calculate linear regression y = mx + b with R-squared
 
     หลักการ (Principle):
-    สำหรับเซ็นเซอร์ pH: E(mV) = m * pH + b
-    - x = pH (ค่า pH ของสารละลายกันชน)
-    - y = E (แรงดันไฟฟ้าที่วัดได้ในหน่วย mV)
-    - m = slope (ความชัน mV/pH)
-    - b = intercept (จุดตัดแกน y เป็น mV)
+    สำหรับเซ็นเซอร์ pH: pH = slope_m * mV + intercept_b
+    - x = mV (แรงดันไฟฟ้าที่วัดได้จาก ADC)
+    - y = pH (ค่า pH ของสารละลายกันชน)
+    - slope_m = ความชัน (pH/mV) - ใช้คำนวณ pH จาก mV โดยตรง
+    - intercept_b = จุดตัดแกน y (pH)
 
     สูตรการถดถอยเชิงเส้น (Linear regression formulas):
     m = (n*sum(xy) - sum(x)*sum(y)) / (n*sum(x^2) - (sum(x))^2)
@@ -322,12 +322,12 @@ def linear_regression(x_values, y_values):
     โดย SS_res = sum((y_i - y_pred_i)^2) และ SS_tot = sum((y_i - y_mean)^2)
 
     Args:
-        x_values: ค่า pH ของสารละลายกันชน (Buffer pH values)
-        y_values: ค่าแรงดันที่วัดได้ (Measured voltages in mV)
+        x_values: ค่าแรงดันที่วัดได้ (Measured voltages in mV)
+        y_values: ค่า pH ของสารละลายกันชน (Buffer pH values)
 
     Returns:
-        tuple: (slope, intercept, r_squared)
-               (ความชัน, จุดตัดแกน y, ค่า R-squared)
+        tuple: (slope_m, intercept_b, r_squared)
+               (ความชัน pH/mV, จุดตัดแกน y pH, ค่า R-squared)
     """
     n = len(x_values)
 
@@ -375,18 +375,18 @@ def save_calibration_data(slope, intercept, r_squared, avg_temp):
 
     รูปแบบไฟล์ (File format):
     slope_m,intercept_b,r_squared,cal_temp
-    -59.0,2060.5,0.9985,25.2
+    -0.016911,34.9800,0.9985,25.2
 
-    หมายเหตุเกี่ยวกับ intercept_b (Note about intercept_b):
-    เนื่องจากวงจร LMC6482 offset +1650 mV ค่า intercept_b จะอยู่ประมาณ 2000-2100 mV
-    Due to LMC6482 circuit offset of +1650 mV, intercept_b will be around 2000-2100 mV
+    การใช้งาน (Usage): pH = slope_m * mV + intercept_b
+    - slope_m: ความชัน (pH/mV) - ค่าลบประมาณ -0.0169 pH/mV
+    - intercept_b: จุดตัดแกน y (pH) - ค่าประมาณ 34-36 pH
 
-    การคำนวณ: intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV
-    Calculation: intercept_b = OFFSET_MV + 7 x |slope| ≈ 1650 + 414 = 2064 mV
+    ตัวอย่างการใช้ (Example usage):
+    pH = -0.016911 * 1650 + 34.98 = 7.08 (ใกล้ pH 7 ที่ 1650 mV)
 
     Args:
-        slope: ความชันที่คำนวณได้ (mV/pH) - ค่าลบประมาณ -59 mV/pH
-        intercept: จุดตัดแกน y (mV) - ค่าประมาณ 2000-2100 mV (รวม offset)
+        slope: ความชันที่คำนวณได้ (pH/mV) - ค่าลบประมาณ -0.0169
+        intercept: จุดตัดแกน y (pH) - ค่าประมาณ 34-36
         r_squared: ค่า R-squared
         avg_temp: อุณหภูมิเฉลี่ยขณะสอบเทียบ (C)
 
@@ -417,17 +417,17 @@ def save_calibration_log(slope, intercept, r_squared, efficiency):
     บันทึกรายละเอียดการสอบเทียบลงไฟล์ log
     Save detailed calibration log to file
 
-    หมายเหตุเกี่ยวกับค่าที่คาดหวัง (Expected values note):
-    - slope: ประมาณ -59 mV/pH (ค่าลบ เพราะ pH เพิ่ม -> แรงดันลด)
-    - intercept: ประมาณ 2000-2100 mV (รวม OFFSET_MV = 1650 mV จาก LMC6482)
+    สูตร: pH = slope_m x mV + intercept_b
+    - slope_m: ประมาณ -0.0169 pH/mV (ค่าลบ เพราะ mV เพิ่ม -> pH ลด)
+    - intercept_b: ประมาณ 34-36 pH
 
-    สูตร: E_measured = slope x pH + intercept
-    ที่ pH = 0: E_measured = intercept ≈ 2064 mV
-    ที่ pH = 7: E_measured = -59 x 7 + 2064 ≈ 1651 mV (ใกล้ OFFSET_MV)
+    ตัวอย่าง:
+    ที่ 1650 mV (pH 7): pH = -0.0169 x 1650 + 34.98 ≈ 7.09
+    ที่ 1827 mV (pH 4): pH = -0.0169 x 1827 + 34.98 ≈ 4.09
 
     Args:
-        slope: ความชันที่คำนวณได้ (mV/pH) - ค่าลบประมาณ -59
-        intercept: จุดตัดแกน y (mV) - ค่าประมาณ 2000-2100 mV
+        slope: ความชันที่คำนวณได้ (pH/mV) - ค่าลบประมาณ -0.0169
+        intercept: จุดตัดแกน y (pH) - ค่าประมาณ 34-36
         r_squared: ค่า R-squared
         efficiency: Nernst slope efficiency (%)
     """
@@ -450,8 +450,9 @@ def save_calibration_log(slope, intercept, r_squared, efficiency):
 
             f.write("Linear Regression Results:\n")
             f.write("-" * 40 + "\n")
-            f.write(f"Slope (m):        {slope:.6f} mV/pH\n")
-            f.write(f"Intercept (b):    {intercept:.4f} mV\n")
+            f.write(f"Equation: pH = slope_m * mV + intercept_b\n")
+            f.write(f"Slope (m):        {slope:.6f} pH/mV\n")
+            f.write(f"Intercept (b):    {intercept:.4f} pH\n")
             f.write(f"R-squared:        {r_squared:.6f}\n")
             f.write(f"Slope Efficiency: {efficiency:.1f}%\n")
             f.write("-" * 40 + "\n\n")
@@ -496,8 +497,8 @@ def display_raw_calibration_data():
     - เข้าใจความสัมพันธ์ระหว่าง pH และแรงดันไฟฟ้า
 
     ข้อมูลที่แสดง (Data displayed):
-    - ค่า pH ของสารละลายกันชน: 4.00, 7.00, 10.00
-    - ค่าแรงดันที่วัดได้ (mV)
+    - ค่าแรงดันที่วัดได้ (mV) - ตัวแปรอิสระ x
+    - ค่า pH ของสารละลายกันชน: 4.00, 7.00, 10.00 - ตัวแปรตาม y
     - ค่าอุณหภูมิขณะวัดแต่ละจุด
     """
     # ==============================================================================
@@ -512,57 +513,58 @@ def display_raw_calibration_data():
     print("Students can use this data to calculate linear regression manually")
     print("")
     print("-" * 70)
-    print("  จุดที่  |   pH (x)   |   Voltage (y) mV   |   Temp (C)")
-    print("  Point   |            |                    |")
+    print("  จุดที่  |   Voltage (x) mV   |   pH (y)   |   Temp (C)")
+    print("  Point   |                    |            |")
     print("-" * 70)
 
     for i, ph in enumerate(buffer_pH_values):
-        print(f"    {i+1}     |   {ph:6.2f}   |     {calibrated_voltages[i]:10.2f}     |    {temperatures[i]:5.1f}")
+        print(f"    {i+1}     |     {calibrated_voltages[i]:10.2f}     |   {ph:6.2f}   |    {temperatures[i]:5.1f}")
 
     print("-" * 70)
     print("")
 
     # คำนวณค่าที่ต้องใช้ในสูตร (Calculate intermediate values for formula)
     n = len(buffer_pH_values)
-    sum_x = sum(buffer_pH_values)
-    sum_y = sum(calibrated_voltages)
-    sum_xy = sum(x * y for x, y in zip(buffer_pH_values, calibrated_voltages))
-    sum_x2 = sum(x ** 2 for x in buffer_pH_values)
+    sum_x = sum(calibrated_voltages)
+    sum_y = sum(buffer_pH_values)
+    sum_xy = sum(x * y for x, y in zip(calibrated_voltages, buffer_pH_values))
+    sum_x2 = sum(x ** 2 for x in calibrated_voltages)
 
     print("ค่าที่ใช้ในการคำนวณ (Values for calculation):")
     print("-" * 70)
     print(f"  n (จำนวนจุด)           = {n}")
-    print(f"  Sum(x)    = Sum(pH)    = {sum_x:.2f}")
-    print(f"  Sum(y)    = Sum(mV)    = {sum_y:.2f}")
-    print(f"  Sum(x*y)  = Sum(pH*mV) = {sum_xy:.2f}")
-    print(f"  Sum(x^2)  = Sum(pH^2)  = {sum_x2:.2f}")
+    print(f"  Sum(x)    = Sum(mV)    = {sum_x:.2f}")
+    print(f"  Sum(y)    = Sum(pH)    = {sum_y:.2f}")
+    print(f"  Sum(x*y)  = Sum(mV*pH) = {sum_xy:.2f}")
+    print(f"  Sum(x^2)  = Sum(mV^2)  = {sum_x2:.2f}")
     print("-" * 70)
     print("")
 
     # แสดงสูตรการคำนวณ (Show calculation formulas)
     print("สูตรการคำนวณ Linear Regression (Formulas):")
+    print("สมการ: pH = slope_m * mV + intercept_b")
     print("-" * 70)
     print("")
     print("  วิธีที่ 1: สูตรเต็ม (Full Formula)")
     print("  --------------------------------------")
-    print("  Slope (m) = [n*Sum(xy) - Sum(x)*Sum(y)] / [n*Sum(x^2) - (Sum(x))^2]")
+    print("  slope_m = [n*Sum(xy) - Sum(x)*Sum(y)] / [n*Sum(x^2) - (Sum(x))^2]")
     print("")
-    print(f"            = [{n}*{sum_xy:.2f} - {sum_x:.2f}*{sum_y:.2f}] / [{n}*{sum_x2:.2f} - ({sum_x:.2f})^2]")
+    print(f"          = [{n}*{sum_xy:.2f} - {sum_x:.2f}*{sum_y:.2f}] / [{n}*{sum_x2:.2f} - ({sum_x:.2f})^2]")
     print("")
-    print("  Intercept (b) = [Sum(y) - m*Sum(x)] / n")
+    print("  intercept_b = [Sum(y) - m*Sum(x)] / n")
     print("")
     print("-" * 70)
     print("")
     print("  วิธีที่ 2: แบบลัด 2 จุด (Simplified 2-Point Method)")
     print("  --------------------------------------")
-    print("  ใช้จุด pH 4.00 และ pH 10.00:")
+    print("  ใช้จุด mV ที่ pH 4.00 และ pH 10.00:")
     print("")
-    print("  Slope (m) = (y2 - y1) / (x2 - x1)")
-    print(f"            = ({calibrated_voltages[2]:.2f} - {calibrated_voltages[0]:.2f}) / (10.00 - 4.00)")
-    print(f"            = {calibrated_voltages[2] - calibrated_voltages[0]:.2f} / 6.00")
+    print("  slope_m = (pH2 - pH1) / (mV2 - mV1)")
+    print(f"          = (10.00 - 4.00) / ({calibrated_voltages[2]:.2f} - {calibrated_voltages[0]:.2f})")
+    print(f"          = 6.00 / {calibrated_voltages[2] - calibrated_voltages[0]:.2f}")
     print("")
-    print("  Intercept (b) = y1 - m * x1")
-    print("                = ค่า mV ที่ pH 4 - (slope * 4.00)")
+    print("  intercept_b = pH1 - slope_m * mV1")
+    print(f"             = 4.00 - slope_m * {calibrated_voltages[0]:.2f}")
     print("")
     print("-" * 70)
     print("")
@@ -575,10 +577,11 @@ def display_raw_calibration_data():
     print("-" * 70)
     print(f"  อุณหภูมิเฉลี่ย (Avg Temp): {avg_temp:.1f} C")
     print(f"  ความชัน Nernst ทฤษฎี (Theoretical Nernst Slope): {theoretical_slope:.2f} mV/pH")
-    print(f"  จุดตัดแกน y ที่คาดหวัง (Expected Intercept): ~2060-2100 mV")
+    print(f"  slope_m ที่คาดหวัง (Expected slope_m): ~{1.0/theoretical_slope:.6f} pH/mV")
+    print(f"  intercept_b ที่คาดหวัง (Expected intercept_b): ~34-36 pH")
     print("")
-    print("  หมายเหตุ: ค่า Intercept สูงเพราะวงจร LMC6482 offset +1650 mV")
-    print("  Note: High intercept due to LMC6482 circuit offset of +1650 mV")
+    print("  หมายเหตุ: intercept_b สูงเพราะวงจร LMC6482 offset +1650 mV")
+    print("  Note: High intercept_b due to LMC6482 circuit offset of +1650 mV")
     print("-" * 70)
     print("")
 
@@ -588,10 +591,10 @@ def display_raw_calibration_data():
     display.clear()
     display.draw_text(20, 5, "Raw Calibration Data", font, color565(255, 255, 255))
 
-    # แสดงหัวตาราง (Table header)
-    display.draw_text(5, 35, "pH", font, color565(0, 255, 255))
-    display.draw_text(80, 35, "mV", font, color565(0, 255, 255))
-    display.draw_text(180, 35, "Temp", font, color565(0, 255, 255))
+    # แสดงหัวตาราง (Table header) - x=mV, y=pH
+    display.draw_text(5, 35, "mV(x)", font, color565(0, 255, 255))
+    display.draw_text(100, 35, "pH(y)", font, color565(0, 255, 255))
+    display.draw_text(200, 35, "Temp", font, color565(0, 255, 255))
 
     # แสดงเส้นแบ่ง (Separator line)
     display.fill_rectangle(5, 55, 230, 2, color565(100, 100, 100))
@@ -599,13 +602,13 @@ def display_raw_calibration_data():
     # แสดงข้อมูลแต่ละจุด (Display each data point)
     y_pos = 65
     for i, ph in enumerate(buffer_pH_values):
-        display.draw_text(5, y_pos, f"{ph:.2f}", font, color565(255, 255, 255))
-        display.draw_text(60, y_pos, f"{calibrated_voltages[i]:.1f}", font, color565(255, 193, 34))
-        display.draw_text(170, y_pos, f"{temperatures[i]:.1f}C", font, color565(0, 191, 255))
+        display.draw_text(5, y_pos, f"{calibrated_voltages[i]:.1f}", font, color565(255, 193, 34))
+        display.draw_text(110, y_pos, f"{ph:.2f}", font, color565(255, 255, 255))
+        display.draw_text(200, y_pos, f"{temperatures[i]:.1f}C", font, color565(0, 191, 255))
         y_pos += 30
 
     # แสดงข้อความให้นิสิตคำนวณ (Prompt student to calculate)
-    display.draw_text(5, 170, "Calculate m,b", font, color565(0, 255, 0))
+    display.draw_text(5, 170, "pH = m*mV + b", font, color565(0, 255, 0))
     display.draw_text(5, 200, "Press BTN1 to verify", font, color565(255, 255, 0))
 
 
@@ -631,12 +634,11 @@ def wait_for_manual_calculation():
     print("ให้นิสิตคำนวณค่าต่อไปนี้โดยใช้ข้อมูลด้านบน:")
     print("Students should calculate the following using the data above:")
     print("")
-    print("  1. Slope (m) = ? mV/pH")
-    print("  2. Intercept (b) = ? mV")
+    print("  1. slope_m = ? pH/mV")
+    print("  2. intercept_b = ? pH")
     print("")
-    print("สูตร (Formulas):")
-    print("  E (mV) = m * pH + b")
-    print("  หรือ (or): pH = (E - b) / m")
+    print("สูตร (Formula):")
+    print("  pH = slope_m * mV + intercept_b")
     print("")
     print("-" * 70)
     print("เมื่อคำนวณเสร็จแล้ว กดปุ่ม 1 เพื่อดูคำตอบ")
@@ -674,8 +676,8 @@ def display_results(slope, intercept, r_squared, efficiency, avg_temp):
     Display calibration results on TFT and serial console
 
     Args:
-        slope: ความชันที่คำนวณได้ (mV/pH)
-        intercept: จุดตัดแกน y (mV)
+        slope: ความชันที่คำนวณได้ (pH/mV)
+        intercept: จุดตัดแกน y (pH)
         r_squared: ค่า R-squared
         efficiency: Nernst slope efficiency (%)
         avg_temp: อุณหภูมิเฉลี่ย (C)
@@ -700,10 +702,10 @@ def display_results(slope, intercept, r_squared, efficiency, avg_temp):
     display.draw_text(30, 10, "Calibration Results", font, color565(255, 255, 255))
 
     display.draw_text(10, 50, f"Slope:", font, color565(200, 200, 200))
-    display.draw_text(120, 50, f"{slope:.4f} mV/pH", font, color565(255, 193, 34))
+    display.draw_text(120, 50, f"{slope:.6f}", font, color565(255, 193, 34))
 
     display.draw_text(10, 80, f"Intercept:", font, color565(200, 200, 200))
-    display.draw_text(120, 80, f"{intercept:.2f} mV", font, color565(255, 193, 34))
+    display.draw_text(120, 80, f"{intercept:.4f}", font, color565(255, 193, 34))
 
     display.draw_text(10, 110, f"R-squared:", font, color565(200, 200, 200))
     display.draw_text(120, 110, f"{r_squared:.6f}", font, r2_color)
@@ -719,11 +721,11 @@ def display_results(slope, intercept, r_squared, efficiency, avg_temp):
     print("ผลการสอบเทียบ (Calibration Results)")
     print("=" * 60)
     print(f"\nสมการสอบเทียบ (Calibration Equation):")
-    print(f"E (mV) = {slope:.6f} x pH + {intercept:.4f}")
-    print(f"\nหรือ (or): pH = (E - {intercept:.4f}) / {slope:.6f}")
+    print(f"pH = {slope:.6f} x mV + {intercept:.4f}")
+    print(f"\nตัวอย่าง: pH = {slope:.6f} x 1650 + {intercept:.4f} = {slope * 1650 + intercept:.2f}")
 
-    print(f"\nค่าความชัน (Slope): {slope:.6f} mV/pH")
-    print(f"จุดตัดแกน y (Intercept): {intercept:.4f} mV")
+    print(f"\nค่าความชัน (Slope): {slope:.6f} pH/mV")
+    print(f"จุดตัดแกน y (Intercept): {intercept:.4f} pH")
     print(f"ค่า R-squared: {r_squared:.6f}")
     print(f"Nernst Slope Efficiency: {efficiency:.1f}%")
     print(f"อุณหภูมิเฉลี่ย (Avg Temp): {avg_temp:.1f}C")
@@ -947,7 +949,9 @@ def calibrate_pH():
     print("กำลังคำนวณการถดถอยเชิงเส้น...")
     print("Calculating linear regression...")
 
-    slope, intercept, r_squared = linear_regression(buffer_pH_values, calibrated_voltages)
+    # Regression: pH = slope_m * mV + intercept_b (ใช้งานตรง / direct usage)
+    # x = mV (ค่าที่วัดได้), y = pH (ค่าที่ต้องการ)
+    slope, intercept, r_squared = linear_regression(calibrated_voltages, buffer_pH_values)
 
     # คำนวณอุณหภูมิเฉลี่ย (Calculate average temperature)
     avg_temp = sum(temperatures) / len(temperatures)
@@ -958,7 +962,10 @@ def calibrate_pH():
 
     # คำนวณ Nernst Slope Efficiency
     # นิสิตควรเข้าใจว่า efficiency บอกถึงสภาพของหัววัด
-    efficiency = abs(slope / theoretical_slope) * 100
+    # slope ปัจจุบันเป็น pH/mV, theoretical_slope เป็น mV/pH
+    # ดังนั้น: measured_slope_mV_per_pH = 1/slope
+    # efficiency = |measured_slope_mV_per_pH / theoretical_slope| x 100
+    efficiency = abs(1.0 / (slope * theoretical_slope)) * 100
 
     # แสดงผลการสอบเทียบ (Display calibration results)
     display_results(slope, intercept, r_squared, efficiency, avg_temp)

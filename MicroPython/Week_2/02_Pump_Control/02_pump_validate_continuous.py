@@ -84,7 +84,10 @@ def load_flow_rate():
     Returns:
         float: flow rate ใน mL/s หรือค่า default ถ้าไม่พบไฟล์
     """
-    default_flow_rate = 0.28  # ค่าเริ่มต้นถ้าไม่พบไฟล์ (Default if file not found)
+    # ทศนิยม 4 ตำแหน่ง - สำคัญมากต่อความแม่นยำของปริมาตรที่ปั๊ม
+    # 4 decimal places - critical for precise transferred volume calculation
+    # เช่น 0.2800 vs 0.28 ต่างกัน 0.0000 แต่ถ้า 0.2834 vs 0.28 ผิดพลาด ~1.2%
+    default_flow_rate = 0.2800  # ค่าเริ่มต้นถ้าไม่พบไฟล์ (Default if file not found)
 
     try:
         with open('data_flowrate.txt', 'r') as f:
@@ -96,7 +99,7 @@ def load_flow_rate():
                     print("(Loaded flow_rate from file)")
                     return value
     except OSError:
-        print(f"ไม่พบไฟล์ data_flowrate.txt - ใช้ค่าเริ่มต้น {default_flow_rate} mL/s")
+        print(f"ไม่พบไฟล์ data_flowrate.txt - ใช้ค่าเริ่มต้น {default_flow_rate:.4f} mL/s")
         print("(File not found - using default value)")
         print("*** คำแนะนำ: รัน 01_flowRate.py เพื่อสอบเทียบปั๊มก่อน ***")
         print("*** Tip: Run 01_flowRate.py to calibrate pump first ***")
