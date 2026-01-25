@@ -78,14 +78,27 @@ class Calibrator:
         >>> flow_result = cal.calibrate_flow_rate(5.0, 18.05)  # 5mL in 18.05s
     """
 
-    def __init__(self, data_manager=None):
+    def __init__(self, ph_sensor=None, pump=None, display=None,
+                 buttons=None, buzzer=None, data_manager=None):
         """
         สร้าง Calibrator object (Create Calibrator object)
 
         Args:
+            ph_sensor: PHSensor object สำหรับอ่านค่า pH
+            pump: Pump object สำหรับควบคุมปั๊ม
+            display: DisplayManager สำหรับแสดงผล
+            buttons: ButtonManager สำหรับรับ input
+            buzzer: Buzzer สำหรับเสียงเตือน
             data_manager (DataManager): DataManager สำหรับบันทึก/โหลดข้อมูล
                                         ถ้าไม่ระบุจะสร้างใหม่
         """
+        # Hardware references
+        self._ph_sensor = ph_sensor
+        self._pump = pump
+        self._display = display
+        self._buttons = buttons
+        self._buzzer = buzzer
+
         # DataManager สำหรับ persistence
         self._data_manager = data_manager if data_manager else DataManager()
 
@@ -472,6 +485,171 @@ class Calibrator:
             print(f"[--] Flow Rate: ใช้ค่าเริ่มต้น {self._flow_rate:.4f} mL/s")
 
         print()
+
+    # ===========================================================================
+    # Interactive Methods (ใช้โดย main.py)
+    # ===========================================================================
+
+    def calibrate_ph(self):
+        """
+        สอบเทียบ pH แบบ interactive (Interactive pH calibration)
+
+        ขั้นตอน:
+        1. วัดค่า mV ใน buffer pH 4.00
+        2. วัดค่า mV ใน buffer pH 7.00
+        3. วัดค่า mV ใน buffer pH 10.00
+        4. คำนวณ linear regression
+        5. บันทึกผลลัพธ์
+        """
+        from time import sleep_ms
+
+        if not self._ph_sensor:
+            print("Error: No pH sensor configured")
+            return False
+
+        # ล้างข้อมูลเก่า (Clear old data)
+        self.reset_ph_calibration()
+
+        print("\n" + "=" * 50)
+        print("เริ่มสอบเทียบ pH (Starting pH Calibration)")
+        print("=" * 50)
+
+        if self._display:
+            self._display.clear()
+            self._display.draw_header("pH Calibration")
+
+        # สอบเทียบแต่ละจุด (Calibrate each point)
+        for i, buffer_ph in enumerate(self._buffer_values):
+            print(f"\n[{i+1}/3] จุ่มหัววัดใน buffer pH {buffer_ph:.2f}")
+            print("กดปุ่ม 1 เมื่อพร้อม (Press BTN1 when ready)")
+
+            if self._display:
+                self._display.show_message(
+                    f"Buffer pH {buffer_ph:.2f}",
+                    "Press BTN1 when ready"
+                )
+
+            # รอกดปุ่ม (Wait for button)
+            if self._buttons:
+                while not self._buttons.is_pressed(1):
+                    sleep_ms(50)
+                sleep_ms(200)  # Debounce
+
+            # อ่านค่าเฉลี่ย (Read averaged value)
+            print("กำลังอ่านค่า... (Reading...)")
+            if self._display:
+                self._display.show_message("Reading...", "Please wait 10s")
+
+            voltage = self._ph_sensor.read_voltage_averaged(samples=20)
+            self.add_ph_point(buffer_ph, voltage)
+            print(f"Buffer {buffer_ph:.2f}: {voltage:.2f} mV")
+
+            if self._buzzer:
+                self._buzzer.beep()
+
+        # คำนวณและบันทึก (Calculate and save)
+        result = self.calculate_ph_calibration()
+
+        if result['success']:
+            self.save_ph_calibration()
+            print("\n[SUCCESS] สอบเทียบ pH สำเร็จ!")
+            if self._display:
+                self._display.show_success("Calibration OK!")
+        else:
+            print(f"\n[FAILED] {result['message']}")
+            if self._display:
+                self._display.show_error("Calibration Failed")
+
+        sleep_ms(2000)
+        return result['success']
+
+    def test_ph_sensor(self):
+        """
+        ทดสอบเซ็นเซอร์ pH แบบ real-time (Real-time pH sensor test)
+
+        แสดงค่า pH และ mV แบบต่อเนื่องจนกว่าจะกดปุ่มออก
+        """
+        from time import sleep_ms
+
+        if not self._ph_sensor:
+            print("Error: No pH sensor configured")
+            return
+
+        print("\n" + "=" * 50)
+        print("ทดสอบเซ็นเซอร์ pH (pH Sensor Test)")
+        print("กดปุ่ม 1 เพื่อออก (Press BTN1 to exit)")
+        print("=" * 50)
+
+        if self._display:
+            self._display.clear()
+            self._display.draw_header("pH Sensor Test")
+
+        while True:
+            # อ่านค่า (Read values)
+            voltage = self._ph_sensor.read_voltage_averaged(samples=5)
+            ph_value = self._ph_sensor.read_ph()
+
+            print(f"pH: {ph_value:.2f}  |  mV: {voltage:.1f}")
+
+            if self._display:
+                self._display.clear()
+                self._display.draw_header("pH Sensor Test")
+                self._display.draw_text(20, 60, f"pH: {ph_value:.2f}", 0x07E0)
+                self._display.draw_text(20, 100, f"mV: {voltage:.1f}", 0xFFFF)
+                self._display.draw_status_bar("BTN1: Exit")
+
+            # ตรวจสอบปุ่มออก (Check exit button)
+            if self._buttons and self._buttons.is_pressed(1):
+                break
+
+            sleep_ms(500)
+
+        print("ออกจากการทดสอบ (Exiting test)")
+
+    def test_flow_rate(self):
+        """
+        ทดสอบอัตราการไหลของปั๊ม (Test pump flow rate)
+
+        เปิดปั๊มเป็นเวลา 5 วินาทีเพื่อทดสอบ
+        """
+        from time import sleep_ms
+
+        if not self._pump:
+            print("Error: No pump configured")
+            return
+
+        print("\n" + "=" * 50)
+        print("ทดสอบอัตราการไหล (Flow Rate Test)")
+        print("=" * 50)
+
+        if self._display:
+            self._display.clear()
+            self._display.draw_header("Flow Rate Test")
+            self._display.show_message("Testing...", "Pump running 5s")
+
+        print("กำลังเปิดปั๊ม 5 วินาที... (Running pump for 5s...)")
+
+        if self._buzzer:
+            self._buzzer.beep()
+
+        self._pump.start(100)  # Full speed
+        sleep_ms(5000)
+        self._pump.stop()
+
+        if self._buzzer:
+            self._buzzer.beep_beep()
+
+        expected_volume = self._flow_rate * 5.0
+        print(f"ปริมาตรที่คาดหวัง: {expected_volume:.2f} mL")
+        print(f"(ตาม flow rate: {self._flow_rate:.4f} mL/s)")
+
+        if self._display:
+            self._display.show_message(
+                "Test Complete",
+                f"Expected: {expected_volume:.2f} mL"
+            )
+
+        sleep_ms(2000)
 
     def __repr__(self):
         """แสดงข้อมูล Calibrator"""

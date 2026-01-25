@@ -441,8 +441,8 @@ class AsyncTitrationController:
         # ส่งเสียงเตือนเสร็จสิ้น (Beep to indicate completion)
         if self.buzzer:
             try:
-                # buzzer.beep() เป็น blocking operation (buzzer.beep() is blocking)
-                self.buzzer.beep(frequency=1000, duration_ms=500)
+                # buzzer.play_tone() เป็น blocking operation (buzzer.play_tone() is blocking)
+                self.buzzer.play_tone(1000, 500)
                 # yield เพื่อให้ tasks อื่นทำงานหลัง blocking call (Yield after blocking call)
                 await asyncio.sleep(0)
             except Exception:

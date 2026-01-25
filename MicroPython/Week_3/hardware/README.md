@@ -181,8 +181,8 @@ if buttons.is_long_pressed('down', 3000):  # กดค้าง 3 วินา�
 from hardware.buzzer import Buzzer
 
 buzzer = Buzzer()
-buzzer.beep()                           # บี๊ปสั้น
-buzzer.beep(frequency=2000, duration_ms=500)  # บี๊ปยาว
+buzzer.beep()                           # บี๊ปสั้น (short beep, 2000 Hz)
+buzzer.play_tone(1000, 500)             # บี๊ปยาว 1000 Hz, 500ms
 buzzer.beep_beep()                      # บี๊ปสองครั้ง
 buzzer.deinit()                         # คืนทรัพยากร PWM
 ```

@@ -359,6 +359,33 @@ class DisplayManager:
         """
         self.show_message("Success", message, Colors.GREEN)
 
+    def show_logo(self, title, subtitle=""):
+        """
+        แสดงหน้าจอโลโก้ (Display logo screen)
+
+        แสดงชื่อโปรแกรมและคำอธิบายตรงกลางจอ
+        Shows program title and description centered on screen
+
+        Args:
+            title (str): ชื่อโปรแกรม (Program title)
+            subtitle (str): คำอธิบาย (Description)
+        """
+        self.clear()
+
+        # วาดกรอบ (Draw border)
+        self.draw_rect(5, 5, self.width - 10, self.height - 10, Colors.CYAN)
+        self.draw_rect(8, 8, self.width - 16, self.height - 16, Colors.CYAN)
+
+        # แสดงชื่อโปรแกรม (Show title)
+        self.draw_text_centered(80, title, Colors.YELLOW)
+
+        # แสดงคำอธิบาย (Show subtitle)
+        if subtitle:
+            self.draw_text_centered(120, subtitle, Colors.WHITE)
+
+        # แสดงเวอร์ชัน (Show version)
+        self.draw_text_centered(180, "Week 3 - OOP System", Colors.TEXT_INFO)
+
     # ==========================================================================
     # เมธอดจัดการทรัพยากร (Resource Management Methods)
     # ==========================================================================

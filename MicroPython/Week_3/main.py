@@ -112,7 +112,7 @@ class HardwareHub:
         print("=" * 50)
 
         # ส่งเสียง Buzzer (Beep buzzer)
-        self.buzzer.beep(frequency=1000, duration_ms=100)
+        self.buzzer.play_tone(1000, 100)
 
     def deinit_all(self):
         """
@@ -230,7 +230,7 @@ def main():
                         except Exception as e:
                             print(f"ข้อผิดพลาด (Error): {e}")
                             hardware.leds.red.on()
-                            hardware.buzzer.beep(frequency=500, duration_ms=500)
+                            hardware.buzzer.play_tone(500, 500)
                             sleep_ms(1000)
                             hardware.leds.red.off()
                         finally:

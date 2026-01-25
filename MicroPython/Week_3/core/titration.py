@@ -536,9 +536,9 @@ class TitrationController:
         # ส่งเสียงเตือนเสร็จสิ้น (Beep to indicate completion)
         if self.buzzer:
             try:
-                self.buzzer.beep(frequency=1000, duration_ms=500)
+                self.buzzer.play_tone(1000, 500)
                 time.sleep(0.2)
-                self.buzzer.beep(frequency=1500, duration_ms=500)
+                self.buzzer.play_tone(1500, 500)
             except Exception:
                 pass
 

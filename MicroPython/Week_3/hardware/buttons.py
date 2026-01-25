@@ -423,6 +423,25 @@ class ButtonManager:
             return 1
         return 0
 
+    def is_pressed(self, button_number):
+        """
+        ตรวจสอบว่าปุ่มที่ระบุถูกกดหรือไม่ (Check if specified button is pressed)
+
+        Args:
+            button_number (int): หมายเลขปุ่ม 1, 2, หรือ 3
+                                 (Button number: 1=Select, 2=Navigate, 3=Back)
+
+        Returns:
+            bool: True ถ้าปุ่มถูกกด (True if button is pressed)
+        """
+        if button_number == 1:
+            return self._button1.is_pressed()
+        elif button_number == 2:
+            return self._button2.is_pressed()
+        elif button_number == 3:
+            return self._button3.is_pressed()
+        return False
+
     def update(self):
         """
         อัพเดตสถานะปุ่มทั้งหมด (Update all button states)

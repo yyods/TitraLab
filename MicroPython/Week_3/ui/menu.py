@@ -216,28 +216,44 @@ class MenuSystem:
         modes (list): รายการโหมด (List of modes)
     """
 
-    def __init__(self, display, screen_main_menu, modes=None, buzzer=None):
+    # รายการเมนู TitraLab (TitraLab menu items)
+    MENU_ITEMS = [
+        "1. Calibrate pH",
+        "2. Test pH Sensor",
+        "3. Calibrate Flow",
+        "4. Test Flow Rate",
+        "5. Purge Tubing",
+        "6. Auto Titration"
+    ]
+
+    def __init__(self, display, buttons=None, screen_main_menu=None, modes=None, buzzer=None):
         """
         สร้าง MenuSystem (Create MenuSystem)
 
         Args:
             display: ออบเจ็กต์ Display (Display object)
-            screen_main_menu: ออบเจ็กต์ MainMenuScreen (MainMenuScreen object)
+            buttons: ออบเจ็กต์ ButtonManager (ButtonManager object)
+            screen_main_menu: ออบเจ็กต์ MainMenuScreen (optional, MainMenuScreen object)
             modes (list): รายการออบเจ็กต์ BaseMode (List of BaseMode objects)
             buzzer: ออบเจ็กต์ Buzzer สำหรับเสียง (Buzzer object for sound)
         """
         self.display = display
+        self.hw_buttons = buttons  # ButtonManager from hardware
         self.main_menu_screen = screen_main_menu
         self.modes = modes if modes else []
         self.buzzer = buzzer
 
-        # State Machine
+        # Simple menu state (สถานะเมนูแบบง่าย)
+        self._selected_index = 0
+        self._menu_items = self.MENU_ITEMS.copy()
+
+        # State Machine (ใช้สำหรับ advanced mode)
         self.state = MenuState.MAIN_MENU
         self.previous_state = None
         self.selected_mode = 0
         self.current_mode = None
 
-        # Button Handler
+        # Button Handler (ใช้สำหรับ advanced mode)
         self.buttons = ButtonHandler()
 
         # ผลลัพธ์จากโหมด (Results from mode)
@@ -245,6 +261,72 @@ class MenuSystem:
 
         # สถานะการทำงาน (Running flag)
         self._running = True
+
+    # ==========================================================================
+    # Simple API (ใช้โดย main.py)
+    # ==========================================================================
+
+    def show(self):
+        """
+        แสดงเมนูบนจอ TFT (Display menu on TFT screen)
+
+        แสดงรายการเมนูพร้อมไฮไลท์รายการที่เลือก
+        Shows menu items with highlighted selection
+        """
+        try:
+            # ล้างจอและวาดหัวข้อ (Clear and draw header)
+            self.display.clear()
+            self.display.draw_header("TitraLab Menu")
+
+            # วาดรายการเมนู (Draw menu items)
+            y_start = 50
+            line_height = 28
+
+            for i, item in enumerate(self._menu_items):
+                y = y_start + (i * line_height)
+
+                # ไฮไลท์รายการที่เลือก (Highlight selected item)
+                if i == self._selected_index:
+                    # วาดพื้นหลังไฮไลท์ (Draw highlight background)
+                    self.display.fill_rect(5, y - 2, 310, line_height, 0x001F)  # Blue
+                    self.display.draw_text(10, y, f"> {item}", 0xFFFF)  # White text
+                else:
+                    self.display.draw_text(10, y, f"  {item}", 0xFFFF)  # White text
+
+            # แสดงคำแนะนำ (Show instructions)
+            self.display.draw_status_bar("BTN1:Select BTN2:Up BTN3:Down/Exit")
+
+        except Exception as e:
+            print(f"Menu display error: {e}")
+
+    def get_selected(self):
+        """
+        รับหมายเลขเมนูที่เลือก (Get selected menu number)
+
+        Returns:
+            int: หมายเลขเมนู 1-6 (Menu number 1-6)
+        """
+        return self._selected_index + 1  # Convert 0-based to 1-based
+
+    def move_up(self):
+        """
+        เลื่อนขึ้น (Move selection up)
+        """
+        if self._selected_index > 0:
+            self._selected_index -= 1
+        else:
+            # วนกลับไปรายการสุดท้าย (Wrap to last item)
+            self._selected_index = len(self._menu_items) - 1
+
+    def move_down(self):
+        """
+        เลื่อนลง (Move selection down)
+        """
+        if self._selected_index < len(self._menu_items) - 1:
+            self._selected_index += 1
+        else:
+            # วนกลับไปรายการแรก (Wrap to first item)
+            self._selected_index = 0
 
     def _beep(self):
         """
