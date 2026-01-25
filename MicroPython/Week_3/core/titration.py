@@ -50,13 +50,18 @@ class TitrationController:
     DEFAULT_SAMPLE_VOLUME = 5.0    # ปริมาตรสารตัวอย่าง (sample volume mL)
     DEFAULT_PH_THRESHOLD = 0.01    # ค่า threshold สำหรับ pH คงที่
 
+    # ปริมาตรสำหรับเตือนใกล้จุดสมมูล (Volume for near-equivalence alert)
+    # สำหรับการทดลอง HCl 0.1M 5mL + NaOH 0.1M → จุดสมมูลที่ 5.0 mL
+    # For HCl 0.1M 5mL + NaOH 0.1M experiment → equivalence at 5.0 mL
+    ALERT_VOLUME_ML = 4.80         # เตือนที่ 4.80 mL (alert at 4.80 mL)
+
     # CSV Header สำหรับบันทึกข้อมูล (CSV Header for data logging)
     # ชื่อคอลัมน์ตรงกับ EquivPoint analysis tool (Column names match EquivPoint)
     # "Volume (mL)" และ "pH Value" เป็นคอลัมน์หลักที่ EquivPoint ต้องการ
     CSV_HEADERS = ['Volume (mL)', 'pH Value', 'Cycle', 'Time(s)', 'Temperature(C)']
 
     def __init__(self, pump, ph_sensor, temp_sensor=None,
-                 display=None, buzzer=None, led_indicator=None):
+                 display=None, buzzer=None, led_indicator=None, buttons=None):
         """
         กำหนดค่าเริ่มต้น TitrationController
         Initialize TitrationController
@@ -68,6 +73,7 @@ class TitrationController:
             display: ออบเจ็กต์จอแสดงผล (Display object, optional)
             buzzer: ออบเจ็กต์ Buzzer (Buzzer object, optional)
             led_indicator: ออบเจ็กต์ LED แสดงสถานะ (LED indicator, optional)
+            buttons: ออบเจ็กต์ปุ่มกด สำหรับ BTN3 ยกเลิก (Buttons for BTN3 cancel, optional)
 
         หมายเหตุ: ไม่ใช้ SD Card - ข้อมูลบันทึกใน ESP32 flash storage
         Note: SD Card NOT USED - data saved to ESP32 flash storage
@@ -81,6 +87,7 @@ class TitrationController:
         self.display = display
         self.buzzer = buzzer
         self.led = led_indicator
+        self.buttons = buttons  # สำหรับ BTN3 ยกเลิก (for BTN3 cancel)
 
         # ข้อมูลการไทเทรชัน (Titration data)
         self.data_points = []       # รายการข้อมูล [(volume, pH, temp, time), ...]
@@ -238,10 +245,21 @@ class TitrationController:
         """
         if self.display:
             try:
+                # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
+                total_steps = int(self.max_volume / self.dose_volume)
+
                 # ใช้เมธอด show_titration_status ถ้ามี
                 # Use show_titration_status method if available
                 if hasattr(self.display, 'show_titration_status'):
-                    self.display.show_titration_status(cycle, volume, ph, temperature)
+                    self.display.show_titration_status(
+                        step=cycle,
+                        total_steps=total_steps,
+                        volume=volume,
+                        max_volume=self.max_volume,
+                        ph=ph,
+                        temperature=temperature,
+                        status_text="Titrating... BTN3:Cancel"
+                    )
                 else:
                     # แสดงผลพื้นฐาน (Basic display)
                     print(f"Cycle {cycle}: V={volume:.2f}mL, pH={ph:.2f}, T={temperature:.1f}C")
@@ -401,6 +419,27 @@ class TitrationController:
         self._should_stop = True
         print("กำลังหยุดการไทเทรชัน... (Stopping titration...)")
 
+    def _wait_with_cancel(self, duration_s):
+        """
+        รอเวลาที่กำหนด พร้อมตรวจสอบ BTN3 ยกเลิก
+        Wait for specified duration with BTN3 cancel check
+
+        Args:
+            duration_s: เวลาที่จะรอ (seconds)
+
+        Returns:
+            bool: True ถ้ารอครบ, False ถ้าถูกยกเลิก (True if completed, False if cancelled)
+        """
+        # รอด้วยการตรวจสอบ BTN3 ทุก 100ms
+        # Wait with BTN3 check every 100ms
+        wait_count = int(duration_s * 10)  # 100ms intervals
+        for _ in range(wait_count):
+            if self.buttons and self.buttons.is_pressed(3):
+                self._should_stop = True
+                return False
+            time.sleep(0.1)
+        return True
+
     @property
     def is_running(self):
         """
@@ -409,13 +448,21 @@ class TitrationController:
         """
         return self._is_running
 
-    def run_titration(self, auto_detect=True, callback=None):
+    def run_titration(self, callback=None):
         """
-        ดำเนินการไทเทรชันอัตโนมัติ
-        Run automatic titration
+        ดำเนินการไทเทรชันอัตโนมัติ - เก็บข้อมูลครบทุก step
+        Run automatic titration - collect ALL data points
+
+        หมายเหตุสำคัญ (Important Note):
+        - ไทเทรชันจะทำงานจนครบทุก step (เช่น 50 step = 10.0 mL)
+        - ไม่หยุดอัตโนมัติเมื่อพบจุดสมมูล
+        - ข้อมูลทั้งหมดจะถูกวิเคราะห์ด้วย EquivPoint tool
+
+        - Titration runs until ALL steps complete (e.g., 50 steps = 10.0 mL)
+        - Does NOT stop automatically at equivalence point
+        - All data analyzed with EquivPoint tool
 
         Args:
-            auto_detect: หาจุดสมมูลอัตโนมัติและหยุด (auto detect and stop at equivalence point)
             callback: ฟังก์ชันเรียกกลับหลังแต่ละรอบ (callback function after each cycle)
                       callback(cycle, volume, ph, temperature, derivative) -> bool
                       Return False เพื่อหยุดการไทเทรชัน (Return False to stop)
@@ -423,6 +470,54 @@ class TitrationController:
         Returns:
             dict: ผลลัพธ์การไทเทรชัน (Titration results)
         """
+        # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
+        total_steps = int(self.max_volume / self.dose_volume)
+
+        print("\n" + "=" * 50)
+        print("ไทเทรชันอัตโนมัติ (Auto Titration)")
+        print("=" * 50)
+        print(f"ปริมาตรตัวอย่าง (Sample): {self.sample_volume} mL")
+        print(f"ปริมาตรสูงสุด (Max): {self.max_volume} mL (2x sample)")
+        print(f"ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
+        print(f"จำนวน step (Total steps): {total_steps}")
+        print("-" * 50)
+        print("กดปุ่ม 1 เริ่ม, ปุ่ม 3 ยกเลิก (BTN1:Start BTN3:Cancel)")
+
+        # แสดงหน้าจอพร้อมเริ่ม (Show ready screen)
+        if self.display:
+            try:
+                if hasattr(self.display, 'show_titration_ready'):
+                    self.display.show_titration_ready(
+                        sample_vol=self.sample_volume,
+                        max_vol=self.max_volume,
+                        dose_vol=self.dose_volume,
+                        total_steps=total_steps
+                    )
+                else:
+                    self.display.show_message("Auto Titration", "BTN1:Start BTN3:Cancel")
+            except Exception as e:
+                print(f"Display error: {e}")
+
+        # รอกดปุ่ม 1 เริ่ม หรือปุ่ม 3 ยกเลิก (Wait for BTN1 to start or BTN3 to cancel)
+        if self.buttons:
+            while True:
+                if self.buttons.is_pressed(1):
+                    time.sleep(0.2)  # Debounce
+                    break
+                if self.buttons.is_pressed(3):
+                    # ยกเลิก (Cancel)
+                    print("\n[CANCELLED] ยกเลิกการไทเทรชัน (Titration cancelled)")
+                    if self.display:
+                        self.display.show_message("Cancelled", "Returning to menu")
+                    if self.buzzer:
+                        try:
+                            self.buzzer.error_sound()
+                        except:
+                            pass
+                    time.sleep(1.5)
+                    return {'cancelled': True, 'total_cycles': 0, 'total_volume': 0}
+                time.sleep(0.05)
+
         # เตรียมการเริ่มต้น (Initialize)
         self.reset()
         self._is_running = True
@@ -434,42 +529,68 @@ class TitrationController:
             self._current_filename = self._get_next_filename('titration_data')
             with open(self._current_filename, 'w') as f:
                 f.write(','.join(self.CSV_HEADERS) + '\n')
-            print(f"สร้างไฟล์: {self._current_filename} (File created: {self._current_filename})")
+            print(f"\nสร้างไฟล์: {self._current_filename} (File created)")
         except Exception as e:
             print(f"ไม่สามารถสร้างไฟล์ (Cannot create file): {e}")
             self._current_filename = None
 
+        print("\n" + "=" * 50)
+        print("เริ่มการไทเทรชัน! (Starting Titration!)")
+        print("กดปุ่ม 3 เพื่อหยุด (Press BTN3 to stop)")
         print("=" * 50)
-        print("เริ่มการไทเทรชันอัตโนมัติ (Starting Automatic Titration)")
-        print("=" * 50)
-        print(f"ปริมาตรตัวอย่าง (Sample): {self.sample_volume} mL")
-        print(f"ปริมาตรสูงสุด (Max): {self.max_volume} mL (2x sample)")
-        print(f"ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
-        print(f"จำนวน step (Total steps): {int(self.max_volume / self.dose_volume)}")
-        print("-" * 50)
 
         # เปิด LED แสดงสถานะทำงาน (Turn on working status LED)
         if self.led:
             self.led.on()
 
-        # อ่านค่าเริ่มต้นก่อนเติมสารละลาย (Read initial values)
+        # ส่งเสียงเริ่มต้น (Beep to start)
+        if self.buzzer:
+            try:
+                self.buzzer.beep()
+            except:
+                pass
+
+        # อ่านค่าเริ่มต้นก่อนเติมสารละลาย (Read initial values at 0 mL)
+        # นี่คือจุดเริ่มต้น: ยังไม่มีการหยดสารละลาย (Starting point: no titrant added yet)
+        print(f"\n[Step 0] อ่านค่าเริ่มต้น (Reading initial values)...")
         ph_value, temp_value = self._read_sensors()
         self._log_data_point(0, 0.0, 0.0, ph_value, temp_value)
         self._update_display(0, 0.0, ph_value, temp_value)
+        print(f"         pH เริ่มต้น = {ph_value:.2f} (Initial pH)")
+
+        # รอให้ pH เริ่มต้นคงที่ก่อนเริ่มหยด (Wait for initial pH to stabilize before first dose)
+        # FIX Bug 1: เพิ่มการรอก่อนหยดแรก (Add wait before first dose)
+        print(f"         รอ {self.stabilize_time:.0f} วินาทีก่อนเริ่มหยด (Waiting before first dose)...")
+        if not self._wait_with_cancel(self.stabilize_time):
+            print("\n[CANCELLED by BTN3] หยุดการไทเทรชัน")
+            self._is_running = False
+            if self.led:
+                self.led.off()
+            return {'cancelled': True, 'total_cycles': 0, 'total_volume': 0}
 
         previous_derivative = 0.0
-        equivalence_detected = False
+        alert_played = False  # Flag: เตือนใกล้จุดสมมูลแล้วหรือยัง (near-EP alert played?)
+
+        # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
+        # FIX Bug 2: ใช้ step count แทน volume เพื่อหลีกเลี่ยงปัญหา floating-point
+        # Use step count instead of volume to avoid floating-point precision issues
+        total_steps = int(self.max_volume / self.dose_volume)
+        print(f"\n[Titration] จำนวน step ทั้งหมด: {total_steps} (Total steps)")
 
         try:
             # ลูปการไทเทรชันหลัก (Main titration loop)
-            while not self._should_stop and self.current_volume < self.max_volume:
+            # FIX Bug 2: ใช้ cycle_count < total_steps แทน current_volume < max_volume
+            # Use cycle_count < total_steps instead of current_volume < max_volume
+            while not self._should_stop and self.cycle_count < total_steps:
                 self.cycle_count += 1
 
                 # เติมสารละลาย (Dispense titrant)
                 self._dispense_titrant(self.dose_volume)
 
-                # รอให้คงที่ (Wait for stabilization)
-                time.sleep(self.stabilize_time)
+                # รอให้คงที่ พร้อม BTN3 ยกเลิก (Wait for stabilization with BTN3 cancel)
+                if not self._wait_with_cancel(self.stabilize_time):
+                    print("\n[CANCELLED by BTN3] หยุดการไทเทรชัน")
+                    break
 
                 # อ่านค่าเซ็นเซอร์ (Read sensors)
                 ph_value, temp_value = self._read_sensors()
@@ -492,24 +613,54 @@ class TitrationController:
                 print(f"Cycle {self.cycle_count:3d}: V={self.current_volume:6.2f}mL, "
                       f"pH={ph_value:5.2f}, dpH/dV={derivative:+7.3f}")
 
-                # ตรวจจับจุดสมมูลอัตโนมัติ (Auto-detect equivalence point)
-                if auto_detect and len(self.data_points) > 3:
-                    # หาจุดที่ derivative เริ่มลดลงหลังจากสูงสุด
-                    # Find where derivative starts decreasing after maximum
-                    if abs(derivative) < abs(previous_derivative) * 0.5:
-                        if abs(previous_derivative) > 0.5:  # threshold
-                            print("\nตรวจพบจุดสมมูล! (Equivalence point detected!)")
-                            equivalence_detected = True
-                            # เติมอีกเล็กน้อยเพื่อยืนยัน (Add a bit more to confirm)
+                # =============================================================
+                # เตือนใกล้จุดสมมูล (Near-equivalence point alert)
+                # สำหรับ HCl 0.1M 5mL + NaOH 0.1M: จุดสมมูลที่ ~5.0 mL
+                # เตือนที่ 4.80 mL เพื่อให้นิสิตเตรียมสังเกต
+                # =============================================================
+                # FIX: ใช้ step count แทน volume เพื่อหลีกเลี่ยงปัญหา floating-point
+                # Use step count instead of volume to avoid floating-point issues
+                # alert_step = 4.80 / 0.2 = 24
+                alert_step = int(self.ALERT_VOLUME_ML / self.dose_volume)
+                if not alert_played and self.cycle_count >= alert_step:
+                    alert_played = True
+                    print("\n" + "!" * 50)
+                    print(f"⚠️  ใกล้จุดสมมูล! (Approaching Equivalence Point!)")
+                    print(f"    ปริมาตร: {self.current_volume:.2f} mL")
+                    print("!" * 50 + "\n")
+
+                    # ส่งเสียงเตือน 3 ครั้ง (Beep 3 times)
+                    if self.buzzer:
+                        try:
                             for _ in range(3):
-                                self.cycle_count += 1
-                                self._dispense_titrant(self.dose_volume)
-                                time.sleep(self.stabilize_time)
-                                ph_value, temp_value = self._read_sensors()
-                                elapsed_time = time.ticks_diff(time.ticks_ms(), self.start_time) / 1000.0
-                                self._log_data_point(self.cycle_count, elapsed_time,
-                                                    self.current_volume, ph_value, temp_value)
-                            break
+                                self.buzzer.play_tone(2000, 200)  # เสียงสูง 2000 Hz
+                                time.sleep(0.1)
+                        except Exception:
+                            pass
+
+                    # อัปเดตจอแสดงผลพร้อมข้อความเตือน (Update display with alert)
+                    if self.display:
+                        try:
+                            total_steps = int(self.max_volume / self.dose_volume)
+                            if hasattr(self.display, 'show_titration_status'):
+                                self.display.show_titration_status(
+                                    step=self.cycle_count,
+                                    total_steps=total_steps,
+                                    volume=self.current_volume,
+                                    max_volume=self.max_volume,
+                                    ph=ph_value,
+                                    temperature=temp_value,
+                                    status_text="!! NEAR EQUIV POINT !!"
+                                )
+                        except Exception:
+                            pass
+
+                # หมายเหตุ: ไม่หยุดไทเทรชันอัตโนมัติเมื่อพบจุดสมมูล
+                # Note: Do NOT stop titration automatically when equivalence point detected
+                # เหตุผล: ต้องการข้อมูลครบ 50 จุดสำหรับวิเคราะห์ด้วย EquivPoint tool
+                # Reason: Need all 50 data points for analysis with EquivPoint tool
+                # จุดสมมูลจะถูกหาในตอนท้ายโดย detect_equivalence_point()
+                # Equivalence point will be found at the end by detect_equivalence_point()
 
                 previous_derivative = derivative
 
@@ -562,6 +713,42 @@ class TitrationController:
             print(f"จุดสมมูล (Equivalence point): V={results['equivalence_point'][0]:.3f} mL, "
                   f"pH={results['equivalence_point'][1]:.3f}")
         print("=" * 50)
+
+        # แสดงหน้าจอเสร็จสิ้น (Show completion screen)
+        if self.display:
+            try:
+                eq_vol = results['equivalence_point'][0] if results['equivalence_point'] else None
+                eq_ph = results['equivalence_point'][1] if results['equivalence_point'] else None
+
+                if hasattr(self.display, 'show_titration_complete'):
+                    self.display.show_titration_complete(
+                        total_vol=results['total_volume'],
+                        eq_vol=eq_vol,
+                        eq_ph=eq_ph,
+                        filename=results['filename']
+                    )
+                else:
+                    if results['equivalence_point']:
+                        self.display.show_success(f"EP: {eq_vol:.2f}mL")
+                    else:
+                        self.display.show_success("Complete!")
+            except Exception as e:
+                print(f"Display error: {e}")
+
+        # รอกดปุ่ม 1 เพื่อกลับเมนู (Wait for BTN1 to return to menu)
+        if self.buttons:
+            print("กดปุ่ม 1 เพื่อกลับเมนู (Press BTN1 to return to menu)")
+            while True:
+                if self.buttons.is_pressed(1):
+                    time.sleep(0.2)  # Debounce
+                    break
+                if self.buttons.is_pressed(3):
+                    time.sleep(0.2)
+                    break
+                time.sleep(0.05)
+        else:
+            # ถ้าไม่มีปุ่ม รอ 5 วินาที (If no buttons, wait 5 seconds)
+            time.sleep(5)
 
         return results
 

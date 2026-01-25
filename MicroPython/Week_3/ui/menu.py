@@ -22,6 +22,7 @@
 
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
+import gc  # สำหรับ garbage collection (for garbage collection)
 
 
 # ==============================================================================
@@ -245,7 +246,8 @@ class MenuSystem:
 
         # Simple menu state (สถานะเมนูแบบง่าย)
         self._selected_index = 0
-        self._menu_items = self.MENU_ITEMS.copy()
+        self._menu_items = self.MENU_ITEMS  # ใช้ reference แทน copy เพื่อประหยัด memory
+        self._needs_redraw = True  # Flag: ต้องวาดใหม่หรือไม่
 
         # State Machine (ใช้สำหรับ advanced mode)
         self.state = MenuState.MAIN_MENU
@@ -262,42 +264,61 @@ class MenuSystem:
         # สถานะการทำงาน (Running flag)
         self._running = True
 
+        # เรียก gc.collect() เพื่อเคลียร์ memory ก่อนเริ่ม
+        gc.collect()
+
     # ==========================================================================
     # Simple API (ใช้โดย main.py)
     # ==========================================================================
 
-    def show(self):
+    def show(self, force=False):
         """
         แสดงเมนูบนจอ TFT (Display menu on TFT screen)
 
         แสดงรายการเมนูพร้อมไฮไลท์รายการที่เลือก
         Shows menu items with highlighted selection
+
+        Args:
+            force (bool): บังคับวาดใหม่แม้ไม่มีการเปลี่ยนแปลง
         """
+        # ข้ามถ้าไม่ต้องวาดใหม่ (Skip if no redraw needed)
+        if not self._needs_redraw and not force:
+            return
+
         try:
+            # เคลียร์ memory ก่อนวาด (Clear memory before drawing)
+            gc.collect()
+
             # ล้างจอและวาดหัวข้อ (Clear and draw header)
             self.display.clear()
             self.display.draw_header("TitraLab Menu")
 
-            # วาดรายการเมนู (Draw menu items)
+            # วาดรายการเมนู - ใช้การวาดแบบง่าย (Draw menu items - simple method)
             y_start = 50
             line_height = 28
 
-            for i, item in enumerate(self._menu_items):
+            for i in range(len(self._menu_items)):
                 y = y_start + (i * line_height)
+                item = self._menu_items[i]
 
                 # ไฮไลท์รายการที่เลือก (Highlight selected item)
                 if i == self._selected_index:
                     # วาดพื้นหลังไฮไลท์ (Draw highlight background)
                     self.display.fill_rect(5, y - 2, 310, line_height, 0x001F)  # Blue
-                    self.display.draw_text(10, y, f"> {item}", 0xFFFF)  # White text
+                    self.display.draw_text(10, y, "> " + item, 0xFFFF)  # White text
                 else:
-                    self.display.draw_text(10, y, f"  {item}", 0xFFFF)  # White text
+                    self.display.draw_text(10, y, "  " + item, 0xFFFF)  # White text
 
             # แสดงคำแนะนำ (Show instructions)
-            self.display.draw_status_bar("BTN1:Select BTN2:Up BTN3:Down/Exit")
+            self.display.draw_status_bar("BTN1:OK BTN2:Up BTN3:Dn")
+
+            # รีเซ็ต flag (Reset flag)
+            self._needs_redraw = False
 
         except Exception as e:
             print(f"Menu display error: {e}")
+            # พยายามเคลียร์ memory และลองใหม่
+            gc.collect()
 
     def get_selected(self):
         """
@@ -317,6 +338,7 @@ class MenuSystem:
         else:
             # วนกลับไปรายการสุดท้าย (Wrap to last item)
             self._selected_index = len(self._menu_items) - 1
+        self._needs_redraw = True  # ต้องวาดใหม่
 
     def move_down(self):
         """
@@ -327,6 +349,13 @@ class MenuSystem:
         else:
             # วนกลับไปรายการแรก (Wrap to first item)
             self._selected_index = 0
+        self._needs_redraw = True  # ต้องวาดใหม่
+
+    def request_redraw(self):
+        """
+        บังคับให้วาดเมนูใหม่ในครั้งถัดไป (Force menu redraw on next show)
+        """
+        self._needs_redraw = True
 
     def _beep(self):
         """

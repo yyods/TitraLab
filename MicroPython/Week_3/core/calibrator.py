@@ -508,7 +508,7 @@ class Calibrator:
             return False
 
         # ล้างข้อมูลเก่า (Clear old data)
-        self.reset_ph_calibration()
+        self.clear_ph_points()
 
         print("\n" + "=" * 50)
         print("เริ่มสอบเทียบ pH (Starting pH Calibration)")
@@ -521,28 +521,49 @@ class Calibrator:
         # สอบเทียบแต่ละจุด (Calibrate each point)
         for i, buffer_ph in enumerate(self._buffer_values):
             print(f"\n[{i+1}/3] จุ่มหัววัดใน buffer pH {buffer_ph:.2f}")
-            print("กดปุ่ม 1 เมื่อพร้อม (Press BTN1 when ready)")
+            print("กดปุ่ม 1 เมื่อพร้อม, ปุ่ม 3 ยกเลิก (BTN1: Ready, BTN3: Cancel)")
 
             if self._display:
                 self._display.show_message(
                     f"Buffer pH {buffer_ph:.2f}",
-                    "Press BTN1 when ready"
+                    "BTN1:OK BTN3:Cancel"
                 )
 
             # รอกดปุ่ม (Wait for button)
             if self._buttons:
-                while not self._buttons.is_pressed(1):
+                while True:
+                    if self._buttons.is_pressed(1):
+                        sleep_ms(200)  # Debounce
+                        break
+                    if self._buttons.is_pressed(3):
+                        # ยกเลิกการสอบเทียบ (Cancel calibration)
+                        print("\n[CANCELLED] ยกเลิกการสอบเทียบ (Calibration cancelled)")
+                        if self._display:
+                            self._display.show_message("Cancelled", "Returning to menu")
+                        if self._buzzer:
+                            self._buzzer.error_sound()
+                        sleep_ms(1500)
+                        return False
                     sleep_ms(50)
-                sleep_ms(200)  # Debounce
 
             # อ่านค่าเฉลี่ย (Read averaged value)
             print("กำลังอ่านค่า... (Reading...)")
-            if self._display:
-                self._display.show_message("Reading...", "Please wait 10s")
+            try:
+                if self._display:
+                    print("  DEBUG: Calling show_message...")
+                    self._display.show_message("Reading...", "Please wait 10s")
+                    print("  DEBUG: show_message OK")
 
-            voltage = self._ph_sensor.read_voltage_averaged(samples=20)
-            self.add_ph_point(buffer_ph, voltage)
-            print(f"Buffer {buffer_ph:.2f}: {voltage:.2f} mV")
+                print("  DEBUG: Calling read_voltage_averaged...")
+                voltage = self._ph_sensor.read_voltage_averaged(num_samples=20)
+                print(f"  DEBUG: voltage = {voltage}")
+
+                print("  DEBUG: Calling add_ph_point...")
+                self.add_ph_point(buffer_ph, voltage)
+                print(f"Buffer {buffer_ph:.2f}: {voltage:.2f} mV")
+            except Exception as e:
+                print(f"  DEBUG ERROR: {type(e).__name__}: {e}")
+                raise
 
             if self._buzzer:
                 self._buzzer.beep()
@@ -550,7 +571,7 @@ class Calibrator:
         # คำนวณและบันทึก (Calculate and save)
         result = self.calculate_ph_calibration()
 
-        if result['success']:
+        if result['is_valid']:
             self.save_ph_calibration()
             print("\n[SUCCESS] สอบเทียบ pH สำเร็จ!")
             if self._display:
@@ -561,7 +582,7 @@ class Calibrator:
                 self._display.show_error("Calibration Failed")
 
         sleep_ms(2000)
-        return result['success']
+        return result['is_valid']
 
     def test_ph_sensor(self):
         """
@@ -577,7 +598,7 @@ class Calibrator:
 
         print("\n" + "=" * 50)
         print("ทดสอบเซ็นเซอร์ pH (pH Sensor Test)")
-        print("กดปุ่ม 1 เพื่อออก (Press BTN1 to exit)")
+        print("กดปุ่ม 3 เพื่อออก (Press BTN3 to exit)")
         print("=" * 50)
 
         if self._display:
@@ -586,7 +607,7 @@ class Calibrator:
 
         while True:
             # อ่านค่า (Read values)
-            voltage = self._ph_sensor.read_voltage_averaged(samples=5)
+            voltage = self._ph_sensor.read_voltage_averaged(num_samples=5)
             ph_value = self._ph_sensor.read_ph()
 
             print(f"pH: {ph_value:.2f}  |  mV: {voltage:.1f}")
@@ -596,60 +617,351 @@ class Calibrator:
                 self._display.draw_header("pH Sensor Test")
                 self._display.draw_text(20, 60, f"pH: {ph_value:.2f}", 0x07E0)
                 self._display.draw_text(20, 100, f"mV: {voltage:.1f}", 0xFFFF)
-                self._display.draw_status_bar("BTN1: Exit")
+                self._display.draw_status_bar("BTN3: Exit")
 
-            # ตรวจสอบปุ่มออก (Check exit button)
-            if self._buttons and self._buttons.is_pressed(1):
+            # ตรวจสอบปุ่มออก (Check exit button - BTN3)
+            if self._buttons and self._buttons.is_pressed(3):
                 break
 
             sleep_ms(500)
 
         print("ออกจากการทดสอบ (Exiting test)")
 
+    def calibrate_flow_rate_interactive(self):
+        """
+        สอบเทียบอัตราการไหลแบบ interactive (Interactive flow rate calibration)
+
+        ขั้นตอน:
+        1. เปิดปั๊มจนกว่าจะกดปุ่มหยุด
+        2. ผู้ใช้วัดปริมาตรจริงที่สูบได้
+        3. คำนวณ flow rate จากปริมาตร/เวลา
+        4. บันทึกผลลัพธ์
+        """
+        from time import sleep_ms, ticks_ms, ticks_diff
+
+        if not self._pump:
+            print("Error: No pump configured")
+            return False
+
+        print("\n" + "=" * 50)
+        print("สอบเทียบอัตราการไหล (Flow Rate Calibration)")
+        print("=" * 50)
+
+        if self._display:
+            self._display.clear()
+            self._display.draw_header("Flow Rate Cal")
+
+        # แสดงคำแนะนำ (Show instructions)
+        print("\nคำแนะนำ:")
+        print("1. เตรียมกระบอกตวงสำหรับวัดปริมาตร")
+        print("2. กดปุ่ม 1 เพื่อเริ่มปั๊ม, ปุ่ม 3 ยกเลิก")
+        print("3. กดปุ่ม 1 อีกครั้งเพื่อหยุด")
+        print("4. วัดปริมาตรที่ได้และป้อนค่า")
+        print("\nInstructions:")
+        print("1. Prepare measuring cylinder")
+        print("2. BTN1: Start pump, BTN3: Cancel")
+        print("3. Press BTN1 again to stop")
+        print("4. Measure and enter the volume")
+
+        if self._display:
+            self._display.show_message(
+                "Flow Cal",
+                "BTN1:Start BTN3:Cancel"
+            )
+
+        # รอกดปุ่มเริ่ม (Wait for start button)
+        if self._buttons:
+            while True:
+                if self._buttons.is_pressed(1):
+                    sleep_ms(200)  # Debounce
+                    break
+                if self._buttons.is_pressed(3):
+                    # ยกเลิก (Cancel)
+                    print("\n[CANCELLED] ยกเลิกการสอบเทียบ (Calibration cancelled)")
+                    if self._display:
+                        self._display.show_message("Cancelled", "Returning to menu")
+                    if self._buzzer:
+                        self._buzzer.error_sound()
+                    sleep_ms(1500)
+                    return False
+                sleep_ms(50)
+
+        # เริ่มจับเวลาและเปิดปั๊ม (Start timing and pump)
+        if self._buzzer:
+            self._buzzer.beep()
+
+        print("\nกำลังสูบ... กดปุ่ม 1 หยุด, ปุ่ม 3 ยกเลิก (Pumping... BTN1:Stop BTN3:Cancel)")
+
+        if self._display:
+            self._display.show_message(
+                "Pumping...",
+                "BTN1:Stop BTN3:Cancel"
+            )
+
+        start_time = ticks_ms()
+        self._pump.start(100)  # Full speed
+
+        # รอกดปุ่มหยุด (Wait for stop button)
+        cancelled = False
+        if self._buttons:
+            while True:
+                if self._buttons.is_pressed(1):
+                    sleep_ms(200)  # Debounce
+                    break
+                if self._buttons.is_pressed(3):
+                    # ยกเลิก - หยุดปั๊มก่อน (Cancel - stop pump first)
+                    cancelled = True
+                    break
+                sleep_ms(50)
+
+        self._pump.stop()
+        end_time = ticks_ms()
+
+        if cancelled:
+            print("\n[CANCELLED] ยกเลิกการสอบเทียบ (Calibration cancelled)")
+            if self._display:
+                self._display.show_message("Cancelled", "Pump stopped")
+            if self._buzzer:
+                self._buzzer.error_sound()
+            sleep_ms(1500)
+            return False
+
+        if self._buzzer:
+            self._buzzer.beep_beep()
+
+        # คำนวณเวลา (Calculate time)
+        elapsed_time_s = ticks_diff(end_time, start_time) / 1000.0
+
+        print(f"\nเวลาที่สูบ: {elapsed_time_s:.2f} วินาที")
+        print(f"(Pump time: {elapsed_time_s:.2f} seconds)")
+
+        # ใช้ปริมาตรมาตรฐาน 5 mL (Use standard volume)
+        # ผู้ใช้ต้องปรับให้ได้ 5 mL
+        target_volume = FLOW_RATE_CALIBRATION_VOLUME_ML
+
+        if self._display:
+            self._display.show_message(
+                f"Time: {elapsed_time_s:.1f}s",
+                f"Volume: {target_volume:.1f} mL"
+            )
+
+        print(f"\nใช้ปริมาตรเป้าหมาย: {target_volume:.2f} mL")
+        print("กรุณาตรวจสอบว่าปริมาตรจริงใกล้เคียง")
+        print(f"(Target volume: {target_volume:.2f} mL)")
+        print("Please verify actual volume is similar")
+
+        # คำนวณและบันทึก (Calculate and save)
+        result = self.calibrate_flow_rate(target_volume, elapsed_time_s)
+        self.save_flow_rate()
+
+        print(f"\n[SUCCESS] Flow rate: {result['flow_rate']:.4f} mL/s")
+
+        if self._display:
+            self._display.show_success(
+                f"FR: {result['flow_rate']:.4f}"
+            )
+
+        sleep_ms(2000)
+        return True
+
     def test_flow_rate(self):
         """
         ทดสอบอัตราการไหลของปั๊ม (Test pump flow rate)
 
-        เปิดปั๊มเป็นเวลา 5 วินาทีเพื่อทดสอบ
+        จ่ายปริมาตร 5 mL โดยคำนวณเวลาจาก flow rate ที่สอบเทียบได้
+        Dispense 5 mL with time calculated from calibrated flow rate
+
+        ขั้นตอน (Steps):
+        1. แสดงปริมาตรเป้าหมาย (5 mL) และเวลาที่คำนวณ
+        2. รอกดปุ่ม 1 เพื่อเริ่ม (Wait for BTN1 to start)
+        3. เปิดปั๊มตามเวลาที่คำนวณ (Run pump for calculated time)
+        4. กด BTN3 เพื่อยกเลิกได้ (Press BTN3 to cancel)
         """
-        from time import sleep_ms
+        from time import sleep_ms, ticks_ms, ticks_diff
+
+        if not self._pump:
+            print("Error: No pump configured")
+            return
+
+        # ปริมาตรเป้าหมาย (Target volume)
+        target_volume_ml = FLOW_RATE_CALIBRATION_VOLUME_ML  # 5.00 mL
+
+        # คำนวณเวลาจาก flow rate (Calculate time from flow rate)
+        # time (s) = volume (mL) / flow_rate (mL/s)
+        calculated_time_s = target_volume_ml / self._flow_rate
+        calculated_time_ms = int(calculated_time_s * 1000)
+
+        print("\n" + "=" * 50)
+        print("ทดสอบอัตราการไหล (Flow Rate Test)")
+        print("=" * 50)
+        print(f"ปริมาตรเป้าหมาย: {target_volume_ml:.2f} mL (Target volume)")
+        print(f"อัตราการไหล: {self._flow_rate:.4f} mL/s (Flow rate)")
+        print(f"เวลาที่คำนวณ: {calculated_time_s:.2f} s (Calculated time)")
+        print("-" * 50)
+        print("กดปุ่ม 1 เริ่ม, ปุ่ม 3 ยกเลิก (BTN1:Start BTN3:Cancel)")
+
+        if self._display:
+            self._display.clear()
+            self._display.draw_header("Flow Rate Test")
+            # แสดงข้อมูลทดสอบ (Show test info)
+            self._display.draw_text(10, 50, f"Target: {target_volume_ml:.1f} mL", 0xFFFF)
+            self._display.draw_text(10, 80, f"Flow: {self._flow_rate:.4f} mL/s", 0xFFFF)
+            self._display.draw_text(10, 110, f"Time: {calculated_time_s:.2f} s", 0x07E0)  # Green
+            self._display.draw_status_bar("BTN1:Start BTN3:Cancel")
+
+        # รอกดปุ่ม 1 เริ่ม หรือปุ่ม 3 ยกเลิก (Wait for BTN1 to start or BTN3 to cancel)
+        if self._buttons:
+            while True:
+                if self._buttons.is_pressed(1):
+                    sleep_ms(200)  # Debounce
+                    break
+                if self._buttons.is_pressed(3):
+                    # ยกเลิก (Cancel)
+                    print("\n[CANCELLED] ยกเลิกการทดสอบ (Test cancelled)")
+                    if self._display:
+                        self._display.show_message("Cancelled", "Returning to menu")
+                    if self._buzzer:
+                        self._buzzer.error_sound()
+                    sleep_ms(1500)
+                    return
+                sleep_ms(50)
+
+        # เริ่มทดสอบ (Start test)
+        print(f"\nกำลังจ่าย {target_volume_ml:.1f} mL ({calculated_time_s:.2f} s)...")
+        print("(Dispensing... BTN3 to cancel)")
+
+        if self._display:
+            self._display.show_message(
+                f"Dispensing...",
+                f"{target_volume_ml:.1f}mL / {calculated_time_s:.1f}s"
+            )
+
+        if self._buzzer:
+            self._buzzer.beep()
+
+        self._pump.start(100)  # Full speed
+
+        # รอตามเวลาที่คำนวณ พร้อมตรวจสอบ BTN3
+        # Wait for calculated time with BTN3 check
+        start_time = ticks_ms()
+        cancelled = False
+
+        while ticks_diff(ticks_ms(), start_time) < calculated_time_ms:
+            if self._buttons and self._buttons.is_pressed(3):
+                cancelled = True
+                break
+            sleep_ms(50)
+
+        self._pump.stop()
+
+        if cancelled:
+            elapsed_s = ticks_diff(ticks_ms(), start_time) / 1000.0
+            dispensed_ml = self._flow_rate * elapsed_s
+            print(f"\n[CANCELLED] หยุดที่ {elapsed_s:.2f} s (จ่ายไป ~{dispensed_ml:.2f} mL)")
+            print(f"(Stopped at {elapsed_s:.2f}s, dispensed ~{dispensed_ml:.2f} mL)")
+            if self._display:
+                self._display.show_message("Cancelled", f"~{dispensed_ml:.2f} mL dispensed")
+            if self._buzzer:
+                self._buzzer.error_sound()
+            sleep_ms(1500)
+            return
+
+        if self._buzzer:
+            self._buzzer.beep_beep()
+
+        print(f"\n[COMPLETE] จ่ายเสร็จ: {target_volume_ml:.2f} mL")
+        print(f"กรุณาตรวจสอบปริมาตรจริงในกระบอกตวง")
+        print(f"(Please verify actual volume in measuring cylinder)")
+
+        if self._display:
+            self._display.show_success(f"Done: {target_volume_ml:.1f} mL")
+
+        sleep_ms(2000)
+
+    def purge_tubing(self):
+        """
+        ล้างท่อปั๊มแบบ manual (Manual purge pump tubing)
+
+        ขั้นตอน (Steps):
+        1. รอกดปุ่ม 1 เพื่อเริ่ม (Wait for BTN1 to start)
+        2. ปั๊มทำงานต่อเนื่อง (Pump runs continuously)
+        3. กดปุ่ม 1 อีกครั้งเพื่อหยุด (Press BTN1 again to stop)
+
+        หมายเหตุ: BTN3 ยกเลิกก่อนเริ่ม (BTN3 cancels before starting)
+        """
+        from time import sleep_ms, ticks_ms, ticks_diff
 
         if not self._pump:
             print("Error: No pump configured")
             return
 
         print("\n" + "=" * 50)
-        print("ทดสอบอัตราการไหล (Flow Rate Test)")
+        print("ล้างท่อปั๊ม (Purge Tubing)")
         print("=" * 50)
+        print("กดปุ่ม 1 เริ่ม, ปุ่ม 3 ยกเลิก (BTN1:Start BTN3:Cancel)")
 
         if self._display:
             self._display.clear()
-            self._display.draw_header("Flow Rate Test")
-            self._display.show_message("Testing...", "Pump running 5s")
+            self._display.draw_header("Purge Tubing")
+            self._display.draw_text(10, 60, "Manual Purge Mode", 0xFFFF)
+            self._display.draw_text(10, 100, "BTN1: Start pump", 0x07E0)  # Green
+            self._display.draw_status_bar("BTN1:Start BTN3:Cancel")
 
-        print("กำลังเปิดปั๊ม 5 วินาที... (Running pump for 5s...)")
+        # รอกดปุ่ม 1 เริ่ม หรือปุ่ม 3 ยกเลิก (Wait for BTN1 to start or BTN3 to cancel)
+        if self._buttons:
+            while True:
+                if self._buttons.is_pressed(1):
+                    sleep_ms(200)  # Debounce
+                    break
+                if self._buttons.is_pressed(3):
+                    # ยกเลิก (Cancel)
+                    print("\n[CANCELLED] ยกเลิก (Cancelled)")
+                    if self._display:
+                        self._display.show_message("Cancelled", "Returning to menu")
+                    if self._buzzer:
+                        self._buzzer.error_sound()
+                    sleep_ms(1500)
+                    return
+                sleep_ms(50)
+
+        # เริ่มปั๊ม (Start pump)
+        print("\nกำลังล้างท่อ... กดปุ่ม 1 หยุด (Purging... BTN1:Stop)")
+
+        if self._display:
+            self._display.clear()
+            self._display.draw_header("Purge Tubing")
+            self._display.draw_text(10, 60, "Purging...", 0x07E0)  # Green
+            self._display.draw_text(10, 100, "Pump is running", 0xFFFF)
+            self._display.draw_status_bar("BTN1: Stop pump")
 
         if self._buzzer:
             self._buzzer.beep()
 
         self._pump.start(100)  # Full speed
-        sleep_ms(5000)
+        start_time = ticks_ms()
+
+        # รอกดปุ่ม 1 หยุด (Wait for BTN1 to stop)
+        if self._buttons:
+            while True:
+                if self._buttons.is_pressed(1):
+                    sleep_ms(200)  # Debounce
+                    break
+                sleep_ms(50)
+
         self._pump.stop()
+        elapsed_s = ticks_diff(ticks_ms(), start_time) / 1000.0
 
         if self._buzzer:
             self._buzzer.beep_beep()
 
-        expected_volume = self._flow_rate * 5.0
-        print(f"ปริมาตรที่คาดหวัง: {expected_volume:.2f} mL")
-        print(f"(ตาม flow rate: {self._flow_rate:.4f} mL/s)")
+        # แสดงเวลาที่ใช้ (Show elapsed time)
+        print(f"\n[COMPLETE] ล้างท่อเสร็จ: {elapsed_s:.1f} วินาที")
+        print(f"(Purge complete: {elapsed_s:.1f} seconds)")
 
         if self._display:
-            self._display.show_message(
-                "Test Complete",
-                f"Expected: {expected_volume:.2f} mL"
-            )
+            self._display.show_success(f"Done: {elapsed_s:.1f}s")
 
-        sleep_ms(2000)
+        sleep_ms(1500)
 
     def __repr__(self):
         """แสดงข้อมูล Calibrator"""

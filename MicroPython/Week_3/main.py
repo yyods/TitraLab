@@ -19,6 +19,7 @@
 # ==============================================================================
 
 from time import sleep_ms, ticks_ms, ticks_diff
+import gc  # สำหรับ garbage collection (for garbage collection)
 
 # นำเข้า Hardware Modules (Import Hardware Modules)
 from hardware.display import DisplayManager
@@ -180,7 +181,15 @@ def main():
             temp_sensor=hardware.temp_sensor,
             display=hardware.display,
             buzzer=hardware.buzzer,
-            led_indicator=hardware.leds.green
+            led_indicator=hardware.leds.green,
+            buttons=hardware.buttons  # สำหรับ BTN3 ยกเลิก (for BTN3 cancel)
+        )
+
+        # ตั้งค่าพารามิเตอร์ไทเทรชัน (Configure titration parameters)
+        # stabilize_time=2.0 สำหรับทดสอบ, ใช้ 10.0 สำหรับการทดลองจริง
+        # stabilize_time=2.0 for testing, use 10.0 for real experiments
+        titration.configure(
+            stabilize_time=10.0  # วินาที (seconds) - เปลี่ยนเป็น 2.0 สำหรับทดสอบ
         )
 
         # สร้าง Menu System (Create Menu System)
@@ -191,13 +200,14 @@ def main():
         )
 
         # กำหนด Menu Actions (Define Menu Actions)
+        # ทุกเมนูรองรับ BTN3 เพื่อยกเลิก (All menus support BTN3 to cancel)
         menu_actions = {
-            1: lambda: calibrator.calibrate_ph(),        # สอบเทียบ pH
-            2: lambda: calibrator.test_ph_sensor(),      # ทดสอบ pH
-            3: lambda: calibrator.calibrate_flow_rate(), # สอบเทียบ Flow Rate
-            4: lambda: calibrator.test_flow_rate(),      # ทดสอบ Flow Rate
-            5: lambda: hardware.pump.purge(),            # ล้างท่อ
-            6: lambda: titration.run_titration()         # ไทเทรชันอัตโนมัติ
+            1: lambda: calibrator.calibrate_ph(),                    # สอบเทียบ pH
+            2: lambda: calibrator.test_ph_sensor(),                  # ทดสอบ pH
+            3: lambda: calibrator.calibrate_flow_rate_interactive(), # สอบเทียบ Flow Rate
+            4: lambda: calibrator.test_flow_rate(),                  # ทดสอบ Flow Rate
+            5: lambda: calibrator.purge_tubing(),                    # ล้างท่อ (with BTN3)
+            6: lambda: titration.run_titration()                     # ไทเทรชันอัตโนมัติ
         }
 
         # แสดงหน้าจอต้อนรับ (Show welcome screen)
@@ -210,6 +220,9 @@ def main():
 
         running = True
         while running:
+            # เก็บกวาดหน่วยความจำก่อนแสดงเมนู (Garbage collect before showing menu)
+            gc.collect()
+
             # แสดงเมนู (Show menu)
             menu.show()
 
@@ -235,6 +248,10 @@ def main():
                             hardware.leds.red.off()
                         finally:
                             hardware.leds.green.off()
+                            # เก็บกวาดหน่วยความจำหลังทำงานเสร็จ (Garbage collect after action)
+                            gc.collect()
+                            # ร้องขอให้วาดเมนูใหม่ (Request menu redraw)
+                            menu.request_redraw()
                     # รอปล่อยปุ่ม (Wait for button release)
                     while hardware.buttons.is_pressed(1):
                         sleep_ms(10)

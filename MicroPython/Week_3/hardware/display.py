@@ -387,6 +387,120 @@ class DisplayManager:
         self.draw_text_centered(180, "Week 3 - OOP System", Colors.TEXT_INFO)
 
     # ==========================================================================
+    # เมธอดสำหรับ Titration (Titration Display Methods)
+    # ==========================================================================
+
+    def show_titration_status(self, step, total_steps, volume, max_volume,
+                               ph, temperature=None, status_text=None):
+        """
+        แสดงสถานะการไทเทรชัน (Display titration status)
+
+        แสดงข้อมูลความคืบหน้าของการไทเทรชันบนหน้าจอ
+        Shows titration progress information on screen
+
+        Args:
+            step (int): รอบปัจจุบัน (Current step/cycle)
+            total_steps (int): รอบทั้งหมด (Total steps)
+            volume (float): ปริมาตรที่จ่ายแล้ว (Dispensed volume in mL)
+            max_volume (float): ปริมาตรสูงสุด (Maximum volume in mL)
+            ph (float): ค่า pH ปัจจุบัน (Current pH value)
+            temperature (float): อุณหภูมิ (Temperature in C, optional)
+            status_text (str): ข้อความสถานะ (Status text, optional)
+        """
+        self.clear()
+        self.draw_header("Auto Titration")
+
+        # คำนวณ progress (Calculate progress)
+        progress = volume / max_volume if max_volume > 0 else 0
+
+        # แสดง Step (Show step)
+        step_text = f"Step: {step}/{total_steps}"
+        self.draw_text(10, 40, step_text, Colors.WHITE)
+
+        # แสดงปริมาตร (Show volume)
+        vol_text = f"Vol: {volume:.2f}/{max_volume:.1f} mL"
+        self.draw_text(10, 70, vol_text, Colors.CYAN)
+
+        # แสดง pH (Show pH) - ขนาดใหญ่และเด่น (Large and prominent)
+        ph_text = f"pH: {ph:.2f}"
+        self.draw_text(10, 100, ph_text, Colors.GREEN)
+
+        # แสดงอุณหภูมิถ้ามี (Show temperature if available)
+        if temperature is not None:
+            temp_text = f"Temp: {temperature:.1f} C"
+            self.draw_text(180, 100, temp_text, Colors.YELLOW)
+
+        # แสดง Progress Bar (Show progress bar)
+        self.draw_text(10, 140, "Progress:", Colors.WHITE)
+        self.draw_progress_bar(10, 165, 300, 20, progress, Colors.GREEN, Colors.WHITE)
+
+        # แสดงเปอร์เซ็นต์ (Show percentage)
+        percent_text = f"{progress * 100:.0f}%"
+        self.draw_text(140, 190, percent_text, Colors.TEXT_INFO)
+
+        # แสดงสถานะ (Show status)
+        if status_text:
+            self.draw_status_bar(status_text, Colors.TEXT_INFO)
+        else:
+            self.draw_status_bar("BTN3: Cancel", Colors.TEXT_WARNING)
+
+    def show_titration_ready(self, sample_vol, max_vol, dose_vol, total_steps):
+        """
+        แสดงหน้าจอพร้อมเริ่มไทเทรชัน (Display titration ready screen)
+
+        แสดงข้อมูลการตั้งค่าและรอกดปุ่มเริ่ม
+        Shows configuration and waits for start button
+
+        Args:
+            sample_vol (float): ปริมาตรตัวอย่าง (Sample volume in mL)
+            max_vol (float): ปริมาตรสูงสุด (Maximum volume in mL)
+            dose_vol (float): ปริมาตรต่อครั้ง (Dose volume in mL)
+            total_steps (int): จำนวน step ทั้งหมด (Total steps)
+        """
+        self.clear()
+        self.draw_header("Auto Titration")
+
+        # แสดงข้อมูลการตั้งค่า (Show configuration)
+        self.draw_text(10, 45, f"Sample: {sample_vol:.1f} mL", Colors.WHITE)
+        self.draw_text(10, 75, f"Max Vol: {max_vol:.1f} mL", Colors.CYAN)
+        self.draw_text(10, 105, f"Dose: {dose_vol:.2f} mL", Colors.WHITE)
+        self.draw_text(10, 135, f"Steps: {total_steps}", Colors.WHITE)
+
+        # แสดงคำแนะนำ (Show instructions)
+        self.draw_text(10, 175, "Press BTN1 to START", Colors.GREEN)
+        self.draw_status_bar("BTN1:Start BTN3:Cancel", Colors.TEXT_WARNING)
+
+    def show_titration_complete(self, total_vol, eq_vol=None, eq_ph=None, filename=None):
+        """
+        แสดงหน้าจอไทเทรชันเสร็จสิ้น (Display titration complete screen)
+
+        Args:
+            total_vol (float): ปริมาตรรวมที่จ่าย (Total dispensed volume in mL)
+            eq_vol (float): ปริมาตรจุดสมมูล (Equivalence point volume, optional)
+            eq_ph (float): pH จุดสมมูล (Equivalence point pH, optional)
+            filename (str): ชื่อไฟล์ที่บันทึก (Saved filename, optional)
+        """
+        self.clear()
+        self.draw_header("Titration Complete")
+
+        # แสดงปริมาตรรวม (Show total volume)
+        self.draw_text(10, 50, f"Total: {total_vol:.2f} mL", Colors.CYAN)
+
+        # แสดงจุดสมมูลถ้ามี (Show equivalence point if available)
+        if eq_vol is not None and eq_ph is not None:
+            self.draw_text(10, 85, "Equivalence Point:", Colors.YELLOW)
+            self.draw_text(10, 115, f"  V = {eq_vol:.3f} mL", Colors.GREEN)
+            self.draw_text(10, 145, f"  pH = {eq_ph:.3f}", Colors.GREEN)
+        else:
+            self.draw_text(10, 85, "Equiv. Point: N/A", Colors.TEXT_WARNING)
+
+        # แสดงชื่อไฟล์ถ้ามี (Show filename if available)
+        if filename:
+            self.draw_text(10, 180, f"File: {filename}", Colors.TEXT_INFO)
+
+        self.draw_status_bar("BTN1: Return to menu", Colors.WHITE)
+
+    # ==========================================================================
     # เมธอดจัดการทรัพยากร (Resource Management Methods)
     # ==========================================================================
 
