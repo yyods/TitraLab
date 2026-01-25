@@ -22,9 +22,9 @@
 from .pump import Pump
 from .buttons import Button, ButtonManager
 from .buzzer import Buzzer
-from .ph_sensor import pHSensor
-from .temp_sensor import TempSensor
-from .display import Display, Colors
+from .ph_sensor import PHSensor
+from .temp_sensor import TemperatureSensor
+from .display import DisplayManager, Colors
 from .leds import LED, LEDManager
 # หมายเหตุ: ไม่นำเข้า SDCardManager เนื่องจากไม่ใช้งาน
 # Note: SDCardManager not imported - not used (board connected to laptop via USB)
@@ -36,9 +36,9 @@ __all__ = [
     'Button',
     'ButtonManager',
     'Buzzer',
-    'pHSensor',
-    'TempSensor',
-    'Display',
+    'PHSensor',
+    'TemperatureSensor',
+    'DisplayManager',
     'Colors',
     'LED',
     'LEDManager',
@@ -161,7 +161,7 @@ class HardwareHub:
     def init_ph_sensor(self):
         """Initialize เซ็นเซอร์ pH (Initialize pH sensor)"""
         try:
-            self._ph_sensor = pHSensor()
+            self._ph_sensor = PHSensor()
             self._initialized['ph_sensor'] = True
         except Exception as e:
             print(f"ข้อผิดพลาดเริ่มต้น pH sensor (pH sensor init error): {e}")
@@ -171,7 +171,7 @@ class HardwareHub:
     def init_temp_sensor(self):
         """Initialize เซ็นเซอร์อุณหภูมิ (Initialize temperature sensor)"""
         try:
-            self._temp_sensor = TempSensor()
+            self._temp_sensor = TemperatureSensor()
             self._initialized['temp_sensor'] = True
         except Exception as e:
             print(f"ข้อผิดพลาดเริ่มต้น temp sensor (Temp sensor init error): {e}")
@@ -228,7 +228,7 @@ class HardwareHub:
         เข้าถึงเซ็นเซอร์ pH (Access pH sensor)
 
         Returns:
-            pHSensor: pHSensor object
+            PHSensor: PHSensor object
         """
         if self._ph_sensor is None:
             raise RuntimeError("pH sensor ยังไม่ได้ initialize (pH sensor not initialized)")
@@ -240,7 +240,7 @@ class HardwareHub:
         เข้าถึงเซ็นเซอร์อุณหภูมิ (Access temperature sensor)
 
         Returns:
-            TempSensor: TempSensor object
+            TemperatureSensor: TemperatureSensor object
         """
         if self._temp_sensor is None:
             raise RuntimeError("Temp sensor ยังไม่ได้ initialize (Temp sensor not initialized)")

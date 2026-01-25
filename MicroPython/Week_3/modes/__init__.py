@@ -49,7 +49,7 @@ def create_all_modes(display, colors, ph_sensor, pump, temperature_sensor, buzze
     Args:
         display: ออบเจ็กต์ Display (Display object)
         colors: คลาส Colors (Colors class)
-        ph_sensor: ออบเจ็กต์ pHSensor (pHSensor object)
+        ph_sensor: ออบเจ็กต์ PHSensor (PHSensor object)
         pump: ออบเจ็กต์ Pump (Pump object)
         temperature_sensor: ออบเจ็กต์ TemperatureSensor (TemperatureSensor object)
         buzzer: ออบเจ็กต์ Buzzer (optional) (Buzzer object)

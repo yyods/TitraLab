@@ -213,6 +213,15 @@ class LED:
         else:
             self.off()
 
+    def init(self):
+        """
+        เริ่มต้น LED (Initialize LED)
+
+        เมธอดนี้ถูกเรียกเพื่อเตรียม LED ให้พร้อมใช้งาน
+        This method is called to prepare the LED for use.
+        """
+        pass  # LED พร้อมใช้งานตั้งแต่ __init__ (LED ready from __init__)
+
     def deinit(self):
         """
         ปิดการใช้งานและคืนทรัพยากร (Deinitialize and release resources)

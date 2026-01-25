@@ -287,6 +287,24 @@ class ButtonManager:
 
         print("ButtonManager พร้อมใช้งาน (ButtonManager ready)")
 
+    def init(self):
+        """
+        เริ่มต้น ButtonManager (Initialize ButtonManager)
+
+        เมธอดนี้ถูกเรียกโดย HardwareHub - ปุ่มพร้อมใช้งานตั้งแต่สร้าง object
+        This method is called by HardwareHub - buttons are ready from object creation.
+        """
+        pass  # ปุ่มพร้อมใช้งานตั้งแต่ __init__ (Buttons ready from __init__)
+
+    def deinit(self):
+        """
+        ปิด ButtonManager (Deinitialize ButtonManager)
+
+        เมธอดนี้ถูกเรียกเมื่อปิดโปรแกรม
+        This method is called on shutdown.
+        """
+        pass  # ไม่มี resources ที่ต้อง cleanup (No resources to cleanup)
+
     @property
     def select(self):
         """ปุ่ม 1 - เลือก/ยืนยัน (Button 1 - Select/Confirm)"""

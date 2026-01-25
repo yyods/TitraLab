@@ -58,9 +58,9 @@ class Colors:
 
 
 # ==============================================================================
-# คลาส Display (Display Class)
+# คลาส DisplayManager (Display Manager Class)
 # ==============================================================================
-class Display:
+class DisplayManager:
     """
     คลาส wrapper สำหรับจอ TFT ILI9341 (Wrapper class for ILI9341 TFT display)
 
@@ -98,7 +98,7 @@ class Display:
         Example:
             from xglcd_font import XglcdFont
             font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
-            display = Display(rotation=90, font=font)
+            display = DisplayManager(rotation=90, font=font)
         """
         # ตั้งค่า SPI สำหรับจอ TFT (Setup SPI for TFT display)
         self._spi = SPI(
@@ -129,6 +129,32 @@ class Display:
         else:
             self.width = self.HEIGHT
             self.height = self.WIDTH
+
+    # ==========================================================================
+    # Lifecycle Methods (init/deinit)
+    # ==========================================================================
+
+    def init(self):
+        """
+        เริ่มต้นจอแสดงผล (Initialize display)
+
+        เมธอดนี้ถูกเรียกโดย HardwareHub เพื่อเตรียมจอให้พร้อมใช้งาน
+        This method is called by HardwareHub to prepare the display for use.
+        """
+        # ล้างจอและแสดงหน้าจอเริ่มต้น (Clear and show initial screen)
+        self.clear()
+
+    def deinit(self):
+        """
+        ปิดจอแสดงผล (Deinitialize display)
+
+        เมธอดนี้ถูกเรียกเมื่อปิดโปรแกรม เพื่อทำความสะอาด resources
+        This method is called on shutdown to clean up resources.
+        """
+        # ล้างจอก่อนปิด (Clear screen before shutdown)
+        self.clear()
+        # หมายเหตุ: SPI bus จะถูกจัดการโดย MicroPython GC
+        # Note: SPI bus is managed by MicroPython garbage collector
 
     # ==========================================================================
     # เมธอดพื้นฐาน (Basic Methods)
@@ -378,8 +404,8 @@ if __name__ == '__main__':
         from xglcd_font import XglcdFont
         font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
 
-        # สร้างออบเจ็กต์ Display (Create Display object)
-        display = Display(rotation=90, font=font)
+        # สร้างออบเจ็กต์ DisplayManager (Create DisplayManager object)
+        display = DisplayManager(rotation=90, font=font)
 
         # แสดงตัวอย่าง UI (Display UI example)
         display.clear()

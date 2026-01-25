@@ -88,6 +88,15 @@ class Buzzer:
         print(f"Buzzer พร้อมใช้งานที่ GPIO{self._pin_number} "
               f"(Buzzer ready on GPIO{self._pin_number})")
 
+    def init(self):
+        """
+        เริ่มต้น Buzzer (Initialize Buzzer)
+
+        เมธอดนี้ถูกเรียกโดย HardwareHub - PWM พร้อมใช้งานตั้งแต่สร้าง object
+        This method is called by HardwareHub - PWM ready from object creation.
+        """
+        pass  # PWM พร้อมใช้งานตั้งแต่ __init__ (PWM ready from __init__)
+
     @property
     def is_playing(self):
         """ตรวจสอบว่ากำลังเล่นเสียงหรือไม่ (Check if sound is playing)"""

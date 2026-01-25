@@ -48,7 +48,7 @@ except ImportError:
     NERNST_THEORETICAL_SLOPE = -59.16  # mV/pH ที่ 25 C (theoretical)
 
 
-class pHSensor:
+class PHSensor:
     """
     คลาสเซ็นเซอร์ pH สำหรับการไทเทรต (pH Sensor class for titration)
 
@@ -69,14 +69,14 @@ class pHSensor:
         - เฉลี่ยค่าที่เหลือเพื่อลด noise
 
     ตัวอย่างการใช้งาน (Usage Example):
-        >>> ph_sensor = pHSensor()
+        >>> ph_sensor = PHSensor()
         >>> voltage_mv, ph = ph_sensor.read()
         >>> print(f"Voltage: {voltage_mv:.1f} mV, pH: {ph:.2f}")
     """
 
     def __init__(self, pin=None, slope=None, intercept=None):
         """
-        สร้าง pHSensor object (Create pHSensor object)
+        สร้าง PHSensor object (Create PHSensor object)
 
         สมการ: pH = slope_m * mV + intercept_b
         Equation: pH = slope_m * mV + intercept_b
@@ -115,6 +115,24 @@ class pHSensor:
               f"(pH Sensor ready on GPIO{self._pin_number})")
         print(f"สมการ: pH = {self._slope:.6f} * mV + {self._intercept:.4f} "
               f"(Equation: pH = {self._slope:.6f} * mV + {self._intercept:.4f})")
+
+    def init(self):
+        """
+        เริ่มต้น pH Sensor (Initialize pH Sensor)
+
+        เมธอดนี้ถูกเรียกโดย HardwareHub - ADC พร้อมใช้งานตั้งแต่สร้าง object
+        This method is called by HardwareHub - ADC ready from object creation.
+        """
+        pass  # ADC พร้อมใช้งานตั้งแต่ __init__ (ADC ready from __init__)
+
+    def deinit(self):
+        """
+        ปิด pH Sensor (Deinitialize pH Sensor)
+
+        เมธอดนี้ถูกเรียกเมื่อปิดโปรแกรม
+        This method is called on shutdown.
+        """
+        pass  # ADC ไม่ต้อง cleanup (ADC does not need cleanup)
 
     @property
     def slope(self):
@@ -389,7 +407,7 @@ class pHSensor:
 
     def __repr__(self):
         """แสดงข้อมูลเซ็นเซอร์ pH"""
-        return (f"pHSensor(pin={self._pin_number}, "
+        return (f"PHSensor(pin={self._pin_number}, "
                 f"slope={self._slope:.4f}, intercept={self._intercept:.4f})")
 
 
@@ -398,11 +416,11 @@ class pHSensor:
 # ==============================================================================
 if __name__ == "__main__":
     print("=" * 50)
-    print("ทดสอบคลาส pHSensor (Testing pHSensor Class)")
+    print("ทดสอบคลาส PHSensor (Testing PHSensor Class)")
     print("=" * 50)
 
-    # สร้าง pHSensor object (Create pHSensor object)
-    ph_sensor = pHSensor()
+    # สร้าง PHSensor object (Create PHSensor object)
+    ph_sensor = PHSensor()
     print(ph_sensor)
 
     print("\n--- ข้อมูลทางเคมี (Chemistry Information) ---")

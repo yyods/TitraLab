@@ -138,9 +138,9 @@ available = temp_sensor.is_available    # ตรวจสอบว่าเซ�
 
 ```python
 # ตัวอย่างการใช้งาน (Usage Example)
-from hardware.display import Display, Colors
+from hardware.display import DisplayManager, Colors
 
-display = Display()
+display = DisplayManager()
 display.clear()                         # ล้างจอ
 display.draw_header("Title")            # วาดหัวข้อ
 display.draw_text(10, 50, "pH: 7.00", Colors.WHITE)

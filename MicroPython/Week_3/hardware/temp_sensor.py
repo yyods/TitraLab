@@ -47,7 +47,7 @@ except ImportError:
     TEMP_DEFAULT_VALUE = 25.0
 
 
-class TempSensor:
+class TemperatureSensor:
     """
     คลาสเซ็นเซอร์อุณหภูมิ DS18B20 (DS18B20 Temperature Sensor class)
 
@@ -62,14 +62,14 @@ class TempSensor:
         - สามารถต่อหลาย device บน bus เดียวกัน
 
     ตัวอย่างการใช้งาน (Usage Example):
-        >>> temp_sensor = TempSensor()
+        >>> temp_sensor = TemperatureSensor()
         >>> temp = temp_sensor.read()
         >>> print(f"Temperature: {temp:.2f} C")
     """
 
     def __init__(self, pin=None, default_temp=None):
         """
-        สร้าง TempSensor object (Create TempSensor object)
+        สร้าง TemperatureSensor object (Create TemperatureSensor object)
 
         Args:
             pin (int): หมายเลขขา GPIO (GPIO pin number)
@@ -100,6 +100,24 @@ class TempSensor:
         else:
             print(f"ไม่พบเซ็นเซอร์ DS18B20 ที่ GPIO{self._pin_number} "
                   f"(No DS18B20 sensor found on GPIO{self._pin_number})")
+
+    def init(self):
+        """
+        เริ่มต้น Temperature Sensor (Initialize Temperature Sensor)
+
+        เมธอดนี้ถูกเรียกโดย HardwareHub - OneWire พร้อมใช้งานตั้งแต่สร้าง object
+        This method is called by HardwareHub - OneWire ready from object creation.
+        """
+        pass  # OneWire พร้อมใช้งานตั้งแต่ __init__ (OneWire ready from __init__)
+
+    def deinit(self):
+        """
+        ปิด Temperature Sensor (Deinitialize Temperature Sensor)
+
+        เมธอดนี้ถูกเรียกเมื่อปิดโปรแกรม
+        This method is called on shutdown.
+        """
+        pass  # OneWire ไม่ต้อง cleanup (OneWire does not need cleanup)
 
     @property
     def is_available(self):
@@ -315,7 +333,7 @@ class TempSensor:
     def __repr__(self):
         """แสดงข้อมูลเซ็นเซอร์อุณหภูมิ"""
         status = "available" if self.is_available else "not found"
-        return (f"TempSensor(pin={self._pin_number}, "
+        return (f"TemperatureSensor(pin={self._pin_number}, "
                 f"sensors={self.sensor_count}, status={status})")
 
 
@@ -324,11 +342,11 @@ class TempSensor:
 # ==============================================================================
 if __name__ == "__main__":
     print("=" * 50)
-    print("ทดสอบคลาส TempSensor (Testing TempSensor Class)")
+    print("ทดสอบคลาส TemperatureSensor (Testing TemperatureSensor Class)")
     print("=" * 50)
 
-    # สร้าง TempSensor object (Create TempSensor object)
-    temp_sensor = TempSensor()
+    # สร้าง TemperatureSensor object (Create TemperatureSensor object)
+    temp_sensor = TemperatureSensor()
     print(temp_sensor)
 
     if temp_sensor.is_available:
