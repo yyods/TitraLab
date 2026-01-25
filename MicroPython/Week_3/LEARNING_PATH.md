@@ -630,7 +630,9 @@ EquivPoint เป็น Python tool สำหรับหาจุดสมม�
 **ขั้นตอนการติดตั้ง (ครั้งแรก):**
 ```bash
 # เปิด Command Prompt หรือ Terminal
-cd C:\Users\v_viw\Documents\Teaching\TitraLab\EquivPoint
+# ไปยังโฟลเดอร์ EquivPoint ในโปรเจกต์ TitraLab
+# (ปรับ path ตามตำแหน่งที่เก็บโปรเจกต์บนเครื่องของนิสิต)
+cd <your-path>/TitraLab/EquivPoint
 
 # สร้าง virtual environment (ครั้งแรก)
 python -m venv venv
@@ -638,14 +640,14 @@ python -m venv venv
 # เปิดใช้งาน virtual environment (Windows)
 venv\Scripts\activate
 
-# ติดตั้ง packages ที่จำเป็น
-pip install numpy matplotlib scipy pandas
+# ติดตั้ง packages จาก requirements.txt
+pip install -r requirements.txt
 ```
 
 **ขั้นตอนการใช้งาน:**
 ```bash
 # เปิดใช้งาน virtual environment
-cd C:\Users\v_viw\Documents\Teaching\TitraLab\EquivPoint
+cd <your-path>/TitraLab/EquivPoint
 venv\Scripts\activate
 
 # วิเคราะห์ข้อมูล

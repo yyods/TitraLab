@@ -956,9 +956,9 @@ print(f"Files on ESP32: {files}")
 3. ด้านซ้ายล่าง จะเห็น **MicroPython device** แสดงไฟล์บน ESP32
 4. หาไฟล์ `titration_data_R1.csv` (หรือชื่อที่คล้ายกัน)
 5. **คลิกขวา** ที่ไฟล์ แล้วเลือก **"Download to..."**
-6. บันทึกไปยังโฟลเดอร์ `EquivPoint`:
+6. บันทึกไปยังโฟลเดอร์ `EquivPoint/` ในโปรเจกต์ TitraLab:
    ```
-   C:\Users\v_viw\Documents\Teaching\TitraLab\EquivPoint\
+   TitraLab/EquivPoint/
    ```
 
 #### Step 2: ใช้ไฟล์ CSV ได้ทันที (CSV Ready to Use)
@@ -998,8 +998,9 @@ EquivPoint เป็นเครื่องมือวิเคราะห์
 
 ```bash
 # เปิด Command Prompt หรือ Terminal
-# ไปยังโฟลเดอร์ EquivPoint
-cd C:\Users\v_viw\Documents\Teaching\TitraLab\EquivPoint
+# ไปยังโฟลเดอร์ EquivPoint ในโปรเจกต์ TitraLab
+# (ปรับ path ตามตำแหน่งที่เก็บโปรเจกต์บนเครื่องของนิสิต)
+cd <your-path>/TitraLab/EquivPoint
 
 # สร้าง Virtual Environment (ทำครั้งแรกครั้งเดียว)
 python -m venv venv
@@ -1007,15 +1008,15 @@ python -m venv venv
 # เปิดใช้งาน Virtual Environment (Windows)
 venv\Scripts\activate
 
-# ติดตั้ง dependencies
-pip install numpy matplotlib scipy pandas
+# ติดตั้ง dependencies จาก requirements.txt
+pip install -r requirements.txt
 ```
 
 #### Step 4: รันโปรแกรม EquivPoint (Run EquivPoint)
 
 ```bash
 # เปิดใช้งาน venv (ถ้ายังไม่เปิด)
-cd C:\Users\v_viw\Documents\Teaching\TitraLab\EquivPoint
+cd <your-path>/TitraLab/EquivPoint
 venv\Scripts\activate
 
 # รันโปรแกรมวิเคราะห์
@@ -1053,12 +1054,13 @@ Approximate volume at zero crossing: 5.58 mL
 ### โครงสร้างโฟลเดอร์ EquivPoint (EquivPoint Folder Structure)
 
 ```
-C:\Users\v_viw\Documents\Teaching\TitraLab\
+TitraLab/                    <-- โฟลเดอร์หลักของโปรเจกต์
 ├── MicroPython/
 │   └── Week_3/              <-- คุณอยู่ที่นี่
 │       └── README.md
 └── EquivPoint/              <-- เครื่องมือวิเคราะห์ข้อมูล
     ├── README.md            # คู่มือการใช้งาน EquivPoint
+    ├── requirements.txt     # Python dependencies
     ├── equiv_point.py       # โปรแกรมหลัก
     ├── data.csv             # ไฟล์ตัวอย่าง
     ├── data.png             # กราฟตัวอย่าง
