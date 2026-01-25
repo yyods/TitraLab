@@ -302,8 +302,8 @@ pH = slope_m * mV + intercept_b
 ระบบใช้วิธี **ปริมาตรคงที่ต่อครั้ง (constant dose volume)** ครั้งละ **0.2 mL** ตลอดทั้งการไทเทรต:
 
 ```
-สูบ 0.2 mL → หยุด → รอ pH เสถียร (2 วินาที) → อ่านค่า pH → ทำซ้ำ
-Pump 0.2 mL → Stop → Wait for pH stabilization (2s) → Read pH → Repeat
+สูบ 0.2 mL → หยุด → รอ pH เสถียร (10 วินาที) → อ่านค่า pH → ทำซ้ำ
+Pump 0.2 mL → Stop → Wait for pH stabilization (10s) → Read pH → Repeat
 ```
 
 **เหตุผลทางการเรียนรู้ (Pedagogical Rationale):**
@@ -320,7 +320,7 @@ Pump 0.2 mL → Stop → Wait for pH stabilization (2s) → Read pH → Repeat
 | ขั้นตอน | การทำงาน | รายละเอียด |
 |:-------:|----------|------------|
 | 1 | สูบ (Pump) | เปิดปั๊ม 100% เติม 0.2 mL แล้วหยุด |
-| 2 | รอ (Wait) | รอ 2 วินาทีให้ pH เสถียร (stabilization) |
+| 2 | รอ (Wait) | รอ 10 วินาทีให้ pH เสถียร (stabilization) |
 | 3 | วัด (Read) | อ่านค่า pH และอุณหภูมิ |
 | 4 | บันทึก (Log) | บันทึกข้อมูลลง CSV |
 | 5 | ตรวจสอบ (Check) | ตรวจจับจุดสมมูล (dpH/dV สูงสุด) |
@@ -380,12 +380,18 @@ Week_3/
 │   ├── screens.py              # Screen templates - หน้าจอต่างๆ
 │   └── README.md               # คำอธิบาย UI Layer
 │
-└── async_support/              # [OPTIONAL] Asynchronous Support (Advanced)
-    ├── __init__.py             # Package initialization
-    ├── scheduler.py            # Task scheduler
-    ├── async_pump.py           # Async pump control
-    ├── async_titration.py      # Async titration
-    └── README.md               # คำอธิบาย Async Support
+├── async_support/              # [OPTIONAL] Asynchronous Support (Advanced)
+│   ├── __init__.py             # Package initialization
+│   ├── scheduler.py            # Task scheduler
+│   ├── async_pump.py           # Async pump control
+│   ├── async_titration.py      # Async titration
+│   └── README.md               # คำอธิบาย Async Support
+│
+├── fonts/                      # [LIBRARY] ฟอนต์สำหรับจอ TFT
+│   └── EspressoDolce18x24.c    # ฟอนต์หลัก 18x24 pixels
+│
+├── ili9341.py                  # [LIBRARY] TFT Display Driver
+└── xglcd_font.py               # [LIBRARY] Font Loading Library
 ```
 
 ### สถาปัตยกรรมแบบชั้น (Layered Architecture)
@@ -539,23 +545,14 @@ pH = slope_m * mV + intercept_b
 
 ### การตรวจจับจุดสมมูล (Equivalence Point Detection)
 
-ระบบใช้วิธี derivative เพื่อหาจุดสมมูล โดยแต่ละจุด (●) ห่างกัน 0.2 mL:
+ระบบใช้วิธี derivative เพื่อหาจุดสมมูล โดยแต่ละจุดห่างกัน 0.2 mL:
 
-```
-               pH                    แต่ละจุดห่างกัน 0.2 mL (constant dose)
-               │
-           14 ─┤                              ●────────
-               │                           ●/
-               │                         /●
-               │                       /●
-            7 ─┤    ─ ─ ─ ─ ─ ─ ─ ●● ←── จุดสมมูล (Equivalence Point)
-               │               /●             dpH/dV สูงสุด
-               │            /●                (pH เปลี่ยนมากที่สุดใน 0.2 mL)
-               │         ●/
-            0 ─┤────────●
-               └──────────────────────────────── Volume (mL)
-                    0.2  0.4  ...  Ve  ...        (เพิ่มทีละ 0.2 mL)
-```
+![Titration Curve Analysis - การวิเคราะห์เส้นโค้งไทเทรชัน](../../EquivPoint/data.png)
+
+**กราฟแสดง 3 ส่วน (3-Panel Plot):**
+1. **Titration Curve** - เส้นโค้งไทเทรชัน (pH vs Volume) พร้อม spline fit
+2. **First Derivative** - อนุพันธ์อันดับหนึ่ง (dpH/dV) จุดสูงสุดคือจุดสมมูล
+3. **Second Derivative** - อนุพันธ์อันดับสอง จุดตัดศูนย์ (zero crossing) คือจุดสมมูล
 
 **เนื่องจากใช้ constant dose volume (0.2 mL):**
 - `dpH/dV = (pH[i] - pH[i-1]) / 0.2` (ตัวหารคงที่ทุก step)
@@ -769,17 +766,19 @@ Step 6: บันทึกผลจากหน้าจอและดาวน
 
 ### ไฟล์ CSV บน ESP32 Flash Storage
 
-ไฟล์ CSV ที่บันทึกลง ESP32 มีคอลัมน์ (ปริมาตรเพิ่มขึ้นทีละ 0.2 mL ทุก cycle):
+ไฟล์ CSV ที่บันทึกลง ESP32 มีรูปแบบที่ใช้ได้กับ **EquivPoint** โดยตรง:
 ```
-Cycle,Time(s),Volume(mL),pH,Temperature(C)
-1,2.50,0.200,2.50,25.1
-2,5.00,0.400,2.55,25.1
-3,7.50,0.600,2.61,25.1
+Volume (mL),pH Value,Time(s),Temperature(C)
+0.200,2.50,2.50,25.1
+0.400,2.55,5.00,25.1
+0.600,2.61,7.50,25.1
 ...
 ```
 
-> **สังเกต**: ปริมาตรเพิ่มขึ้นคงที่ทีละ 0.200 mL ทุก cycle
-> นิสิตสามารถตรวจสอบได้ว่า `Volume = Cycle x 0.2 mL`
+> **สังเกต**:
+> - ปริมาตรเพิ่มขึ้นคงที่ทีละ 0.200 mL ทุก step
+> - รูปแบบไฟล์ใช้ได้กับ EquivPoint โดยไม่ต้องแปลงคอลัมน์
+> - Header ใช้ `Volume (mL)` และ `pH Value` ตามที่ EquivPoint ต้องการ
 
 > **วิธีดาวน์โหลดไฟล์ CSV จาก ESP32 ผ่าน Thonny IDE:**
 >
@@ -962,32 +961,20 @@ print(f"Files on ESP32: {files}")
    C:\Users\v_viw\Documents\Teaching\TitraLab\EquivPoint\
    ```
 
-#### Step 2: เตรียมไฟล์ CSV สำหรับ EquivPoint (Prepare CSV for EquivPoint)
+#### Step 2: ใช้ไฟล์ CSV ได้ทันที (CSV Ready to Use)
 
-EquivPoint ต้องการคอลัมน์ชื่อ `Volume (mL)` และ `pH Value`
+ไฟล์ CSV จาก TitraLab Week 3 **ใช้ได้กับ EquivPoint โดยตรง** ไม่ต้องแปลงรูปแบบ:
 
 **รูปแบบจาก TitraLab (ปริมาตรเพิ่มทีละ 0.2 mL):**
 ```csv
-Cycle,Time(s),Volume(mL),pH,Temperature(C)
-1,2.50,0.200,2.50,25.1
-2,5.00,0.400,2.55,25.1
-3,7.50,0.600,2.61,25.1
+Volume (mL),pH Value,Time(s),Temperature(C)
+0.200,2.50,2.50,25.1
+0.400,2.55,5.00,25.1
+0.600,2.61,7.50,25.1
 ```
 
-**รูปแบบที่ EquivPoint ต้องการ:**
-```csv
-Volume (mL),pH Value
-0.200,2.50
-0.400,2.55
-0.600,2.61
-```
-
-**วิธีแปลงไฟล์:**
-1. เปิดไฟล์ CSV ด้วย Excel หรือ Google Sheets
-2. ลบคอลัมน์ Cycle, Time(s), Temperature(C) ออก
-3. เปลี่ยนชื่อคอลัมน์ Volume(mL) เป็น `Volume (mL)` (เว้นวรรค)
-4. เปลี่ยนชื่อคอลัมน์ pH เป็น `pH Value`
-5. บันทึกเป็นไฟล์ CSV ใหม่
+> **หมายเหตุ:** EquivPoint อ่านคอลัมน์ `Volume (mL)` และ `pH Value` โดยอัตโนมัติ
+> คอลัมน์เพิ่มเติม (Time, Temperature) จะถูกข้ามไป
 
 ### EquivPoint คืออะไร? (What is EquivPoint?)
 
@@ -1039,23 +1026,15 @@ python equiv_point.py titration_data_R1.csv
 
 โปรแกรมจะแสดง 3 กราฟ:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Graph 1: Original Data and Spline Fit                          │
-│  กราฟ 1: ข้อมูลจริงและเส้นโค้ง Spline                            │
-│  - จุดสีน้ำเงิน = ข้อมูลที่วัดได้                                 │
-│  - เส้นสีส้ม = เส้นโค้ง Spline ที่ประมาณค่า                       │
-├─────────────────────────────────────────────────────────────────┤
-│  Graph 2: First Derivative (dpH/dV)                             │
-│  กราฟ 2: อนุพันธ์อันดับหนึ่ง                                      │
-│  - จุดสูงสุด = จุดสมมูล (Equivalence Point)                      │
-├─────────────────────────────────────────────────────────────────┤
-│  Graph 3: Second Derivative (d2pH/dV2) with Zero Crossings      │
-│  กราฟ 3: อนุพันธ์อันดับสองและจุดตัดศูนย์                          │
-│  - เส้นประสีแดง = จุดที่ค่าเปลี่ยนเครื่องหมาย (จุดสมมูล)          │
-│  - แสดงค่าปริมาตรที่จุดตัด เช่น "5.58 mL"                        │
-└─────────────────────────────────────────────────────────────────┘
-```
+![EquivPoint Analysis Output - ผลลัพธ์การวิเคราะห์](../../EquivPoint/data.png)
+
+**คำอธิบายกราฟ (Graph Description):**
+
+| กราฟ | ชื่อ | คำอธิบาย |
+|:----:|------|----------|
+| 1 | Titration Curve | ข้อมูลจริง (จุดสีน้ำเงิน) + Spline fit (เส้นสีส้ม) |
+| 2 | First Derivative | dpH/dV - จุดสูงสุด (★) คือจุดสมมูล |
+| 3 | Second Derivative | d²pH/dV² - เส้นประสีแดงคือ zero crossing (จุดสมมูล) |
 
 **ตัวอย่างผลลัพธ์ใน Console:**
 ```
@@ -1063,10 +1042,6 @@ Approximate volume at zero crossing: 5.58 mL
 ```
 
 ค่า 5.58 mL คือปริมาตรที่จุดสมมูล (Equivalence Point Volume)
-
-### ตัวอย่างผลลัพธ์ (Example Output)
-
-ดูตัวอย่างกราฟผลลัพธ์ได้ที่: `EquivPoint/data.png`
 
 ### เปรียบเทียบผลลัพธ์ (Compare Results)
 

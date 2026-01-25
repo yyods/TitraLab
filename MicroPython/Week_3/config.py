@@ -289,7 +289,7 @@ TFT_ROTATION = 90         # การหมุนจอ (Display rotation) - deg
 TFT_BAUDRATE = 40000000   # ความเร็ว SPI (SPI speed) - 40 MHz
 
 # ไฟล์ฟอนต์ (Font file)
-FONT_FILE = 'EspressoDolce18x24.c'
+FONT_FILE = 'fonts/EspressoDolce18x24.c'
 FONT_WIDTH = 18
 FONT_HEIGHT = 24
 

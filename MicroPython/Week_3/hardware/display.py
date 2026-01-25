@@ -97,7 +97,7 @@ class Display:
 
         Example:
             from xglcd_font import XglcdFont
-            font = XglcdFont('EspressoDolce18x24.c', 18, 24)
+            font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
             display = Display(rotation=90, font=font)
         """
         # ตั้งค่า SPI สำหรับจอ TFT (Setup SPI for TFT display)
@@ -376,7 +376,7 @@ if __name__ == '__main__':
     try:
         # โหลดฟอนต์ (Load font)
         from xglcd_font import XglcdFont
-        font = XglcdFont('EspressoDolce18x24.c', 18, 24)
+        font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
 
         # สร้างออบเจ็กต์ Display (Create Display object)
         display = Display(rotation=90, font=font)

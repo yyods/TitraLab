@@ -202,11 +202,27 @@ ESP32 Flash Memory:
 │   ├── titration.py
 │   ├── data_manager.py
 │   └── math_utils.py
+├── modes/               ← โหมดการทำงาน (Operating modes)
+│   ├── __init__.py
+│   ├── base_mode.py
+│   ├── mode_calibrate_ph.py
+│   ├── mode_calibrate_flow.py
+│   ├── mode_test_ph.py
+│   ├── mode_test_flow.py
+│   ├── mode_purge.py
+│   └── mode_titration.py
 ├── ui/                  ← User interface
 │   ├── __init__.py
 │   └── menu.py
-├── EspressoDolce18x24.c ← ฟอนต์สำหรับจอ TFT
-└── ili9341.py           ← Driver สำหรับจอ TFT
+├── async_support/       ← Async functions (optional)
+│   ├── __init__.py
+│   ├── scheduler.py
+│   ├── async_pump.py
+│   └── async_titration.py
+├── fonts/               ← ฟอนต์สำหรับจอ TFT (TFT fonts)
+│   └── EspressoDolce18x24.c
+├── ili9341.py           ← Driver สำหรับจอ TFT
+└── xglcd_font.py        ← Library สำหรับโหลดฟอนต์
 ```
 
 ### 3.3 การเริ่มโปรแกรม (Starting the Program)
@@ -643,21 +659,13 @@ python equiv_point.py titration_data_R1.csv --save
 
 EquivPoint แสดงกราฟ 3 ช่อง (3-panel plot):
 
-```
-+------------------------------------------+
-| Panel 1: Titration Curve (pH vs Volume)  |
-|  - เส้นโค้ง S-shape                       |
-|  - จุดแสดง equivalence point             |
-+------------------------------------------+
-| Panel 2: First Derivative (dpH/dV)       |
-|  - จุดสูงสุด = จุดสมมูล                    |
-|  - Maximum |dpH/dV|                      |
-+------------------------------------------+
-| Panel 3: Second Derivative (d2pH/dV2)    |
-|  - จุดตัดแกน x (zero crossing)            |
-|  - ยืนยันตำแหน่งจุดสมมูล                  |
-+------------------------------------------+
-```
+![EquivPoint Analysis - การวิเคราะห์จุดสมมูล](../../EquivPoint/data.png)
+
+| Panel | ชื่อ | คำอธิบาย |
+|:-----:|------|----------|
+| 1 | Titration Curve | เส้นโค้ง S-shape (pH vs Volume) + Spline fit |
+| 2 | First Derivative | dpH/dV - จุดสูงสุด (★) คือจุดสมมูล |
+| 3 | Second Derivative | d²pH/dV² - จุดตัดศูนย์ (zero crossing) ยืนยันจุดสมมูล |
 
 **ผลลัพธ์ใน Console:**
 ```
@@ -830,7 +838,7 @@ Last saved: 2025-03-15
 |-------|-------------------|--------|
 | จอไม่แสดงผล | ขา SPI ผิด | ขา TFT เป็น fixed pin ไม่ต้องต่อสาย |
 | จอขาวทั้งหมด | ไม่ได้ init | กดปุ่ม Reset บน ESP32 |
-| ฟอนต์ไม่แสดง | ไม่มีไฟล์ฟอนต์ | คัดลอก EspressoDolce18x24.c ไป ESP32 |
+| ฟอนต์ไม่แสดง | ไม่มีไฟล์ฟอนต์ | คัดลอก fonts/EspressoDolce18x24.c ไป ESP32 |
 | จอค้าง | โปรแกรม error | กด Ctrl+C แล้วรันใหม่ |
 
 ### 9.4 ปัญหาเกี่ยวกับไฟล์ข้อมูล (Data File Issues)
