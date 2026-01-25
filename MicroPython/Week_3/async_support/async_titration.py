@@ -45,7 +45,9 @@ class AsyncTitrationController:
     EQUIVALENCE_DERIVATIVE_RATIO = 0.5
 
     # CSV Header สำหรับบันทึกข้อมูล (CSV Header for data logging)
-    CSV_HEADERS = ['Cycle', 'Time(s)', 'Volume(mL)', 'pH', 'Temperature(C)']
+    # ชื่อคอลัมน์ตรงกับ EquivPoint analysis tool (Column names match EquivPoint)
+    # "Volume (mL)" และ "pH Value" เป็นคอลัมน์หลักที่ EquivPoint ต้องการ
+    CSV_HEADERS = ['Volume (mL)', 'pH Value', 'Cycle', 'Time(s)', 'Temperature(C)']
 
     def __init__(self, pump, ph_sensor, temp_sensor=None,
                  display=None, buzzer=None):
@@ -220,7 +222,7 @@ class AsyncTitrationController:
         # บันทึกลง ESP32 flash storage (Log to ESP32 flash storage)
         if self._current_filename:
             try:
-                data_row = f"{cycle},{elapsed_time:.2f},{volume:.3f},{ph:.3f},{temperature:.2f}\n"
+                data_row = f"{volume:.3f},{ph:.3f},{cycle},{elapsed_time:.2f},{temperature:.2f}\n"
                 with open(self._current_filename, 'a') as f:
                     f.write(data_row)
             except Exception as e:
@@ -485,9 +487,11 @@ class AsyncTitrationController:
                 f.write(','.join(self.CSV_HEADERS) + '\n')
 
                 # เขียนข้อมูลทั้งหมด (Write all data)
+                # ลำดับคอลัมน์: Volume, pH, Cycle, Time, Temperature
+                # Column order: Volume, pH, Cycle, Time, Temperature
                 for point in self.data_points:
-                    data_row = f"{point['cycle']},{point['time']:.2f},{point['volume']:.3f},"
-                    data_row += f"{point['ph']:.3f},{point['temperature']:.2f}\n"
+                    data_row = f"{point['volume']:.3f},{point['ph']:.3f},"
+                    data_row += f"{point['cycle']},{point['time']:.2f},{point['temperature']:.2f}\n"
                     f.write(data_row)
 
                 # เพิ่มบรรทัดสรุป (Add summary line)

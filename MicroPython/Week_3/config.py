@@ -199,6 +199,9 @@ FONT_HEIGHT = 24
 # Note: SD Card NOT USED - board is always connected to laptop via USB
 # ไฟล์ CSV บันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
 # CSV files are saved to ESP32 flash storage and downloaded via Thonny IDE
+# รูปแบบ CSV ตรงกับ EquivPoint analysis tool (ใช้ได้โดยตรงไม่ต้องแก้ไข)
+# CSV format matches EquivPoint tool (usable directly without modification)
+# Header: Volume (mL),pH Value,Time(s),Temperature(C)
 #
 # เก็บค่าไว้สำหรับอ้างอิงเท่านั้น (Kept for reference only):
 # SD_MISO = 19              # GPIO19 - SD Card MISO

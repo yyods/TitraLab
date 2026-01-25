@@ -18,10 +18,19 @@ Usage (วิธีใช้งาน):
         python equiv_point.py titration_data_R1.csv
 
 Input Format (รูปแบบข้อมูลนำเข้า):
-    CSV file with columns: "Volume (mL)", "pH Value"
-    ไฟล์ CSV ที่มีคอลัมน์: "Volume (mL)", "pH Value"
+    CSV file with required columns: "Volume (mL)", "pH Value"
+    ไฟล์ CSV ต้องมีคอลัมน์: "Volume (mL)", "pH Value"
+    (Extra columns like Time(s), Temperature(C) are ignored)
+    (คอลัมน์เพิ่มเติม เช่น Time(s), Temperature(C) จะถูกข้ามไป)
 
-    Example CSV content:
+    Compatible with TitraLab ESP32 output (titration_data_R*.csv):
+    รองรับไฟล์จากบอร์ด TitraLab ESP32 โดยตรง:
+    Volume (mL),pH Value,Time(s),Temperature(C)
+    0.000,1.188,0.00,25.10
+    0.200,1.215,12.50,25.12
+    ...
+
+    Minimal format (also works):
     Volume (mL),pH Value
     0.000,1.188
     0.200,1.215
@@ -99,8 +108,10 @@ def validate_csv_file(filepath):
         raise FileNotFoundError(f"File not found: {data_path}")
 
     # ลองโหลดไฟล์ CSV (Try to load CSV file)
+    # comment='#' ข้ามบรรทัดที่ขึ้นต้นด้วย # (เช่น summary จาก ESP32)
+    # comment='#' skips lines starting with # (e.g., summary from ESP32)
     try:
-        data = pd.read_csv(data_path)
+        data = pd.read_csv(data_path, comment='#')
     except pd.errors.EmptyDataError:
         print(f"\n{'='*60}")
         print("ข้อผิดพลาด: ไฟล์ CSV ว่างเปล่า (Error: CSV file is empty)")
@@ -135,6 +146,9 @@ def validate_csv_file(filepath):
         print("0.000,1.188")
         print("0.200,1.215")
         print("...")
+        print("\nหรือจาก TitraLab ESP32 (or from TitraLab ESP32):")
+        print("Volume (mL),pH Value,Time(s),Temperature(C)")
+        print("0.000,1.188,0.00,25.10")
         print(f"{'='*60}\n")
         raise ValueError(f"Missing required columns: {missing_columns}")
 
@@ -571,9 +585,14 @@ def print_usage():
     print("    0.000,1.188")
     print("    0.200,1.215")
     print("    ...")
+    print("\n    TitraLab ESP32 format (also supported / รองรับไฟล์จาก ESP32):")
+    print("    Volume (mL),pH Value,Time(s),Temperature(C)")
+    print("    0.000,1.188,0.00,25.10")
+    print("    0.200,1.215,12.50,25.12")
     print("\nNote / หมายเหตุ:")
     print("    - The CSV must have headers: 'Volume (mL)' and 'pH Value'")
     print("    - ไฟล์ CSV ต้องมีหัวคอลัมน์: 'Volume (mL)' และ 'pH Value'")
+    print("    - Extra columns are ignored (คอลัมน์เพิ่มเติมจะถูกข้ามไป)")
     print("="*70 + "\n")
 
 

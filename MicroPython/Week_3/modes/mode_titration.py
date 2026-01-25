@@ -807,16 +807,19 @@ class TitrationMode(BaseMode):
 
             # เขียนไฟล์ (Write file)
             with open(filepath, 'w') as f:
-                # Header
-                f.write("Time(s),Volume(mL),pH,Temperature(C)\n")
+                # Header - ใช้ชื่อคอลัมน์ที่ตรงกับ EquivPoint analysis tool
+                # Column names match EquivPoint tool: "Volume (mL)" and "pH Value"
+                f.write("Volume (mL),pH Value,Time(s),Temperature(C)\n")
 
-                # Data
+                # Data - Volume and pH first for EquivPoint compatibility
                 for timestamp, volume, ph, temp in self.data_log:
-                    f.write(f"{timestamp:.2f},{volume:.3f},{ph:.3f},{temp:.2f}\n")
+                    f.write(f"{volume:.3f},{ph:.3f},{timestamp:.2f},{temp:.2f}\n")
 
             print(f"บันทึกข้อมูล {len(self.data_log)} จุดลง {filepath}")
             print(f"Saved {len(self.data_log)} points to {filepath}")
             print(f"ดาวน์โหลดไฟล์ผ่าน Thonny IDE (Download via Thonny IDE)")
+            print(f"วิเคราะห์ด้วย: python equiv_point.py {filepath}")
+            print(f"Analyze with: python equiv_point.py {filepath}")
 
         except Exception as e:
             print(f"ข้อผิดพลาดการบันทึก (Save error): {e}")
