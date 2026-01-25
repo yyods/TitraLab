@@ -20,8 +20,9 @@ class CalibrationData:
 
     Context ทางเคมี:
     - slope และ intercept มาจากการ calibrate pH sensor
-    - สมการ: pH = slope * voltage + intercept
-    - slope ทฤษฎีที่ 25C = -59.16 mV/pH (ค่าลบเสมอ)
+    - สมการ: pH = slope * voltage(V) + intercept
+    - slope ทฤษฎีที่ 25C ≈ -16.9 pH/V (= 1000/(-59.16 mV/pH จาก Nernst))
+    - ค่าจริงจาก calibration อาจต่างจากค่าทฤษฎี
     - R-squared บอกความแม่นยำของ calibration (ค่ายิ่งใกล้ 1 ยิ่งดี)
 
     สิ่งที่ต้องทำ:

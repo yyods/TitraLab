@@ -138,8 +138,8 @@ class Pump:
 │                      pHSensor                             │
 ├───────────────────────────────────────────────────────────┤
 │  Private Attributes (ตัวแปรภายใน):                         │
-│  - _slope = -59.16                                        │
-│  - _intercept = 414.12                                    │
+│  - _slope = -5.79  (pH/V, จาก calibration)               │
+│  - _intercept = 16.77                                     │
 ├───────────────────────────────────────────────────────────┤
 │  @property (อ่านค่าได้):                                   │
 │  + slope --> return self._slope                           │
@@ -259,7 +259,7 @@ class Pump:
 ```python
 class PHSensor:
     def __init__(self):
-        self._slope = -59.16  # private attribute (convention)
+        self._slope = -5.79  # pH/V จาก calibration (private attribute)
 
     @property
     def slope(self):
@@ -269,10 +269,10 @@ class PHSensor:
     @slope.setter
     def slope(self, value):
         """Setter - กำหนดค่าพร้อม validation"""
-        if -100 < value < 0:
+        if -25 < value < 0:  # ช่วงที่เป็นไปได้สำหรับ pH/V
             self._slope = value
         else:
-            raise ValueError("Slope must be between -100 and 0")
+            raise ValueError("Slope must be between -25 and 0 (pH/V)")
 ```
 
 ---
