@@ -452,17 +452,20 @@ Week_3/
 | pH Sensor | 25 | `PH_PIN` | ADC | อ่านแรงดัน 0-3.3V |
 | DS18B20 Temperature | 16 | `DS18B20_PIN` | OneWire | ต้องใช้ pull-up 4.7K |
 | **ตัวกระตุ้น (Actuators)** |
-| Pump (ปั๊ม) | 21 | `PUMP_PIN` | PWM | ความถี่ 1000 Hz |
+| Pump (ปั๊ม) | 21 หรือ 22 | `PUMP_PIN` | PWM | ต่อ CONTROL_1 (21) หรือ CONTROL_2 (22) |
 | Buzzer | 26 | `BUZZER_PIN` | PWM | เสียงแจ้งเตือน |
 | **Potentiometers** |
 | POT1 | 32 | `POT1_PIN` | ADC | ปรับค่า |
 | POT2 | 33 | `POT2_PIN` | ADC | ปรับค่า |
 
-### ขา GPIO เสริม (Additional GPIO)
+### ขา GPIO สำหรับปั๊ม (Pump GPIO Options)
+
+นิสิตเลือกต่อปั๊มที่ CONTROL_1 หรือ CONTROL_2 บน DEVICES header แล้วตั้ง PUMP_PIN ให้ตรง:
 
 | อุปกรณ์ | GPIO | ค่าคงที่ใน config.py | หมายเหตุ |
 |---------|:----:|---------------------|----------|
-| Control 2 | 22 | `CONTROL_2` | ช่องควบคุมเสริม (ปั๊มตัวที่ 2) |
+| CONTROL_1 | 21 | `CONTROL_1_PIN` | ต่อปั๊มที่นี่ → PUMP_PIN = CONTROL_1_PIN |
+| CONTROL_2 | 22 | `CONTROL_2_PIN` | ต่อปั๊มที่นี่ → PUMP_PIN = CONTROL_2_PIN |
 | Relay | 17 | `RELAY_PIN` | รีเลย์ควบคุม |
 
 ### ขา TFT Display (SPI Bus 1)

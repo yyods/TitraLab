@@ -23,11 +23,16 @@ from time import ticks_us, ticks_diff, sleep_ms
 try:
     from config import (
         PUMP_PIN, PUMP_PWM_FREQ, PUMP_PWM_MAX_DUTY,
-        PUMP_PWM_MIN_DUTY, DEFAULT_FLOW_RATE_ML_PER_SEC
+        PUMP_PWM_MIN_DUTY, DEFAULT_FLOW_RATE_ML_PER_SEC,
+        CONTROL_1_PIN, CONTROL_2_PIN
     )
 except ImportError:
     # ค่าเริ่มต้นถ้าไม่พบ config (Default values if config not found)
-    PUMP_PIN = 21
+    # ปั๊มต่อที่ CONTROL_1 หรือ CONTROL_2 บน DEVICES header
+    # Pump connects to CONTROL_1 or CONTROL_2 on DEVICES header
+    CONTROL_1_PIN = 21  # GPIO21 - CONTROL_1
+    CONTROL_2_PIN = 22  # GPIO22 - CONTROL_2
+    PUMP_PIN = CONTROL_1_PIN  # ค่าเริ่มต้นใช้ CONTROL_1 (Default: CONTROL_1)
     PUMP_PWM_FREQ = 1000
     PUMP_PWM_MAX_DUTY = 1023
     PUMP_PWM_MIN_DUTY = 0
@@ -66,11 +71,15 @@ class Pump:
 
         Args:
             pin (int): หมายเลขขา GPIO สำหรับปั๊ม (GPIO pin number)
-                       ค่าเริ่มต้น: GPIO21
+                       ต่อปั๊มที่ CONTROL_1 → ใช้ GPIO21 (CONTROL_1_PIN)
+                       ต่อปั๊มที่ CONTROL_2 → ใช้ GPIO22 (CONTROL_2_PIN)
+                       Connect pump to CONTROL_1 → use GPIO21
+                       Connect pump to CONTROL_2 → use GPIO22
+                       ค่าเริ่มต้น: PUMP_PIN จาก config.py (default: GPIO21)
             freq (int): ความถี่ PWM (PWM frequency in Hz)
                         ค่าเริ่มต้น: 1000 Hz
             flow_rate (float): อัตราการไหลที่ 100% duty (mL/s at 100% duty)
-                               ค่าเริ่มต้น: 0.2772 mL/s
+                               ค่าเริ่มต้น: 0.2772 mL/s (4 ทศนิยม)
         """
         # กำหนดขา GPIO (Set GPIO pin)
         self._pin_number = pin if pin is not None else PUMP_PIN

@@ -137,7 +137,11 @@ PH_PIN = 25       # GPIO25 - หัววัด pH (ADC)
 DS18B20_PIN = 16  # GPIO16 - เซ็นเซอร์อุณหภูมิ (OneWire)
 
 # ปั๊มและเสียง (Pump & Buzzer) - ต้องการ PWM
-PUMP_PIN = 21     # GPIO21 - ปั๊มไทแทรนต์
+# ปั๊มต่อที่ CONTROL_1 หรือ CONTROL_2 บน DEVICES header
+# Pump connects to CONTROL_1 or CONTROL_2 on DEVICES header
+CONTROL_1_PIN = 21  # GPIO21 - CONTROL_1 on DEVICES
+CONTROL_2_PIN = 22  # GPIO22 - CONTROL_2 on DEVICES
+PUMP_PIN = CONTROL_1_PIN  # เปลี่ยนเป็น CONTROL_2_PIN ถ้าต่อที่ CONTROL_2
 BUZZER_PIN = 26   # GPIO26 - Buzzer
 ```
 
@@ -151,7 +155,8 @@ BUZZER_PIN = 26   # GPIO26 - Buzzer
   pH Probe --------| ADC pin (25)     |
   (BNC Connector)  |                  |
                     |                  |--------- ปั๊ม (Pump)
-  DS18B20 ---------| GPIO16           |           PWM pin (21)
+  DS18B20 ---------| GPIO16           |           PWM: CONTROL_1 (21)
+                    |                  |           หรือ CONTROL_2 (22)
   (อุณหภูมิ)        |                  |
                     |                  |--------- Buzzer
   ปุ่ม 3 ปุ่ม ------| GPIO34,35,39     |           PWM pin (26)
@@ -811,8 +816,9 @@ Last saved: 2025-03-15
 
 | ปัญหา | สาเหตุที่เป็นไปได้ | วิธีแก้ |
 |-------|-------------------|--------|
-| ปั๊มไม่ทำงาน | สายจัมเปอร์หลวม | ตรวจ GPIO→CONTROL_1 บน DEVICES |
-| ปั๊มไม่ทำงาน | ใช้ input-only pin | เปลี่ยนเป็น GPIO ที่รองรับ output |
+| ปั๊มไม่ทำงาน | สายจัมเปอร์หลวม | ตรวจ GPIO→CONTROL_1 หรือ CONTROL_2 |
+| ปั๊มไม่ทำงาน | PUMP_PIN ไม่ตรงกับสาย | ถ้าต่อ CONTROL_2 ต้องใช้ GPIO22 ใน config.py |
+| ปั๊มไม่ทำงาน | ใช้ input-only pin | เปลี่ยนเป็น GPIO21 หรือ GPIO22 |
 | ปริมาตรไม่ตรง | ท่ออุดตัน | เปลี่ยนท่อหรือล้างด้วย Mode 5 |
 | ปริมาตรไม่ตรง | ฟองอากาศในท่อ | ใช้ Mode 5: Purge ไล่ฟอง |
 | ปริมาตรไม่ตรง | Flow rate ผิด | สอบเทียบใหม่ด้วย Mode 3 |

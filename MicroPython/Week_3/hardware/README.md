@@ -38,7 +38,9 @@ hardware/
 
 ### pump.py - คลาสควบคุมปั๊ม (Pump Control Class)
 
-**GPIO**: 21 (PWM Output)
+**GPIO**: CONTROL_1 (GPIO21) หรือ CONTROL_2 (GPIO22) - PWM Output
+
+นิสิตเลือกต่อปั๊มที่ CONTROL_1 หรือ CONTROL_2 บน DEVICES header แล้วตั้ง `PUMP_PIN` ใน config.py ให้ตรง
 
 **หน้าที่**: ควบคุมปั๊มเพอริสตาลติกสำหรับหยดสารไทแทรนต์ (titrant)
 
@@ -48,7 +50,12 @@ hardware/
 # ตัวอย่างการใช้งาน (Usage Example)
 from hardware.pump import Pump
 
+# ถ้าต่อปั๊มที่ CONTROL_1 → ใช้ค่าเริ่มต้น (GPIO21)
 pump = Pump()
+
+# ถ้าต่อปั๊มที่ CONTROL_2 → ระบุ pin=22 หรือแก้ config.py
+# pump = Pump(pin=22)
+
 pump.start(duty_percent=100)    # เริ่มปั๊มที่ 100% (ใช้ 100% เสมอสำหรับการไทเทรต)
 result = pump.stop()            # หยุดและรับข้อมูลเวลา/ปริมาตร
 pump.run_for_volume(0.2)        # สูบ 0.2 mL (1 dose) แล้วหยุดอัตโนมัติ

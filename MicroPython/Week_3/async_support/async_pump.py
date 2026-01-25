@@ -15,7 +15,8 @@
 # - ตอบสนองปุ่มกดได้แม้ระหว่างทำงาน (Responsive to buttons during operation)
 #
 # Hardware Configuration:
-# - Pump: GPIO21 (PWM)
+# - Pump: CONTROL_1 (GPIO21) หรือ CONTROL_2 (GPIO22) - PWM
+# - นิสิตเลือกต่อปั๊มที่ CONTROL_1 หรือ CONTROL_2 แล้วตั้ง PUMP_PIN ใน config.py
 # ==============================================================================
 
 import uasyncio as asyncio

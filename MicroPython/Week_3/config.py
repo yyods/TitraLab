@@ -14,27 +14,85 @@
 #
 # เวอร์ชัน (Version): 2.0.0 (OOP Refactored)
 # ==============================================================================
+#
+# ⚠️ หลักการออกแบบบอร์ด TitraLab: GPIO และ DEVICES แยกกัน!
+# ⚠️ TitraLab Board Design: GPIO and DEVICES headers are SEPARATE!
+#
+# บอร์ดมี 2 แถว header ที่แยกกัน (Board has 2 separate headers):
+#
+#   GPIO Header (ซ้าย/Left):          DEVICES Header (ขวา/Right):
+#   ┌─────────────────────────┐       ┌─────────────────────────────┐
+#   │ IO26 IO12 IO2  IO4  ... │       │ RED  GREEN  BUZZER  ...     │
+#   │ IO25 IO33 IO32 IO35*... │       │ BUTTON_1 BUTTON_2 BUTTON_3  │
+#   │      (* = Input Only)   │       │ DS18B20  PH_PROBE  POT_1    │
+#   └─────────────────────────┘       │ CONTROL_1  CONTROL_2  ...   │
+#                                     └─────────────────────────────┘
+#
+# นิสิตต้องต่อสายจัมเปอร์เองจาก GPIO → DEVICES
+# Students must connect jumper wires from GPIO → DEVICES
+#
+# ตัวอย่าง: ต้องการใช้ LED แดง
+# Example: Want to use RED LED
+#   1. เลือก GPIO ที่รองรับ OUTPUT (ไม่ใช่ input-only 34,35,36,39)
+#   2. ต่อสายจัมเปอร์ เช่น GPIO2 → RED บน DEVICES header
+#   3. ตั้งค่าในโค้ด: LED_RED = 2
+#
+# ข้อดี: นิสิตเรียนรู้การเลือก GPIO ที่เหมาะสมกับอุปกรณ์แต่ละชนิด
+# Benefit: Students learn to select appropriate GPIO for each device type
+#
+# ==============================================================================
+# ขา GPIO ที่กำหนดตายตัวบน PCB (Fixed GPIO - Hardwired on PCB)
+# ==============================================================================
+# เฉพาะ TFT Display และ SD Card เท่านั้นที่ต่อตายตัวบน PCB
+# Only TFT Display and SD Card are hardwired on PCB
+# (ดู Section: TFT Display GPIO และ SD Card GPIO ด้านล่าง)
+#
+# ==============================================================================
+# ⬇️ ขา GPIO ที่นิสิตกำหนดเอง (Student-Assigned GPIO) ⬇️
+# ==============================================================================
+# ค่าด้านล่างเป็น "ค่าแนะนำ" - นิสิตสามารถเปลี่ยนได้ตามการต่อสายจัมเปอร์
+# Values below are "recommended defaults" - students can change based on wiring
+#
+# กฎการเลือก GPIO (GPIO Selection Rules):
+#   - LED, Buzzer, Pump: ต้องใช้ GPIO ที่รองรับ OUTPUT (ไม่ใช่ 34,35,36,39)
+#   - Button: ใช้ GPIO ใดก็ได้ (แนะนำ input-only 34,35,39 เพราะเหลือ output ให้อื่น)
+#   - pH Sensor: ต้องใช้ GPIO ที่รองรับ ADC (25,32,33,34,35,36,39)
+#   - DS18B20: ต้องใช้ GPIO ที่รองรับ digital I/O (ไม่ใช่ input-only)
+#   - Pump: ต้องใช้ GPIO ที่รองรับ PWM (ไม่ใช่ input-only 34,35,36,39)
+# ==============================================================================
 
 # ==============================================================================
 # ขา GPIO สำหรับ LED แสดงสถานะ (Status LED GPIO Pins)
 # ==============================================================================
-# ใช้สำหรับแสดงสถานะการทำงานของระบบ (Used for system status indication)
-LED_RED = 2      # GPIO2  - LED สีแดง แสดงข้อผิดพลาด (Red LED for errors)
-LED_GREEN = 4    # GPIO4  - LED สีเขียว แสดงสถานะปกติ (Green LED for normal status)
+# DEVICES Header: RED, GREEN
+# ต้องการ: OUTPUT capability (ห้ามใช้ GPIO 34,35,36,39)
+# Required: OUTPUT capability (cannot use GPIO 34,35,36,39)
+LED_RED = 2      # GPIO2  → ต่อกับ RED บน DEVICES (connect to RED on DEVICES)
+LED_GREEN = 4    # GPIO4  → ต่อกับ GREEN บน DEVICES (connect to GREEN on DEVICES)
 
 # ==============================================================================
 # ขา GPIO สำหรับปุ่มกด (Button GPIO Pins)
 # ==============================================================================
+# DEVICES Header: BUTTON_1, BUTTON_2, BUTTON_3
+# ต้องการ: INPUT capability (GPIO ใดก็ได้ - แนะนำ input-only pins)
+# Required: INPUT capability (any GPIO works - recommend input-only pins)
+#
 # หมายเหตุสำคัญ: GPIO34, 35, 39 เป็น input-only pins
 # ไม่รองรับ internal pull-up/pull-down resistors
-# ต้องใช้ external pull-down resistor (10K ohm)
+# ต้องใช้ external pull-down resistor (มีบนบอร์ดแล้ว)
 #
 # IMPORTANT: GPIO34, 35, 39 are input-only pins
 # They do NOT support internal pull-up/pull-down resistors
-# Must use external pull-down resistor (10K ohm)
-BUTTON_1 = 34    # GPIO34 - ปุ่ม 1: เลือก/ยืนยัน (Select/Confirm)
-BUTTON_2 = 35    # GPIO35 - ปุ่ม 2: เลื่อนเมนู (Navigate menu)
-BUTTON_3 = 39    # GPIO39 - ปุ่ม 3: ย้อนกลับ (กดค้าง 3 วินาที) (Back - hold 3 sec)
+# Must use external pull-down resistor (already on board)
+#
+# ค่าแนะนำ (Recommended): input-only pins เพราะเหลือ output pins ให้อุปกรณ์อื่น
+# input-only pins are recommended because it saves output pins for other devices
+#
+# ตัวอย่าง: ต่อ GPIO34 → BUTTON_1, GPIO35 → BUTTON_2, GPIO39 → BUTTON_3
+# Example: Connect GPIO34 → BUTTON_1, GPIO35 → BUTTON_2, GPIO39 → BUTTON_3
+BUTTON_1 = 34    # GPIO34 → BUTTON_1 บน DEVICES (input-only, เลือก/Select)
+BUTTON_2 = 35    # GPIO35 → BUTTON_2 บน DEVICES (input-only, เลื่อน/Navigate)
+BUTTON_3 = 39    # GPIO39 → BUTTON_3 บน DEVICES (input-only, ออก/Exit 3s hold)
 
 # ค่า debounce สำหรับปุ่มกด (Button debounce value)
 BUTTON_DEBOUNCE_MS = 200  # มิลลิวินาที (milliseconds)
@@ -42,9 +100,16 @@ BUTTON_DEBOUNCE_MS = 200  # มิลลิวินาที (milliseconds)
 # ==============================================================================
 # ขา GPIO สำหรับเซ็นเซอร์อุณหภูมิ DS18B20 (Temperature Sensor GPIO)
 # ==============================================================================
+# DEVICES Header: DS18B20
+# ต้องการ: Digital I/O capability (ห้ามใช้ input-only GPIO 34,35,36,39)
+# Required: Digital I/O capability (cannot use input-only GPIO 34,35,36,39)
+#
 # เซ็นเซอร์อุณหภูมิใช้โปรโตคอล OneWire
 # Temperature sensor uses OneWire protocol
-DS18B20_PIN = 16  # GPIO16 - เซ็นเซอร์อุณหภูมิ DS18B20 (Temperature sensor)
+#
+# ตัวอย่าง: ต่อสาย GPIO16 → DS18B20 บน DEVICES header
+# Example: Connect GPIO16 → DS18B20 on DEVICES header
+DS18B20_PIN = 16  # GPIO16 → DS18B20 บน DEVICES (OneWire protocol)
 
 # ค่าคงที่สำหรับการอ่านอุณหภูมิ (Temperature reading constants)
 TEMP_CONVERSION_DELAY_MS = 750  # เวลารอการแปลงค่า (Conversion wait time)
@@ -53,9 +118,21 @@ TEMP_DEFAULT_VALUE = 25.0       # ค่าเริ่มต้นเมื่�
 # ==============================================================================
 # ขา GPIO สำหรับเซ็นเซอร์ pH (pH Sensor GPIO)
 # ==============================================================================
+# DEVICES Header: PH_PROBE (also called PH_METER)
+# ต้องการ: ADC capability (เฉพาะ GPIO 25,32,33,34,35,36,39)
+# Required: ADC capability (only GPIO 25,32,33,34,35,36,39)
+#
 # เซ็นเซอร์ pH ใช้ ADC สำหรับอ่านค่าแรงดันไฟฟ้า
 # pH sensor uses ADC to read voltage
-PH_PIN = 25      # GPIO25 - เซ็นเซอร์ pH (pH sensor ADC input)
+#
+# คำแนะนำ ADC (ADC recommendations):
+#   ADC1 (GPIO 32,33,34,35,36,39): ใช้งานได้พร้อม WiFi (works with WiFi)
+#   ADC2 (GPIO 25,26,27): ขัดแย้งกับ WiFi (conflicts with WiFi)
+#   ถ้าไม่ใช้ WiFi → GPIO25 ก็ใช้ได้ (If no WiFi → GPIO25 works fine)
+#
+# ตัวอย่าง: ต่อสาย GPIO25 → PH_PROBE บน DEVICES header
+# Example: Connect GPIO25 → PH_PROBE on DEVICES header
+PH_PIN = 25      # GPIO25 → PH_PROBE บน DEVICES (ADC input)
 
 # ค่าคงที่สำหรับ ADC (ADC Constants)
 ADC_MAX_VALUE = 4095        # ค่า ADC สูงสุด 12-bit (Maximum 12-bit ADC value)
@@ -108,8 +185,15 @@ NERNST_THEORETICAL_SLOPE = -59.16  # mV/pH ที่ 25 C (mV/pH at 25 C)
 # ==============================================================================
 # ขา GPIO สำหรับ Buzzer (Buzzer GPIO)
 # ==============================================================================
+# DEVICES Header: BUZZER
+# ต้องการ: PWM capability (ห้ามใช้ input-only GPIO 34,35,36,39)
+# Required: PWM capability (cannot use input-only GPIO 34,35,36,39)
+#
 # Buzzer ใช้ PWM สำหรับสร้างเสียง (Buzzer uses PWM for sound generation)
-BUZZER_PIN = 26  # GPIO26 - Buzzer (PWM output)
+#
+# ตัวอย่าง: ต่อสาย GPIO26 → BUZZER บน DEVICES header
+# Example: Connect GPIO26 → BUZZER on DEVICES header
+BUZZER_PIN = 26  # GPIO26 → BUZZER บน DEVICES (PWM output)
 
 # ความถี่เสียงสำหรับ Buzzer (Buzzer sound frequencies)
 BUZZER_FREQ_LOW = 1000     # เสียงต่ำ (Low tone) - Hz
@@ -122,7 +206,24 @@ BUZZER_DUTY_OFF = 0        # Duty cycle เมื่อปิดเสียง 
 # ขา GPIO สำหรับปั๊ม (Pump GPIO)
 # ==============================================================================
 # ปั๊มใช้ PWM สำหรับควบคุมความเร็ว (Pump uses PWM for speed control)
-PUMP_PIN = 21    # GPIO21 - ปั๊มไทแทรนต์ (Titrant pump PWM output)
+#
+# DEVICES Header มี 2 ช่องสำหรับต่อปั๊ม (2 pump connection options):
+#   CONTROL_1 (Pin 15) → ต่อสายจัมเปอร์จาก GPIO21
+#   CONTROL_2 (Pin 13) → ต่อสายจัมเปอร์จาก GPIO22
+#
+# นิสิตเลือกต่อปั๊มที่ CONTROL_1 หรือ CONTROL_2 แล้วตั้งค่า PUMP_PIN ให้ตรงกัน
+# Students connect pump to CONTROL_1 or CONTROL_2, then set PUMP_PIN accordingly
+#
+# ตัวอย่าง (Examples):
+#   ถ้าต่อปั๊มที่ CONTROL_1 → PUMP_PIN = 21 (GPIO21)
+#   ถ้าต่อปั๊มที่ CONTROL_2 → PUMP_PIN = 22 (GPIO22)
+#
+CONTROL_1_PIN = 21  # GPIO21 - CONTROL_1 on DEVICES header
+CONTROL_2_PIN = 22  # GPIO22 - CONTROL_2 on DEVICES header
+
+# ===== ตั้งค่าตาม jumper wire ที่ต่อ (Set according to your wiring) =====
+PUMP_PIN = CONTROL_1_PIN  # เปลี่ยนเป็น CONTROL_2_PIN ถ้าต่อที่ CONTROL_2
+                          # Change to CONTROL_2_PIN if connected to CONTROL_2
 
 # ค่าคงที่สำหรับ PWM ของปั๊ม (Pump PWM Constants)
 PUMP_PWM_FREQ = 1000       # ความถี่ PWM (PWM frequency) - Hz
@@ -213,17 +314,32 @@ FONT_HEIGHT = 24
 # ==============================================================================
 # ขา GPIO เพิ่มเติม: Potentiometers (Additional GPIO: Potentiometers)
 # ==============================================================================
+# DEVICES Header: POT_1, POT_2
+# ต้องการ: ADC capability (เฉพาะ GPIO 25,32,33,34,35,36,39)
+# Required: ADC capability (only GPIO 25,32,33,34,35,36,39)
+#
 # Potentiometers สำหรับปรับค่า (Potentiometers for value adjustment)
-POT1_PIN = 32             # GPIO32 - Potentiometer 1
-POT2_PIN = 33             # GPIO33 - Potentiometer 2
+#
+# ตัวอย่าง: ต่อสาย GPIO32 → POT_1, GPIO33 → POT_2 บน DEVICES header
+# Example: Connect GPIO32 → POT_1, GPIO33 → POT_2 on DEVICES header
+POT1_PIN = 32             # GPIO32 → POT_1 บน DEVICES (ADC input)
+POT2_PIN = 33             # GPIO33 → POT_2 บน DEVICES (ADC input)
 
 # ==============================================================================
 # ขา GPIO เพิ่มเติม: อุปกรณ์ควบคุมเสริม (Additional GPIO: Secondary Controls)
 # ==============================================================================
-# ช่องควบคุมเสริมสำหรับปั๊มตัวที่ 2 หรืออุปกรณ์อื่น
-# Secondary control channels for additional pump or equipment
-CONTROL_2 = 22            # GPIO22 - ช่องควบคุมเสริม (Secondary control output)
-RELAY_PIN = 17            # GPIO17 - รีเลย์ (Relay control output)
+# หมายเหตุ: CONTROL_1_PIN และ CONTROL_2_PIN ถูกกำหนดในส่วนปั๊มด้านบน
+# Note: CONTROL_1_PIN and CONTROL_2_PIN are defined in pump section above
+# ใช้สำหรับปั๊มหลัก หรืออุปกรณ์เสริมอื่น
+# Used for main pump or additional equipment
+#
+# DEVICES Header: RELAY
+# ต้องการ: Digital OUTPUT capability (ห้ามใช้ input-only GPIO 34,35,36,39)
+# Required: Digital OUTPUT capability (cannot use input-only GPIO 34,35,36,39)
+#
+# ตัวอย่าง: ต่อสาย GPIO17 → RELAY บน DEVICES header
+# Example: Connect GPIO17 → RELAY on DEVICES header
+RELAY_PIN = 17            # GPIO17 → RELAY บน DEVICES (Digital output)
 
 # ==============================================================================
 # ชื่อไฟล์สำหรับบันทึกข้อมูล (Data File Names)
@@ -291,7 +407,8 @@ def validate_pins():
         # SD Card pins removed - ไม่ใช้งาน (not used)
         'POT1_PIN': POT1_PIN,
         'POT2_PIN': POT2_PIN,
-        'CONTROL_2': CONTROL_2,
+        'CONTROL_1_PIN': CONTROL_1_PIN,
+        'CONTROL_2_PIN': CONTROL_2_PIN,
         'RELAY_PIN': RELAY_PIN,
     }
 
@@ -325,10 +442,10 @@ if __name__ == "__main__":
         print(f"DS18B20: GPIO{DS18B20_PIN}")
         print(f"pH Sensor: GPIO{PH_PIN}")
         print(f"Buzzer: GPIO{BUZZER_PIN}")
-        print(f"Pump: GPIO{PUMP_PIN}")
+        print(f"Pump: GPIO{PUMP_PIN} (CONTROL_1={CONTROL_1_PIN}, CONTROL_2={CONTROL_2_PIN})")
         print(f"TFT: SCK={TFT_SCK}, MOSI={TFT_MOSI}, DC={TFT_DC}, CS={TFT_CS}, RST={TFT_RST}")
         print("SD Card: ไม่ใช้งาน (NOT USED) - ไฟล์บันทึกใน ESP32 flash")
         print(f"Potentiometers: POT1={POT1_PIN}, POT2={POT2_PIN}")
-        print(f"Additional: CONTROL_2={CONTROL_2}, RELAY={RELAY_PIN}")
+        print(f"Additional: RELAY={RELAY_PIN}")
     except ValueError as e:
         print(e)
