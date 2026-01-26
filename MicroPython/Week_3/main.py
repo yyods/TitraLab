@@ -47,21 +47,25 @@ from ui.menu import MenuSystem
 # Hardware Hub - ศูนย์รวม Hardware ทั้งหมด
 # ==============================================================================
 class HardwareHub:
-    """
-    ศูนย์รวมการจัดการ Hardware ทั้งหมด
-    Central hub for all hardware management
-    """
+    """ศูนย์รวม Hardware (Central hardware hub)"""
 
     def __init__(self):
         """สร้าง Hardware Hub (Create Hardware Hub)"""
-        # สร้าง hardware objects (Create hardware objects)
-        self.display = DisplayManager()
+        # เก็บกวาดหน่วยความจำก่อนสร้าง hardware (GC before creating hardware)
+        gc.collect()
+
+        # สร้าง hardware objects ที่ใช้หน่วยความจำน้อยก่อน
+        # Create low-memory objects first
         self.buttons = ButtonManager()
         self.pump = Pump()
-        self.ph_sensor = PHSensor()
-        self.temp_sensor = TemperatureSensor()
         self.buzzer = Buzzer()
         self.leds = LEDManager()
+        self.ph_sensor = PHSensor()
+        self.temp_sensor = TemperatureSensor()
+
+        # เก็บกวาดหน่วยความจำก่อนสร้าง display (GC before display - needs most RAM)
+        gc.collect()
+        self.display = DisplayManager()
 
     def init_all(self):
         """
@@ -145,13 +149,14 @@ class HardwareHub:
 
 
 # ==============================================================================
-# Main Application - แอปพลิเคชันหลัก
+# Main Application
 # ==============================================================================
 def main():
-    """
-    ฟังก์ชันหลักของโปรแกรม
-    Main function of the program
-    """
+    """Main function"""
+    # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
+    gc.collect()
+    print(f"Free memory: {gc.mem_free()} bytes")
+
     # สร้าง Hardware Hub (Create Hardware Hub)
     hardware = HardwareHub()
 

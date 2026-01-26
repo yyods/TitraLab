@@ -226,12 +226,19 @@ class DataManager:
     # Flow Rate Data
     # ===========================================================================
 
-    def save_flow_rate(self, flow_rate):
+    def save_flow_rate(self, flow_rate, calibration_data=None, stats=None, duty_percent=100):
         """
         บันทึกข้อมูลอัตราการไหล (Save flow rate data)
 
+        รองรับ 2 รูปแบบ (Supports 2 formats):
+        1. Simple: flow_rate เพียงค่าเดียว (single flow_rate value)
+        2. Extended: รวมข้อมูลการวัดแต่ละครั้งและสถิติ (with individual measurements and stats)
+
         Args:
-            flow_rate (float): อัตราการไหล mL/s
+            flow_rate (float): อัตราการไหลเฉลี่ย mL/s (average flow rate)
+            calibration_data (list): รายการ [(time, volume, flow_rate), ...] (optional)
+            stats (dict): สถิติ {avg_flow_rate, std_dev, rsd_percent, count} (optional)
+            duty_percent (int): Duty cycle ที่ใช้สอบเทียบ (default 100%)
 
         Returns:
             bool: True ถ้าบันทึกสำเร็จ
@@ -240,11 +247,43 @@ class DataManager:
             current_date = self._get_current_date()
 
             with open(self._flowrate_file, "w") as f:
-                f.write(f"{flow_rate}\n")
-                f.write(f"Last saved: {current_date}\n")
+                # Header comments
+                f.write("# TitraLab Pump Flow Rate Calibration Data\n")
+                f.write("# ข้อมูลการสอบเทียบอัตราการไหลของปั๊ม\n")
+
+                if calibration_data and len(calibration_data) > 0:
+                    # Extended format: รวมข้อมูลการวัดแต่ละครั้ง
+                    f.write(f"# จำนวนข้อมูล (Data points): {len(calibration_data)}\n")
+                    f.write(f"# Duty Cycle: {duty_percent}%\n")
+                    f.write(f"# Date: {current_date}\n")
+                    f.write("#\n")
+                    f.write("# รายละเอียดการวัดแต่ละครั้ง (Individual measurements):\n")
+                    f.write("# Time(s), Volume(mL), FlowRate(mL/s)\n")
+                    for i, (t, v, fr) in enumerate(calibration_data, 1):
+                        f.write(f"# {i}: {t:.3f}, {v:.2f}, {fr:.4f}\n")
+                    f.write("#\n")
+
+                    # Statistics
+                    if stats:
+                        f.write(f"# Average: {stats['avg_flow_rate']:.4f} mL/s\n")
+                        if stats['count'] >= 2:
+                            f.write(f"# Std Dev: {stats['std_dev']:.4f} mL/s\n")
+                            f.write(f"# RSD: {stats['rsd_percent']:.2f}%\n")
+                    f.write("#\n")
+                else:
+                    # Simple format: ค่าเดียว (single value)
+                    f.write(f"# Date: {current_date}\n")
+                    f.write("#\n")
+
+                # ค่า flow_rate หลักสำหรับใช้งาน (Main flow_rate value for use)
+                f.write(f"flow_rate={flow_rate:.4f}\n")
 
             print(f"บันทึกข้อมูลอัตราการไหลสำเร็จ (Flow rate saved)")
             print(f"  flow_rate={flow_rate:.4f} mL/s")
+            if calibration_data:
+                print(f"  Data points: {len(calibration_data)}")
+            if stats and stats['count'] >= 2:
+                print(f"  RSD: {stats['rsd_percent']:.2f}%")
             print(f"  Date: {current_date}")
             return True
 
@@ -255,6 +294,10 @@ class DataManager:
     def load_flow_rate(self):
         """
         โหลดข้อมูลอัตราการไหล (Load flow rate data)
+
+        รองรับทั้งรูปแบบเก่าและใหม่ (Supports both old and new formats):
+        - Old format: flow_rate value on first line
+        - New format: flow_rate=value line
 
         Returns:
             tuple: (flow_rate, last_saved_date)
@@ -269,20 +312,43 @@ class DataManager:
             with open(self._flowrate_file, "r") as f:
                 lines = f.readlines()
 
-            flow_rate = float(lines[0].strip())
-
-            # อ่านวันที่ (Read date)
+            flow_rate = None
             last_saved = None
-            if len(lines) > 1:
-                date_line = lines[1].strip()
-                if date_line.startswith("Last saved:"):
-                    last_saved = date_line.replace("Last saved:", "").strip()
 
-            print(f"โหลดข้อมูลอัตราการไหลสำเร็จ (Flow rate loaded)")
-            print(f"  flow_rate={flow_rate:.4f} mL/s")
-            print(f"  Date: {last_saved or 'N/A'}")
+            for line in lines:
+                stripped = line.strip()
 
-            return flow_rate, last_saved
+                # ข้ามบรรทัดว่าง (Skip empty lines)
+                if not stripped:
+                    continue
+
+                # หา flow_rate=value (New format)
+                if stripped.startswith("flow_rate="):
+                    flow_rate = float(stripped.replace("flow_rate=", ""))
+
+                # หาวันที่ (Find date)
+                elif stripped.startswith("# Date:"):
+                    last_saved = stripped.replace("# Date:", "").strip()
+
+                # รองรับ format เก่า "Last saved:" (Support old format)
+                elif stripped.startswith("Last saved:"):
+                    last_saved = stripped.replace("Last saved:", "").strip()
+
+                # รองรับ format เก่ามากๆ ที่มีตัวเลขบรรทัดแรก (Support very old format)
+                elif flow_rate is None and not stripped.startswith("#"):
+                    try:
+                        flow_rate = float(stripped)
+                    except ValueError:
+                        pass
+
+            if flow_rate is not None:
+                print(f"โหลดข้อมูลอัตราการไหลสำเร็จ (Flow rate loaded)")
+                print(f"  flow_rate={flow_rate:.4f} mL/s")
+                print(f"  Date: {last_saved or 'N/A'}")
+                return flow_rate, last_saved
+            else:
+                print("ไม่พบค่า flow_rate ในไฟล์ (No flow_rate found in file)")
+                return None, None
 
         except Exception as e:
             print(f"ข้อผิดพลาดโหลดข้อมูล (Error loading data): {e}")
@@ -455,44 +521,3 @@ class DataManager:
         ph_ok = "OK" if self.has_ph_calibration() else "--"
         flow_ok = "OK" if self.has_flow_rate() else "--"
         return f"DataManager(pH={ph_ok}, flow={flow_ok})"
-
-
-# ==============================================================================
-# ตัวอย่างการใช้งาน (Usage Example)
-# ==============================================================================
-if __name__ == "__main__":
-    print("=" * 50)
-    print("ทดสอบ DataManager (Testing DataManager)")
-    print("=" * 50)
-
-    # สร้าง DataManager
-    dm = DataManager()
-
-    # แสดงสถานะปัจจุบัน
-    dm.print_calibration_status()
-
-    # ทดสอบบันทึก pH calibration (direct-use form: pH = slope_m * mV + intercept_b)
-    print("\n--- ทดสอบบันทึก pH Calibration ---")
-    dm.save_ph_calibration(slope_m=-0.016911, intercept_b=34.98,
-                           r_squared=0.9995, cal_temp=25.2)
-
-    # ทดสอบโหลด pH calibration
-    print("\n--- ทดสอบโหลด pH Calibration ---")
-    slope_m, intercept_b, r_squared, cal_temp = dm.load_ph_calibration()
-
-    # ทดสอบบันทึก flow rate
-    print("\n--- ทดสอบบันทึก Flow Rate ---")
-    dm.save_flow_rate(0.2772)
-
-    # ทดสอบโหลด flow rate
-    print("\n--- ทดสอบโหลด Flow Rate ---")
-    flow_rate, date = dm.load_flow_rate()
-
-    # แสดงสถานะหลังบันทึก
-    dm.print_calibration_status()
-
-    # ทดสอบสำรองข้อมูล
-    print("\n--- ทดสอบสำรองข้อมูล ---")
-    dm.backup_calibration_data()
-
-    print("\nเสร็จสิ้น (Done)")

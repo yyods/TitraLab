@@ -1,24 +1,8 @@
 # ==============================================================================
-# calibrator.py - คลาสสอบเทียบสำหรับ TitraLab
-# (Calibrator Class for TitraLab)
+# calibrator.py - Calibrator Class for TitraLab
 # ==============================================================================
-# โมดูลนี้จัดการการสอบเทียบเซ็นเซอร์ pH และอัตราการไหลของปั๊ม
-# This module handles pH sensor and pump flow rate calibration
-#
-# วัตถุประสงค์การเรียนรู้ (Learning Objectives):
-#   1. เข้าใจขั้นตอนการสอบเทียบ pH sensor แบบ 3 จุด
-#   2. เรียนรู้การคำนวณอัตราการไหลจากเวลาและปริมาตร
-#   3. ประยุกต์ใช้ linear regression สำหรับสร้างสมการสอบเทียบ
-#
-# การสอบเทียบ pH (pH Calibration):
-#   ใช้บัฟเฟอร์มาตรฐาน 3 จุด: pH 4.00, 7.00, 10.00
-#   วัดแรงดัน (mV) ที่แต่ละจุด แล้วสร้างสมการเส้นตรง
-#   pH = slope_m * mV + intercept_b (x=mV, y=pH)
-#
-# การสอบเทียบอัตราการไหล (Flow Rate Calibration):
-#   สูบของเหลวปริมาตรที่ทราบ (เช่น 5 mL) แล้ววัดเวลา
-#   flow_rate = volume / time (mL/s)
-#
+# สอบเทียบ pH sensor และ flow rate ของปั๊ม
+# Handles pH sensor and pump flow rate calibration
 # ==============================================================================
 
 from time import ticks_us, ticks_diff, sleep_ms
@@ -45,53 +29,11 @@ except ImportError:
 
 
 class Calibrator:
-    """
-    คลาสสอบเทียบเซ็นเซอร์และปั๊ม (Calibrator class for sensors and pump)
-
-    คุณสมบัติหลัก (Main Features):
-        - สอบเทียบ pH sensor แบบ 3 จุด
-        - สอบเทียบอัตราการไหลของปั๊ม
-        - ตรวจสอบคุณภาพการสอบเทียบด้วย R-squared
-        - บันทึกและโหลดข้อมูลสอบเทียบ
-
-    หลักการสอบเทียบ pH (pH Calibration Principle):
-        1. แช่หัววัดในบัฟเฟอร์ pH 4.00 -> วัดแรงดัน mV1
-        2. แช่หัววัดในบัฟเฟอร์ pH 7.00 -> วัดแรงดัน mV2
-        3. แช่หัววัดในบัฟเฟอร์ pH 10.00 -> วัดแรงดัน mV3
-        4. ใช้ linear regression หาสมการ pH = slope_m * mV + intercept_b
-        5. ตรวจสอบ R-squared >= 0.99
-
-    หลักการสอบเทียบอัตราการไหล (Flow Rate Calibration Principle):
-        1. เตรียมภาชนะสำหรับรับของเหลว
-        2. สูบของเหลวจนได้ปริมาตรเป้าหมาย (เช่น 5 mL)
-        3. วัดเวลาที่ใช้สูบ
-        4. คำนวณ flow_rate = volume / time
-
-    ตัวอย่างการใช้งาน (Usage Example):
-        >>> cal = Calibrator()
-        >>> # สอบเทียบ pH (buffer pH, voltage mV)
-        >>> cal.add_ph_point(4.00, 2068.0)   # buffer 4.00, 2068 mV
-        >>> cal.add_ph_point(7.00, 1650.0)   # buffer 7.00, 1650 mV
-        >>> cal.add_ph_point(10.00, 1290.0)  # buffer 10.00, 1290 mV
-        >>> result = cal.calculate_ph_calibration()
-        >>> # สอบเทียบ flow rate
-        >>> flow_result = cal.calibrate_flow_rate(5.0, 18.05)  # 5mL in 18.05s
-    """
+    """สอบเทียบ pH sensor และปั๊ม (Calibrator for pH sensor and pump)"""
 
     def __init__(self, ph_sensor=None, pump=None, display=None,
                  buttons=None, buzzer=None, data_manager=None):
-        """
-        สร้าง Calibrator object (Create Calibrator object)
-
-        Args:
-            ph_sensor: PHSensor object สำหรับอ่านค่า pH
-            pump: Pump object สำหรับควบคุมปั๊ม
-            display: DisplayManager สำหรับแสดงผล
-            buttons: ButtonManager สำหรับรับ input
-            buzzer: Buzzer สำหรับเสียงเตือน
-            data_manager (DataManager): DataManager สำหรับบันทึก/โหลดข้อมูล
-                                        ถ้าไม่ระบุจะสร้างใหม่
-        """
+        """สร้าง Calibrator (Create Calibrator)"""
         # Hardware references
         self._ph_sensor = ph_sensor
         self._pump = pump
@@ -388,9 +330,14 @@ class Calibrator:
         # คำนวณอัตราการไหล
         return self.calibrate_flow_rate(volume_ml, actual_time)
 
-    def save_flow_rate(self):
+    def save_flow_rate(self, calibration_data=None, stats=None, duty_percent=100):
         """
         บันทึกข้อมูลอัตราการไหล (Save flow rate data)
+
+        Args:
+            calibration_data (list): รายการ [(time, volume, flow_rate), ...] (optional)
+            stats (dict): สถิติ {avg_flow_rate, std_dev, rsd_percent, count} (optional)
+            duty_percent (int): Duty cycle ที่ใช้สอบเทียบ (default 100%)
 
         Returns:
             bool: True ถ้าบันทึกสำเร็จ
@@ -400,7 +347,12 @@ class Calibrator:
                   "(Flow rate not calibrated, please calibrate first)")
             return False
 
-        return self._data_manager.save_flow_rate(self._flow_rate)
+        return self._data_manager.save_flow_rate(
+            self._flow_rate,
+            calibration_data=calibration_data,
+            stats=stats,
+            duty_percent=duty_percent
+        )
 
     def load_flow_rate(self):
         """
@@ -416,6 +368,111 @@ class Calibrator:
             self._flow_calibrated = True
 
         return flow_rate, date
+
+    def _get_volume_input(self, max_attempts=3):
+        """
+        รับค่าปริมาตรจากนิสิตพร้อมตรวจสอบความถูกต้อง
+        Get volume input from student with validation
+
+        Args:
+            max_attempts (int): จำนวนครั้งสูงสุดที่ให้ลองใหม่ (default 3)
+
+        Returns:
+            float: Valid volume in mL, or None if cancelled/failed
+        """
+        for attempt in range(max_attempts):
+            try:
+                vol_str = input("พิมพ์ปริมาตรที่วัดได้ (Enter measured volume in mL): ").strip()
+
+                # ตรวจสอบค่าว่าง (Check for empty input)
+                if not vol_str:
+                    print("ข้อผิดพลาด: กรุณาพิมพ์ค่า (Error: Please enter a value)")
+                    continue
+
+                # แปลงเป็นตัวเลข (Convert to number)
+                volume = float(vol_str)
+
+                # ตรวจสอบค่าติดลบหรือศูนย์ (Check for negative or zero)
+                if volume <= 0:
+                    print("ข้อผิดพลาด: ปริมาตรต้องมากกว่า 0 (Error: Volume must be > 0)")
+                    continue
+
+                # คำเตือนสำหรับค่าผิดปกติ (Warnings for unusual values)
+                if volume > 50:
+                    print(f"คำเตือน: ปริมาตร {volume:.1f} mL สูงผิดปกติ "
+                          f"(Warning: {volume:.1f} mL is unusually high)")
+                elif volume < 0.1:
+                    print(f"คำเตือน: ปริมาตร {volume:.2f} mL ต่ำผิดปกติ "
+                          f"(Warning: {volume:.2f} mL is unusually low)")
+
+                return volume
+
+            except ValueError:
+                print("ข้อผิดพลาด: กรุณาพิมพ์ตัวเลข เช่น 5.2 "
+                      "(Error: Enter a number, e.g. 5.2)")
+                continue
+
+        print("เกินจำนวนครั้งที่อนุญาต (Max attempts exceeded)")
+        return None
+
+    def _calculate_flow_stats(self, calibration_data):
+        """
+        คำนวณสถิติจากข้อมูลสอบเทียบ
+        Calculate statistics from calibration data
+
+        Args:
+            calibration_data (list): รายการ [(time, volume, flow_rate), ...]
+
+        Returns:
+            dict: {avg_flow_rate, std_dev, rsd_percent, count} หรือ None
+        """
+        if not calibration_data:
+            return None
+
+        flow_rates = [d[2] for d in calibration_data]
+        n = len(flow_rates)
+        avg = sum(flow_rates) / n
+
+        if n >= 2:
+            # คำนวณ standard deviation (population)
+            variance = sum((fr - avg) ** 2 for fr in flow_rates) / n
+            std_dev = variance ** 0.5
+            # คำนวณ RSD% (Relative Standard Deviation)
+            rsd = (std_dev / avg) * 100 if avg > 0 else 0
+        else:
+            std_dev = 0
+            rsd = 0
+
+        return {
+            'avg_flow_rate': avg,
+            'std_dev': std_dev,
+            'rsd_percent': rsd,
+            'count': n
+        }
+
+    def _get_quality_message(self, rsd_percent):
+        """
+        รับข้อความแนะนำคุณภาพตามค่า RSD
+        Get quality guidance message based on RSD value
+
+        Args:
+            rsd_percent (float): ค่า RSD%
+
+        Returns:
+            tuple: (quality_level, message_th, message_en)
+        """
+        if rsd_percent <= 3:
+            return ('excellent',
+                    'ดีมาก! พร้อมบันทึก',
+                    'Excellent! Ready to save')
+        elif rsd_percent <= 5:
+            return ('good',
+                    'ดี สามารถบันทึกหรือวัดเพิ่มได้',
+                    'Good. Can save or add more measurements')
+        else:
+            return ('warning',
+                    'คำเตือน: ค่าไม่สม่ำเสมอ ควรสอบเทียบใหม่',
+                    'Warning: Values inconsistent. Consider recalibration')
 
     # ===========================================================================
     # Utility Methods
@@ -628,141 +685,317 @@ class Calibrator:
         print("ออกจากการทดสอบ (Exiting test)")
 
     def calibrate_flow_rate_interactive(self):
-        """
-        สอบเทียบอัตราการไหลแบบ interactive (Interactive flow rate calibration)
-
-        ขั้นตอน:
-        1. เปิดปั๊มจนกว่าจะกดปุ่มหยุด
-        2. ผู้ใช้วัดปริมาตรจริงที่สูบได้
-        3. คำนวณ flow rate จากปริมาตร/เวลา
-        4. บันทึกผลลัพธ์
-        """
+        """สอบเทียบ flow rate แบบ interactive พร้อมการวัดหลายครั้ง"""
         from time import sleep_ms, ticks_ms, ticks_diff
 
         if not self._pump:
             print("Error: No pump configured")
             return False
 
+        # ตัวแปรสำหรับการสอบเทียบ (Calibration variables)
+        calibration_data = []  # รายการข้อมูลสอบเทียบ [(เวลา, ปริมาตร, flow_rate), ...]
+        pump_running = False
+        start_time = 0
+        elapsed_time = 0
+        duty_percent = 100  # Duty Cycle (%) - 100% = เต็มกำลัง (full power)
+
+        # State machine states
+        STATE_READY = 'ready'           # พร้อมเริ่ม (Ready to start pump)
+        STATE_PUMPING = 'pumping'       # กำลังปั๊ม (Pump running)
+        STATE_ENTER_VOL = 'enter_vol'   # รอป้อนปริมาตร (Waiting for volume input)
+        STATE_STATS = 'stats'           # แสดงสถิติ (Showing statistics)
+        current_state = STATE_READY
+
+        # แสดงหน้าจอเริ่มต้น (Show initial screen)
         print("\n" + "=" * 50)
-        print("สอบเทียบอัตราการไหล (Flow Rate Calibration)")
+        print("Flow Rate Calibration (Multi-Measurement)")
+        print("BTN1: Start/Stop Pump | BTN2: Record | BTN3: Save/Exit")
         print("=" * 50)
 
         if self._display:
             self._display.clear()
             self._display.draw_header("Flow Rate Cal")
+            self._display.draw_text(10, 50, "Multi-Measurement Mode", 0xFFFF)
+            self._display.draw_text(10, 80, "BTN1: Start/Stop Pump", 0x07E0)
+            self._display.draw_text(10, 110, "BTN2: Record Volume", 0xFFE0)
+            self._display.draw_text(10, 140, "BTN3: Save/Cancel", 0xF81F)
+            self._display.draw_status_bar("Ready - BTN1:Start BTN3:Exit")
 
-        # แสดงคำแนะนำ (Show instructions)
-        print("\nคำแนะนำ:")
-        print("1. เตรียมกระบอกตวงสำหรับวัดปริมาตร")
-        print("2. กดปุ่ม 1 เพื่อเริ่มปั๊ม, ปุ่ม 3 ยกเลิก")
-        print("3. กดปุ่ม 1 อีกครั้งเพื่อหยุด")
-        print("4. วัดปริมาตรที่ได้และป้อนค่า")
-        print("\nInstructions:")
-        print("1. Prepare measuring cylinder")
-        print("2. BTN1: Start pump, BTN3: Cancel")
-        print("3. Press BTN1 again to stop")
-        print("4. Measure and enter the volume")
-
-        if self._display:
-            self._display.show_message(
-                "Flow Cal",
-                "BTN1:Start BTN3:Cancel"
-            )
-
-        # รอกดปุ่มเริ่ม (Wait for start button)
-        if self._buttons:
+        # ==================================================================
+        # Main calibration loop
+        # ==================================================================
+        try:
             while True:
-                if self._buttons.is_pressed(1):
-                    sleep_ms(200)  # Debounce
-                    break
-                if self._buttons.is_pressed(3):
-                    # ยกเลิก (Cancel)
-                    print("\n[CANCELLED] ยกเลิกการสอบเทียบ (Calibration cancelled)")
-                    if self._display:
-                        self._display.show_message("Cancelled", "Returning to menu")
-                    if self._buzzer:
-                        self._buzzer.error_sound()
-                    sleep_ms(1500)
-                    return False
-                sleep_ms(50)
+                # ----------------------------------------
+                # State: READY - พร้อมเริ่มปั๊ม
+                # ----------------------------------------
+                if current_state == STATE_READY:
+                    if self._buttons:
+                        # BTN1: เริ่มปั๊ม (Start pump)
+                        if self._buttons.is_pressed(1):
+                            sleep_ms(200)  # Debounce
 
-        # เริ่มจับเวลาและเปิดปั๊ม (Start timing and pump)
-        if self._buzzer:
-            self._buzzer.beep()
+                            # เริ่มปั๊มและจับเวลา (Start pump and timer)
+                            duty_value = int((duty_percent / 100) * 1023)
+                            start_time = ticks_ms()
+                            self._pump.start(duty_percent)
+                            pump_running = True
+                            current_state = STATE_PUMPING
 
-        print("\nกำลังสูบ... กดปุ่ม 1 หยุด, ปุ่ม 3 ยกเลิก (Pumping... BTN1:Stop BTN3:Cancel)")
+                            if self._buzzer:
+                                self._buzzer.beep()
 
-        if self._display:
-            self._display.show_message(
-                "Pumping...",
-                "BTN1:Stop BTN3:Cancel"
-            )
+                            print("\nPUMP STARTED - BTN1:Stop BTN3:Cancel")
 
-        start_time = ticks_ms()
-        self._pump.start(100)  # Full speed
+                            if self._display:
+                                self._display.clear()
+                                self._display.draw_header("Flow Rate Cal")
+                                self._display.draw_text(10, 60, "PUMPING...", 0x07E0)
+                                self._display.draw_text(10, 100, "BTN1: Stop pump", 0xFFFF)
+                                self._display.draw_status_bar("BTN1:Stop BTN3:Cancel")
 
-        # รอกดปุ่มหยุด (Wait for stop button)
-        cancelled = False
-        if self._buttons:
-            while True:
-                if self._buttons.is_pressed(1):
-                    sleep_ms(200)  # Debounce
-                    break
-                if self._buttons.is_pressed(3):
-                    # ยกเลิก - หยุดปั๊มก่อน (Cancel - stop pump first)
-                    cancelled = True
-                    break
-                sleep_ms(50)
+                        # BTN3: ยกเลิกและออก (Cancel and exit)
+                        elif self._buttons.is_pressed(3):
+                            sleep_ms(200)  # Debounce
 
-        self._pump.stop()
-        end_time = ticks_ms()
+                            if len(calibration_data) >= 1:
+                                # มีข้อมูลแล้ว - ถามว่าจะบันทึกไหม (Has data - ask to save)
+                                print("\n" + "=" * 50)
+                                print("คุณมีข้อมูล {} ครั้ง".format(len(calibration_data)))
+                                print("You have {} measurement(s)".format(len(calibration_data)))
+                                print("กดปุ่ม 3 อีกครั้งเพื่อบันทึก หรือ ปุ่ม 1 เพื่อวัดต่อ")
+                                print("Press BTN3 again to save, or BTN1 to continue measuring")
+                                print("=" * 50)
 
-        if cancelled:
-            print("\n[CANCELLED] ยกเลิกการสอบเทียบ (Calibration cancelled)")
-            if self._display:
-                self._display.show_message("Cancelled", "Pump stopped")
-            if self._buzzer:
-                self._buzzer.error_sound()
-            sleep_ms(1500)
+                                current_state = STATE_STATS
+                            else:
+                                # ไม่มีข้อมูล - ยกเลิกเลย (No data - cancel)
+                                print("\n[CANCELLED] ยกเลิกการสอบเทียบ (Calibration cancelled)")
+                                if self._display:
+                                    self._display.show_message("Cancelled", "Returning to menu")
+                                if self._buzzer:
+                                    self._buzzer.error_sound()
+                                sleep_ms(1500)
+                                return False
+
+                # ----------------------------------------
+                # State: PUMPING - กำลังปั๊ม
+                # ----------------------------------------
+                elif current_state == STATE_PUMPING:
+                    if self._buttons:
+                        # BTN1: หยุดปั๊ม (Stop pump)
+                        if self._buttons.is_pressed(1):
+                            sleep_ms(200)  # Debounce
+
+                            # หยุดปั๊มและคำนวณเวลา (Stop pump and calculate time)
+                            self._pump.stop()
+                            end_time = ticks_ms()
+                            pump_running = False
+                            elapsed_time = ticks_diff(end_time, start_time) / 1000.0
+
+                            if self._buzzer:
+                                self._buzzer.beep_beep()
+
+                            print(f"\nPUMP STOPPED - Time: {elapsed_time:.3f}s - BTN2:Enter volume")
+
+                            current_state = STATE_ENTER_VOL
+
+                            if self._display:
+                                self._display.clear()
+                                self._display.draw_header("Flow Rate Cal")
+                                self._display.draw_text(10, 50, f"Time: {elapsed_time:.2f} s", 0x07E0)
+                                self._display.draw_text(10, 90, "Read volume from", 0xFFFF)
+                                self._display.draw_text(10, 110, "graduated cylinder", 0xFFFF)
+                                self._display.draw_status_bar("BTN2:Enter Volume")
+
+                        # BTN3: ยกเลิกระหว่างปั๊ม (Cancel during pumping)
+                        elif self._buttons.is_pressed(3):
+                            sleep_ms(200)  # Debounce
+
+                            # หยุดปั๊มและยกเลิก (Stop pump and cancel)
+                            self._pump.stop()
+                            pump_running = False
+
+                            print("\n[CANCELLED] ยกเลิก - ปั๊มหยุดแล้ว (Cancelled - Pump stopped)")
+
+                            if self._buzzer:
+                                self._buzzer.error_sound()
+
+                            # กลับไปหน้า ready (Return to ready state)
+                            current_state = STATE_READY
+
+                            if self._display:
+                                self._display.show_message("Cancelled", "BTN1:Restart BTN3:Exit")
+                            sleep_ms(1000)
+
+                # ----------------------------------------
+                # State: ENTER_VOL - รอป้อนปริมาตร
+                # ----------------------------------------
+                elif current_state == STATE_ENTER_VOL:
+                    if self._buttons:
+                        # BTN2: บันทึกปริมาตร (Record volume)
+                        if self._buttons.is_pressed(2):
+                            sleep_ms(200)  # Debounce
+
+                            # รับค่าปริมาตรจากผู้ใช้ (Get volume from user)
+                            print(f"\nเวลาที่ปั๊มทำงาน (Elapsed time): {elapsed_time:.3f} s")
+                            volume = self._get_volume_input()
+
+                            if volume is not None:
+                                # คำนวณ flow rate (Calculate flow rate)
+                                flow_rate = volume / elapsed_time
+
+                                # บันทึกข้อมูล (Record data)
+                                calibration_data.append((elapsed_time, volume, flow_rate))
+
+                                # คำนวณสถิติ (Calculate statistics)
+                                stats = self._calculate_flow_stats(calibration_data)
+
+                                # แสดงผล (Display results)
+                                print(f"\n#{len(calibration_data)}: {elapsed_time:.3f}s, {volume:.2f}mL = {flow_rate:.4f} mL/s")
+                                print(f"Avg: {stats['avg_flow_rate']:.4f} mL/s", end="")
+                                if stats['count'] >= 2:
+                                    quality, msg_th, msg_en = self._get_quality_message(stats['rsd_percent'])
+                                    print(f", RSD: {stats['rsd_percent']:.2f}% ({quality})")
+                                else:
+                                    print("")
+                                print("BTN1:More | BTN3:Save")
+
+                                if self._buzzer:
+                                    self._buzzer.beep()
+
+                                # อัปเดต display
+                                if self._display:
+                                    self._display.clear()
+                                    self._display.draw_header("Flow Rate Cal")
+                                    self._display.draw_text(10, 45, f"#{len(calibration_data)}: {flow_rate:.4f} mL/s", 0x07E0)
+                                    self._display.draw_text(10, 75, f"Avg: {stats['avg_flow_rate']:.4f} mL/s", 0xFFFF)
+                                    if stats['count'] >= 2:
+                                        rsd_color = 0x07E0 if stats['rsd_percent'] <= 5 else 0xF800
+                                        self._display.draw_text(10, 105, f"RSD: {stats['rsd_percent']:.2f}%", rsd_color)
+                                    self._display.draw_text(10, 135, f"Points: {stats['count']}", 0xFFFF)
+                                    self._display.draw_status_bar("BTN1:More BTN3:Save")
+
+                                current_state = STATE_STATS
+                            else:
+                                # ป้อนค่าไม่สำเร็จ - กลับไปหน้า ready
+                                print("\nไม่สามารถบันทึกได้ กดปุ่ม 1 เพื่อลองใหม่")
+                                print("Could not record. Press BTN1 to try again.")
+                                current_state = STATE_READY
+
+                        # BTN1: กลับไปหน้า ready (Return to ready)
+                        elif self._buttons.is_pressed(1):
+                            sleep_ms(200)  # Debounce
+                            print("\nกลับไปหน้า ready (Returning to ready state)")
+                            current_state = STATE_READY
+
+                            if self._display:
+                                self._display.clear()
+                                self._display.draw_header("Flow Rate Cal")
+                                n = len(calibration_data)
+                                if n > 0:
+                                    stats = self._calculate_flow_stats(calibration_data)
+                                    self._display.draw_text(10, 60, f"Points: {n}", 0xFFFF)
+                                    self._display.draw_text(10, 90, f"Avg: {stats['avg_flow_rate']:.4f}", 0x07E0)
+                                self._display.draw_status_bar("BTN1:Start BTN3:Save")
+
+                        # BTN3: บันทึกและออก (Save and exit)
+                        elif self._buttons.is_pressed(3):
+                            sleep_ms(200)  # Debounce
+                            if len(calibration_data) >= 1:
+                                current_state = STATE_STATS
+                                # จะไปทำการบันทึกใน STATE_STATS
+                            else:
+                                print("\nต้องมีอย่างน้อย 1 การวัดก่อนบันทึก")
+                                print("Need at least 1 measurement before saving")
+                                current_state = STATE_READY
+
+                # ----------------------------------------
+                # State: STATS - แสดงสถิติและรอบันทึก
+                # ----------------------------------------
+                elif current_state == STATE_STATS:
+                    if self._buttons:
+                        # BTN1: วัดเพิ่ม (Add more measurements)
+                        if self._buttons.is_pressed(1):
+                            sleep_ms(200)  # Debounce
+                            print("\nกลับไปวัดเพิ่ม (Adding more measurements)")
+                            current_state = STATE_READY
+
+                            if self._display:
+                                self._display.clear()
+                                self._display.draw_header("Flow Rate Cal")
+                                n = len(calibration_data)
+                                if n > 0:
+                                    stats = self._calculate_flow_stats(calibration_data)
+                                    self._display.draw_text(10, 60, f"Points: {n}", 0xFFFF)
+                                    self._display.draw_text(10, 90, f"Avg: {stats['avg_flow_rate']:.4f}", 0x07E0)
+                                self._display.draw_status_bar("BTN1:Start BTN3:Save")
+
+                        # BTN3: บันทึกและออก (Save and exit)
+                        elif self._buttons.is_pressed(3):
+                            sleep_ms(200)  # Debounce
+
+                            if len(calibration_data) >= 1:
+                                # คำนวณสถิติสุดท้าย (Calculate final statistics)
+                                stats = self._calculate_flow_stats(calibration_data)
+
+                                # อัปเดต flow rate ใน calibrator
+                                self._flow_rate = stats['avg_flow_rate']
+                                self._flow_calibrated = True
+
+                                # บันทึกลงไฟล์พร้อมข้อมูลการวัดทั้งหมด
+                                success = self.save_flow_rate(
+                                    calibration_data=calibration_data,
+                                    stats=stats,
+                                    duty_percent=duty_percent
+                                )
+
+                                if success:
+                                    print(f"\nSAVED: {stats['avg_flow_rate']:.4f} mL/s ({stats['count']} pts)")
+
+                                    if self._display:
+                                        self._display.show_success(
+                                            f"FR: {stats['avg_flow_rate']:.4f}"
+                                        )
+
+                                    if self._buzzer:
+                                        self._buzzer.beep_beep()
+
+                                    sleep_ms(2000)
+                                    return True
+                                else:
+                                    print("\n[ERROR] ไม่สามารถบันทึกได้ (Could not save)")
+                                    if self._display:
+                                        self._display.show_error("Save Failed")
+                                    if self._buzzer:
+                                        self._buzzer.error_sound()
+                                    sleep_ms(1500)
+                                    return False
+                            else:
+                                print("\nต้องมีอย่างน้อย 1 การวัดก่อนบันทึก")
+                                print("Need at least 1 measurement before saving")
+                                current_state = STATE_READY
+
+                sleep_ms(50)  # ลด CPU usage
+
+        except KeyboardInterrupt:
+            # Ctrl+C pressed - cleanup and exit
+            if pump_running:
+                self._pump.stop()
+            print("\n\nหยุดโปรแกรม (Program stopped by user)")
+
+            # แสดงสรุปข้อมูลที่เก็บได้ (Show data summary)
+            if len(calibration_data) > 0:
+                stats = self._calculate_flow_stats(calibration_data)
+                print(f"\nสรุป: เก็บข้อมูล {len(calibration_data)} ครั้ง")
+                print(f"Flow Rate เฉลี่ย: {stats['avg_flow_rate']:.4f} mL/s")
+
             return False
 
-        if self._buzzer:
-            self._buzzer.beep_beep()
-
-        # คำนวณเวลา (Calculate time)
-        elapsed_time_s = ticks_diff(end_time, start_time) / 1000.0
-
-        print(f"\nเวลาที่สูบ: {elapsed_time_s:.2f} วินาที")
-        print(f"(Pump time: {elapsed_time_s:.2f} seconds)")
-
-        # ใช้ปริมาตรมาตรฐาน 5 mL (Use standard volume)
-        # ผู้ใช้ต้องปรับให้ได้ 5 mL
-        target_volume = FLOW_RATE_CALIBRATION_VOLUME_ML
-
-        if self._display:
-            self._display.show_message(
-                f"Time: {elapsed_time_s:.1f}s",
-                f"Volume: {target_volume:.1f} mL"
-            )
-
-        print(f"\nใช้ปริมาตรเป้าหมาย: {target_volume:.2f} mL")
-        print("กรุณาตรวจสอบว่าปริมาตรจริงใกล้เคียง")
-        print(f"(Target volume: {target_volume:.2f} mL)")
-        print("Please verify actual volume is similar")
-
-        # คำนวณและบันทึก (Calculate and save)
-        result = self.calibrate_flow_rate(target_volume, elapsed_time_s)
-        self.save_flow_rate()
-
-        print(f"\n[SUCCESS] Flow rate: {result['flow_rate']:.4f} mL/s")
-
-        if self._display:
-            self._display.show_success(
-                f"FR: {result['flow_rate']:.4f}"
-            )
-
-        sleep_ms(2000)
-        return True
+        finally:
+            # ตรวจสอบว่าปั๊มปิดแล้ว (Ensure pump is stopped)
+            if pump_running:
+                self._pump.stop()
 
     def test_flow_rate(self):
         """
@@ -968,54 +1201,3 @@ class Calibrator:
         ph_status = "OK" if self._ph_calibrated else "--"
         flow_status = "OK" if self._flow_calibrated else "--"
         return f"Calibrator(pH={ph_status}, flow={flow_status})"
-
-
-# ==============================================================================
-# ตัวอย่างการใช้งาน (Usage Example)
-# ==============================================================================
-if __name__ == "__main__":
-    print("=" * 50)
-    print("ทดสอบ Calibrator (Testing Calibrator)")
-    print("=" * 50)
-
-    # สร้าง Calibrator
-    cal = Calibrator()
-
-    # ======= ทดสอบสอบเทียบ pH =======
-    print("\n" + "=" * 50)
-    print("ทดสอบสอบเทียบ pH (Testing pH Calibration)")
-    print("=" * 50)
-
-    # เพิ่มจุดสอบเทียบ (ข้อมูลตัวอย่าง)
-    # buffer_ph, voltage_mv (x=mV, y=pH for regression)
-    cal.add_ph_point(4.00, 2068.0)   # Buffer pH 4.00 -> 2068 mV
-    cal.add_ph_point(7.00, 1650.0)   # Buffer pH 7.00 -> 1650 mV
-    cal.add_ph_point(10.00, 1290.0)  # Buffer pH 10.00 -> 1290 mV
-
-    # คำนวณ
-    result = cal.calculate_ph_calibration()
-
-    # บันทึก
-    if result['is_valid']:
-        cal.save_ph_calibration()
-
-    # ทดสอบทำนาย (mV -> pH)
-    test_mv = 1850.0
-    predicted_ph = cal.predict_ph(test_mv)
-    print(f"\nทดสอบทำนาย: {test_mv:.1f} mV -> pH {predicted_ph:.2f}")
-
-    # ======= ทดสอบสอบเทียบ Flow Rate =======
-    print("\n" + "=" * 50)
-    print("ทดสอบสอบเทียบ Flow Rate")
-    print("=" * 50)
-
-    # สอบเทียบ (ข้อมูลตัวอย่าง)
-    flow_result = cal.calibrate_flow_rate(5.0, 18.05)
-
-    # บันทึก
-    cal.save_flow_rate()
-
-    # แสดงสรุป
-    cal.print_calibration_summary()
-
-    print("\nเสร็จสิ้น (Done)")

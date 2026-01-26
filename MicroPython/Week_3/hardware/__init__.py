@@ -359,66 +359,6 @@ class HardwareHub:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        ออกจาก context (Exit context)
-
-        ทำความสะอาด hardware อัตโนมัติ
-        Automatically cleanup hardware
-        """
+        """ออกจาก context (Exit context)"""
         self.deinit()
-        return False  # ไม่ suppress exceptions
-
-
-# ==============================================================================
-# ตัวอย่างการใช้งาน (Usage Example)
-# ==============================================================================
-if __name__ == "__main__":
-    print("=" * 50)
-    print("ทดสอบ HardwareHub (Testing HardwareHub)")
-    print("=" * 50)
-
-    # ทดสอบการสร้าง HardwareHub
-    # Test HardwareHub creation
-    try:
-        # วิธีที่ 1: สร้างและใช้งานโดยตรง
-        # Method 1: Create and use directly
-        hw = HardwareHub(skip_missing=True)
-        hw.print_status()
-
-        # ทดสอบการใช้งาน hardware
-        if hw.is_ready('buzzer'):
-            hw.buzzer.beep()
-            print("Buzzer OK")
-
-        if hw.is_ready('temp_sensor'):
-            if hw.temp_sensor.is_available:
-                temp = hw.temp_sensor.read()
-                print(f"Temperature: {temp:.2f} C")
-            else:
-                print("Temperature sensor not connected")
-
-        if hw.is_ready('ph_sensor'):
-            voltage, ph = hw.ph_sensor.read()
-            print(f"pH: {ph:.2f} (V: {voltage:.4f})")
-
-        if hw.is_ready('buttons'):
-            print(f"Buttons ready: {hw.buttons}")
-
-        if hw.is_ready('pump'):
-            print(f"Pump ready: {hw.pump}")
-
-        hw.deinit()
-
-        # วิธีที่ 2: ใช้ with statement (แนะนำ)
-        # Method 2: Use with statement (recommended)
-        print("\n--- ทดสอบ with statement ---")
-        with HardwareHub(skip_missing=True) as hw2:
-            hw2.print_status()
-            if hw2.is_ready('buzzer'):
-                hw2.buzzer.beep_beep()
-        # hardware ถูก deinit อัตโนมัติเมื่อออกจาก with block
-
-    except Exception as e:
-        print(f"ข้อผิดพลาด (Error): {e}")
-
-    print("เสร็จสิ้น (Done)")
+        return False

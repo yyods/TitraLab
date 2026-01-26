@@ -393,42 +393,6 @@ class Pump:
         self.deinit()
 
     def __repr__(self):
-        """
-        แสดงข้อมูลปั๊ม (Display pump information)
-        """
+        """แสดงข้อมูลปั๊ม (Display pump information)"""
         return (f"Pump(pin={self._pin_number}, freq={self._freq}Hz, "
                 f"flow_rate={self._flow_rate:.4f}mL/s, running={self._is_running})")
-
-
-# ==============================================================================
-# ตัวอย่างการใช้งาน (Usage Example)
-# ==============================================================================
-if __name__ == "__main__":
-    print("=" * 50)
-    print("ทดสอบคลาส Pump (Testing Pump Class)")
-    print("=" * 50)
-
-    # สร้าง object ปั๊ม (Create pump object)
-    pump = Pump()
-    print(pump)
-
-    try:
-        # ทดสอบเริ่ม-หยุดปั๊ม (Test start-stop)
-        print("\n--- ทดสอบเริ่ม-หยุด (Start-Stop Test) ---")
-        pump.start(50)  # 50% duty
-        sleep_ms(2000)  # รอ 2 วินาที
-        result = pump.stop()
-        print(f"ผลลัพธ์ (Result): {result}")
-
-        # ทดสอบ purge (Test purge)
-        print("\n--- ทดสอบ Purge (Purge Test) ---")
-        result = pump.purge(1000, 100)
-        print(f"ผลลัพธ์ (Result): {result}")
-
-    except KeyboardInterrupt:
-        print("\nหยุดโดยผู้ใช้ (Stopped by user)")
-
-    finally:
-        # ทำความสะอาด (Cleanup)
-        pump.deinit()
-        print("เสร็จสิ้น (Done)")
