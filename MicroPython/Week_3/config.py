@@ -139,6 +139,32 @@ ADC_MAX_VALUE = 4095        # ค่า ADC สูงสุด 12-bit (Maximum 1
 ADC_REFERENCE_MV = 3300     # แรงดันอ้างอิง 3.3V = 3300mV (Reference voltage)
 ADC_SAMPLES = 10            # จำนวนตัวอย่างสำหรับการเฉลี่ย (Samples for averaging)
 
+# ==============================================================================
+# ค่าคงที่สำหรับการกรอง ADC แบบ Robust (Robust ADC Filtering Constants)
+# ==============================================================================
+# ใช้วิธี IQR (Interquartile Range) หรือ Tukey's Fences สำหรับกำจัด outlier
+# Uses IQR (Interquartile Range) method or Tukey's Fences for outlier rejection
+#
+# ปัญหาที่พบ (Problem encountered):
+#   - ADC ของ ESP32 มี occasional glitches ทำให้ได้ค่าผิดปกติ
+#   - ตัวอย่าง: pH = 26.9 หรือ pH = 0.8 แทนที่จะเป็น ~11.7
+#   - วิธี trimmed mean ปกติไม่สามารถกำจัด outlier รุนแรงได้
+#
+# วิธี IQR (IQR Method):
+#   1. เก็บตัวอย่าง 25 ค่า (collect 25 samples)
+#   2. เรียงลำดับและหา Q1, Q3 (sort and find Q1, Q3)
+#   3. คำนวณ IQR = Q3 - Q1
+#   4. กำหนดขอบเขต: lower = Q1 - 1.5*IQR, upper = Q3 + 1.5*IQR
+#   5. ตัดค่านอกขอบเขตออก (reject values outside bounds)
+#   6. เฉลี่ยค่าที่เหลือ (average remaining values)
+#
+# เวลาที่ใช้ (Time budget):
+#   25 samples x 20ms = 500ms per reading (acceptable for titration)
+#
+ADC_ROBUST_SAMPLES = 25     # จำนวนตัวอย่างสำหรับ robust reading (samples for robust reading)
+ADC_SAMPLE_DELAY_MS = 20    # หน่วงเวลาระหว่างตัวอย่าง (delay between samples in ms)
+ADC_IQR_FACTOR = 1.5        # ตัวคูณ IQR มาตรฐาน (standard Tukey factor)
+
 # ค่าบัฟเฟอร์มาตรฐานสำหรับสอบเทียบ pH (Standard buffer pH values for calibration)
 PH_BUFFER_VALUES = [4.00, 7.00, 10.00]
 

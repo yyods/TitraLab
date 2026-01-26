@@ -32,7 +32,8 @@ try:
     from config import (
         PH_PIN, ADC_MAX_VALUE, ADC_REFERENCE_MV, ADC_SAMPLES,
         PH_BUFFER_VALUES, DEFAULT_PH_SLOPE, DEFAULT_PH_INTERCEPT,
-        NERNST_THEORETICAL_SLOPE
+        NERNST_THEORETICAL_SLOPE,
+        ADC_ROBUST_SAMPLES, ADC_SAMPLE_DELAY_MS, ADC_IQR_FACTOR
     )
 except ImportError:
     # ค่าเริ่มต้นถ้าไม่พบ config (Default values if config not found)
@@ -46,6 +47,10 @@ except ImportError:
     DEFAULT_PH_SLOPE = -0.016911       # slope_m (pH/mV)
     DEFAULT_PH_INTERCEPT = 34.9800     # intercept_b (pH)
     NERNST_THEORETICAL_SLOPE = -59.16  # mV/pH ที่ 25 C (theoretical)
+    # ค่าคงที่สำหรับ robust ADC filtering (Robust ADC filtering constants)
+    ADC_ROBUST_SAMPLES = 25            # จำนวนตัวอย่าง (number of samples)
+    ADC_SAMPLE_DELAY_MS = 20           # หน่วงเวลาระหว่างตัวอย่าง (delay between samples)
+    ADC_IQR_FACTOR = 1.5               # ตัวคูณ IQR (Tukey factor)
 
 
 class PHSensor:
@@ -53,7 +58,7 @@ class PHSensor:
     คลาสเซ็นเซอร์ pH สำหรับการไทเทรต (pH Sensor class for titration)
 
     คุณสมบัติหลัก (Main Features):
-        - อ่านค่าแรงดันจาก ADC
+        - อ่านค่าแรงดันจาก ADC พร้อมการกำจัด outlier แบบ robust
         - แปลงแรงดันเป็นค่า pH ตามสมการสอบเทียบ
         - รองรับการสอบเทียบ 3 จุด
 
@@ -63,10 +68,18 @@ class PHSensor:
         3. ใช้สมการเส้นตรง pH = slope_m * mV + intercept_b
            เพื่อแปลง mV เป็น pH
 
-    การกรองสัญญาณ (Signal Filtering):
-        - อ่านค่า 10 ครั้งติดต่อกัน
-        - เรียงลำดับและตัดค่าสูงสุด-ต่ำสุดออก
-        - เฉลี่ยค่าที่เหลือเพื่อลด noise
+    การกรองสัญญาณแบบ Robust (Robust Signal Filtering):
+        ใช้วิธี IQR (Interquartile Range) หรือ Tukey's Fences:
+        1. เก็บตัวอย่าง 25 ค่า (25 samples, 20ms apart = ~500ms total)
+        2. เรียงลำดับและคำนวณ Q1 (25th percentile), Q3 (75th percentile)
+        3. คำนวณ IQR = Q3 - Q1
+        4. กำหนดขอบเขต: lower = Q1 - 1.5*IQR, upper = Q3 + 1.5*IQR
+        5. ตัดค่านอกขอบเขตออก (ค่า outlier)
+        6. เฉลี่ยค่าที่เหลือ (ถ้าทุกค่าถูกตัด ใช้ median แทน)
+
+        วิธีนี้สามารถกำจัด ADC glitches ที่รุนแรงได้ เช่น:
+        - ค่าที่ให้ pH = 26.9 แทนที่จะเป็น ~11.7
+        - ค่าที่ให้ pH = 0.8 แทนที่จะเป็น ~11.7
 
     ตัวอย่างการใช้งาน (Usage Example):
         >>> ph_sensor = PHSensor()
@@ -195,10 +208,173 @@ class PHSensor:
         voltage_mv = (adc_value / ADC_MAX_VALUE) * ADC_REFERENCE_MV
         return voltage_mv
 
+    def _calculate_percentile(self, sorted_data, percentile):
+        """
+        คำนวณ percentile จากข้อมูลที่เรียงลำดับแล้ว
+        Calculate percentile from sorted data
+
+        ใช้วิธี linear interpolation สำหรับค่าที่ไม่ตรงกับ index
+        Uses linear interpolation for values between indices
+
+        Args:
+            sorted_data (list): ข้อมูลที่เรียงลำดับแล้ว (sorted data)
+            percentile (float): เปอร์เซ็นไทล์ที่ต้องการ 0-100 (desired percentile)
+
+        Returns:
+            float: ค่า percentile ที่คำนวณได้
+        """
+        n = len(sorted_data)
+        if n == 0:
+            return 0
+
+        # คำนวณตำแหน่ง index (Calculate index position)
+        # ใช้วิธี linear interpolation
+        k = (percentile / 100.0) * (n - 1)
+        f = int(k)  # floor index
+        c = f + 1   # ceiling index
+
+        # ถ้า index เป็นจำนวนเต็มพอดี (If index is exact integer)
+        if f == k or c >= n:
+            return sorted_data[min(f, n - 1)]
+
+        # Linear interpolation ระหว่างสองค่า
+        # Linear interpolation between two values
+        return sorted_data[f] + (k - f) * (sorted_data[c] - sorted_data[f])
+
+    def read_voltage_robust(self):
+        """
+        อ่านแรงดันด้วยวิธี IQR-based outlier rejection (Tukey's Fences)
+        Read voltage using IQR-based outlier rejection (Tukey's Fences)
+
+        วิธีการ (Algorithm):
+            1. เก็บตัวอย่าง 25 ค่า ห่างกัน 20ms (~500ms รวม)
+               Collect 25 samples, 20ms apart (~500ms total)
+
+            2. เรียงลำดับและคำนวณ Q1, Q3
+               Sort and calculate Q1 (25th percentile), Q3 (75th percentile)
+
+            3. คำนวณ IQR = Q3 - Q1
+               Calculate IQR = Q3 - Q1
+
+            4. กำหนดขอบเขต Tukey's Fences:
+               Define Tukey's Fences bounds:
+               - lower_bound = Q1 - 1.5 * IQR
+               - upper_bound = Q3 + 1.5 * IQR
+
+            5. ตัดค่านอกขอบเขต (outliers) ออก
+               Reject values outside bounds (outliers)
+
+            6. เฉลี่ยค่าที่เหลือ
+               Average the remaining "clean" values
+
+            7. ถ้าทุกค่าถูกตัด (edge case) ใช้ median แทน
+               If all values rejected (edge case), use median instead
+
+        ข้อดี (Advantages):
+            - กำจัด ADC glitches รุนแรงได้ (เช่น ค่าที่ให้ pH = 26.9)
+            - ไม่ต้องรู้ค่าที่คาดหวังล่วงหน้า (adaptive threshold)
+            - ใช้ได้กับทุกช่วง pH (works across all pH ranges)
+
+        Returns:
+            float: แรงดันเป็นมิลลิโวลต์ที่กำจัด outlier แล้ว
+                   (voltage in mV with outliers rejected)
+        """
+        # ขั้นตอนที่ 1: เก็บตัวอย่าง ADC หลายค่า
+        # Step 1: Collect multiple ADC samples
+        samples = []
+        for _ in range(ADC_ROBUST_SAMPLES):
+            samples.append(self._adc.read())
+            sleep_ms(ADC_SAMPLE_DELAY_MS)
+
+        # ขั้นตอนที่ 2: เรียงลำดับตัวอย่าง
+        # Step 2: Sort samples
+        sorted_samples = sorted(samples)
+        n = len(sorted_samples)
+
+        # ขั้นตอนที่ 3: คำนวณ Q1 (25th percentile) และ Q3 (75th percentile)
+        # Step 3: Calculate Q1 (25th percentile) and Q3 (75th percentile)
+        q1 = self._calculate_percentile(sorted_samples, 25)
+        q3 = self._calculate_percentile(sorted_samples, 75)
+
+        # ขั้นตอนที่ 4: คำนวณ IQR และขอบเขต
+        # Step 4: Calculate IQR and bounds
+        iqr = q3 - q1
+
+        # จัดการกรณี IQR = 0 (ทุกค่าเท่ากัน)
+        # Handle case where IQR = 0 (all values identical)
+        if iqr == 0:
+            # ถ้าทุกค่าเท่ากัน ใช้ค่าเฉลี่ยปกติ
+            # If all values equal, use simple average
+            avg_adc = sum(sorted_samples) / n
+            voltage_mv = (avg_adc / ADC_MAX_VALUE) * ADC_REFERENCE_MV
+            return voltage_mv
+
+        lower_bound = q1 - (ADC_IQR_FACTOR * iqr)
+        upper_bound = q3 + (ADC_IQR_FACTOR * iqr)
+
+        # ขั้นตอนที่ 5: กรองค่า outlier ออก
+        # Step 5: Filter out outliers
+        clean_samples = [s for s in sorted_samples
+                         if lower_bound <= s <= upper_bound]
+
+        # ขั้นตอนที่ 6: คำนวณค่าเฉลี่ยจากค่าที่สะอาด
+        # Step 6: Calculate average from clean samples
+        if len(clean_samples) > 0:
+            # ใช้ค่าเฉลี่ยของ clean samples
+            # Use average of clean samples
+            avg_adc = sum(clean_samples) / len(clean_samples)
+        else:
+            # Edge case: ทุกค่าถูกตัดออก (ไม่ควรเกิดขึ้นในสถานการณ์ปกติ)
+            # Edge case: All values rejected (should not happen normally)
+            # Fallback to median
+            median_index = n // 2
+            if n % 2 == 0:
+                avg_adc = (sorted_samples[median_index - 1] +
+                           sorted_samples[median_index]) / 2
+            else:
+                avg_adc = sorted_samples[median_index]
+
+        # แปลงเป็นมิลลิโวลต์ (Convert to millivolts)
+        voltage_mv = (avg_adc / ADC_MAX_VALUE) * ADC_REFERENCE_MV
+        return voltage_mv
+
     def read_voltage(self):
         """
-        อ่านแรงดันเป็นมิลลิโวลต์พร้อมการกรองสัญญาณ
-        Read voltage in millivolts with signal filtering
+        อ่านแรงดันเป็นมิลลิโวลต์พร้อมการกรองสัญญาณแบบ Robust
+        Read voltage in millivolts with robust signal filtering
+
+        ใช้วิธี IQR-based outlier rejection (Tukey's Fences) เพื่อกำจัด
+        ค่าผิดปกติจาก ADC glitches ที่ทำให้ได้ค่า pH ผิดพลาดรุนแรง
+
+        Uses IQR-based outlier rejection (Tukey's Fences) to eliminate
+        abnormal values from ADC glitches that cause severe pH errors
+
+        วิธีการกรอง Robust (Robust Filtering Method):
+            1. เก็บตัวอย่าง 25 ค่า ห่างกัน 20ms (~500ms รวม)
+            2. เรียงลำดับและคำนวณ Q1, Q3, IQR
+            3. กำหนดขอบเขต: [Q1 - 1.5*IQR, Q3 + 1.5*IQR]
+            4. ตัดค่านอกขอบเขตออก (outliers)
+            5. เฉลี่ยค่าที่เหลือ
+
+        หมายเหตุ (Notes):
+            - เวลาอ่าน ~500ms (25 samples x 20ms)
+            - สามารถกำจัด outlier รุนแรง เช่น pH=26.9 หรือ pH=0.8
+            - ถ้าต้องการวิธีเดิม (trimmed mean) ใช้ read_voltage_simple()
+
+        Returns:
+            float: แรงดันเป็นมิลลิโวลต์ (voltage in mV)
+        """
+        # ใช้ robust IQR-based method
+        # Use robust IQR-based method
+        return self.read_voltage_robust()
+
+    def read_voltage_simple(self):
+        """
+        อ่านแรงดันด้วยวิธี trimmed mean (วิธีเดิม)
+        Read voltage using trimmed mean method (legacy method)
+
+        วิธีนี้ใช้ในกรณีที่ต้องการอ่านเร็ว แต่ไม่ robust ต่อ outlier รุนแรง
+        This method is for fast reading but not robust against severe outliers
 
         วิธีการกรอง (Filtering Method):
             1. อ่านค่า 10 ครั้ง
@@ -415,9 +591,9 @@ class PHSensor:
 # ตัวอย่างการใช้งาน (Usage Example)
 # ==============================================================================
 if __name__ == "__main__":
-    print("=" * 50)
+    print("=" * 60)
     print("ทดสอบคลาส PHSensor (Testing PHSensor Class)")
-    print("=" * 50)
+    print("=" * 60)
 
     # สร้าง PHSensor object (Create PHSensor object)
     ph_sensor = PHSensor()
@@ -427,13 +603,38 @@ if __name__ == "__main__":
     print(f"Theoretical slope at 25C: {NERNST_THEORETICAL_SLOPE:.2f} mV/pH")
     print(f"Buffer values: {ph_sensor.get_buffer_values()}")
 
+    print("\n--- ค่าคงที่ Robust ADC (Robust ADC Constants) ---")
+    print(f"Samples: {ADC_ROBUST_SAMPLES}")
+    print(f"Sample delay: {ADC_SAMPLE_DELAY_MS} ms")
+    print(f"IQR factor: {ADC_IQR_FACTOR}")
+    print(f"Total read time: ~{ADC_ROBUST_SAMPLES * ADC_SAMPLE_DELAY_MS} ms")
+
     try:
-        print("\n--- ทดสอบการอ่านค่า (Reading Test) ---")
+        print("\n--- ทดสอบการอ่านค่าแบบ Robust (Robust Reading Test) ---")
+        print("หมายเหตุ: read_voltage() ใช้ IQR-based outlier rejection")
+        print("Note: read_voltage() uses IQR-based outlier rejection")
         for i in range(5):
             voltage_mv, ph = ph_sensor.read()
             raw = ph_sensor.read_raw()
             print(f"อ่านครั้งที่ {i+1}: Raw ADC={raw}, mV={voltage_mv:.1f}, pH={ph:.2f}")
-            sleep_ms(1000)
+            sleep_ms(500)  # ลด delay เพราะ robust reading ใช้เวลา ~500ms แล้ว
+
+        print("\n--- เปรียบเทียบ Robust vs Simple (Comparison) ---")
+        print("Robust method (IQR) vs Simple method (trimmed mean)")
+        for i in range(3):
+            # อ่านแบบ robust (IQR-based)
+            mv_robust = ph_sensor.read_voltage_robust()
+            ph_robust = ph_sensor._slope * mv_robust + ph_sensor._intercept
+
+            # อ่านแบบ simple (trimmed mean)
+            mv_simple = ph_sensor.read_voltage_simple()
+            ph_simple = ph_sensor._slope * mv_simple + ph_sensor._intercept
+
+            print(f"รอบที่ {i+1}:")
+            print(f"  Robust: mV={mv_robust:.1f}, pH={ph_robust:.2f}")
+            print(f"  Simple: mV={mv_simple:.1f}, pH={ph_simple:.2f}")
+            print(f"  ความต่าง (Diff): {abs(mv_robust - mv_simple):.1f} mV, "
+                  f"{abs(ph_robust - ph_simple):.2f} pH")
 
         print("\n--- ทดสอบการอ่านเฉลี่ย (Averaged Reading Test) ---")
         avg_mv, avg_ph = ph_sensor.read_averaged(num_readings=3, delay_ms=500)
@@ -447,4 +648,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nหยุดโดยผู้ใช้ (Stopped by user)")
 
-    print("เสร็จสิ้น (Done)")
+    print("\nเสร็จสิ้น (Done)")

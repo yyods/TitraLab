@@ -866,6 +866,111 @@ Last saved: 2025-03-15
 | ค่า mV ไม่เปลี่ยน | สายขาด/หลวม | ตรวจสอบสายจัมเปอร์ GPIO→DEVICES |
 | ค่า mV กระโดดไม่นิ่ง | สัญญาณรบกวน | ตรวจ ground, ห่างจากมอเตอร์ |
 | Slope ผิดจากทฤษฎีมาก | หัววัดเสื่อม | เปลี่ยนหัววัดใหม่ |
+| ค่า pH ผิดปกติรุนแรง (เช่น 26.9 หรือ 0.8) | ADC glitch | ระบบใช้ IQR filtering กำจัดอัตโนมัติ (ดู Section 9.6) |
+
+### 9.6 การกรองสัญญาณ ADC แบบ Robust (Robust ADC Filtering)
+
+ระบบ TitraLab Week 3 ใช้เทคนิค **IQR-based Outlier Rejection** (Tukey's Fences) เพื่อกำจัด
+ค่าผิดปกติจาก ADC ที่อาจเกิดจากสัญญาณรบกวนไฟฟ้าหรือการรบกวนจากมอเตอร์ปั๊ม
+
+#### ปัญหาที่พบและวิธีแก้ไข (Problem and Solution)
+
+**ปัญหา**: ADC ของ ESP32 มี occasional glitches ทำให้อ่านค่าผิดปกติรุนแรง
+
+ตัวอย่างค่าผิดปกติที่พบ (Examples of outliers observed):
+- อ่านได้ pH = 26.905 (ค่าจริงควรเป็น ~11.77)
+- อ่านได้ pH = 20.121 (ค่าจริงควรเป็น ~11.77)
+- อ่านได้ pH = 0.869 (ค่าจริงควรเป็น ~11.77)
+
+**วิธีแก้ไข**: ใช้ IQR (Interquartile Range) method หรือ Tukey's Fences
+
+#### อัลกอริทึม IQR-based Outlier Rejection
+
+```
+ขั้นตอน (Algorithm Steps):
+
+1. เก็บตัวอย่าง ADC 25 ค่า ห่างกัน 20ms (~500ms รวม)
+   Collect 25 ADC samples, 20ms apart (~500ms total)
+         ↓
+2. เรียงลำดับตัวอย่างจากน้อยไปมาก
+   Sort samples in ascending order
+         ↓
+3. คำนวณ Q1 (25th percentile) และ Q3 (75th percentile)
+   Calculate Q1 and Q3
+         ↓
+4. คำนวณ IQR = Q3 - Q1
+   Calculate Interquartile Range
+         ↓
+5. กำหนดขอบเขต Tukey's Fences:
+   - ขอบเขตล่าง = Q1 - 1.5 x IQR
+   - ขอบเขตบน = Q3 + 1.5 x IQR
+   Define bounds: lower = Q1 - 1.5*IQR, upper = Q3 + 1.5*IQR
+         ↓
+6. ตัดค่านอกขอบเขตออก (outliers)
+   Reject values outside bounds
+         ↓
+7. เฉลี่ยค่าที่เหลือ (ถ้าทุกค่าถูกตัด ใช้ median แทน)
+   Average remaining values (fallback to median if all rejected)
+```
+
+#### ทำไมใช้วิธี IQR? (Why IQR Method?)
+
+| ข้อดี | คำอธิบาย |
+|-------|---------|
+| **Adaptive threshold** | ไม่ต้องรู้ค่าที่คาดหวังล่วงหน้า ขอบเขตปรับตามข้อมูลจริง |
+| **ใช้ได้ทุกช่วง pH** | ทำงานได้ดีไม่ว่า pH จะเป็น 2 หรือ 12 |
+| **Standard method** | เป็นวิธีมาตรฐานในสถิติ (ใช้ใน box plots) |
+| **กำจัด extreme outliers** | สามารถกำจัดค่าผิดปกติรุนแรงได้ (เช่น pH=26.9) |
+
+#### ค่าคงที่ใน config.py
+
+| ค่าคงที่ | ค่าเริ่มต้น | ความหมาย |
+|---------|-----------|---------|
+| `ADC_ROBUST_SAMPLES` | 25 | จำนวนตัวอย่าง ADC ที่เก็บ |
+| `ADC_SAMPLE_DELAY_MS` | 20 | เวลาหน่วงระหว่างตัวอย่าง (ms) |
+| `ADC_IQR_FACTOR` | 1.5 | ตัวคูณ IQR มาตรฐาน (Tukey's factor) |
+
+#### ผลกระทบต่อเวลา (Time Impact)
+
+| รายการ | ค่า |
+|--------|-----|
+| เวลาอ่านต่อครั้ง | ~500ms (25 x 20ms) |
+| เวลาเดิม (trimmed mean) | ~100ms |
+| เวลาเพิ่มขึ้นต่อ cycle | ~400ms |
+| 50 cycles overhead | ~20 วินาที |
+| เวลาไทเทรชันรวมเพิ่ม | ~4% (ยอมรับได้) |
+
+#### เปรียบเทียบ Robust vs Simple Method
+
+```python
+# Robust method (IQR-based) - ใช้เป็นค่าเริ่มต้น
+voltage_mv = ph_sensor.read_voltage()        # ~500ms, กำจัด outlier รุนแรงได้
+
+# Simple method (trimmed mean) - วิธีเดิม ถ้าต้องการเร็วกว่า
+voltage_mv = ph_sensor.read_voltage_simple() # ~100ms, ไม่ robust ต่อ extreme outlier
+```
+
+#### การเชื่อมโยงกับหลักการทางสถิติ (Statistics Connection)
+
+วิธี IQR หรือ Tukey's Fences เป็นเทคนิคมาตรฐานในการตรวจหา outlier:
+
+```
+Box Plot (แผนภาพกล่อง):
+
+        Lower fence                Upper fence
+            │                          │
+    ────────┼────┬─────────┬────┼──────────
+            │    │   IQR   │    │
+            │   Q1        Q3   │
+            │    │         │    │
+       Q1 - 1.5*IQR      Q3 + 1.5*IQR
+
+ค่าที่อยู่นอก fences ถือว่าเป็น outlier
+Values outside fences are considered outliers
+```
+
+**หมายเหตุสำคัญ**: วิธี IQR ถูกใช้อัตโนมัติเมื่อเรียก `ph_sensor.read()` หรือ `ph_sensor.read_voltage()`
+นิสิตไม่ต้องทำอะไรเพิ่มเติม ระบบจะกำจัด outlier ให้อัตโนมัติ
 
 ### 9.2 ปัญหาเกี่ยวกับปั๊ม (Pump Issues)
 
@@ -1063,9 +1168,14 @@ python equiv_point.py titration_data_R1.csv --save
 
 ---
 
-*TitraLab Week 3 - User Manual v2.1*
+*TitraLab Week 3 - User Manual v2.2*
 *ภาควิชาเคมี คณะวิทยาศาสตร์ จุฬาลงกรณ์มหาวิทยาลัย*
 *Integrated Chemistry Laboratory I (2302311)*
+
+**การเปลี่ยนแปลงใน v2.2:**
+- เพิ่ม Section 9.6: การกรองสัญญาณ ADC แบบ Robust (IQR-based Outlier Rejection)
+- เพิ่มการแก้ปัญหาค่า pH ผิดปกติรุนแรงในตาราง Troubleshooting (เช่น pH=26.9, 0.8)
+- อธิบายอัลกอริทึม Tukey's Fences และค่าคงที่ใน config.py
 
 **การเปลี่ยนแปลงใน v2.1:**
 - ปรับปรุง Mode 4: รอกด BTN1 ก่อนเริ่ม, แสดงเวลาที่คำนวณ

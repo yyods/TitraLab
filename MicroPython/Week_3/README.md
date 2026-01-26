@@ -589,6 +589,32 @@ pH = slope_m * mV + intercept_b
                      mV = ADC/4095 x 3300   pH = slope_m * mV + intercept_b
 ```
 
+### การกรองสัญญาณ ADC แบบ Robust (Robust ADC Filtering)
+
+ระบบใช้ **IQR-based Outlier Rejection** (Tukey's Fences) เพื่อกำจัดค่าผิดปกติจาก ADC glitches:
+
+```
+การอ่านค่าแบบ Robust (Robust Reading Process):
+
+25 ADC samples ─► Sort ─► Calculate Q1, Q3, IQR ─► Define bounds ─► Reject outliers ─► Average
+   (20ms apart)           (percentiles)            [Q1-1.5*IQR,      (outside bounds)
+                                                    Q3+1.5*IQR]
+```
+
+**ข้อดี:**
+- กำจัด extreme outliers ได้ (เช่น pH=26.9 แทนที่จะเป็น ~11.7)
+- ไม่ต้องรู้ค่าที่คาดหวังล่วงหน้า (adaptive threshold)
+- เป็นวิธีมาตรฐานทางสถิติ (ใช้ใน box plots)
+
+**ค่าคงที่ใน config.py:**
+| ค่าคงที่ | ค่า | ความหมาย |
+|---------|-----|---------|
+| `ADC_ROBUST_SAMPLES` | 25 | จำนวนตัวอย่าง |
+| `ADC_SAMPLE_DELAY_MS` | 20 | หน่วงเวลาระหว่างตัวอย่าง (ms) |
+| `ADC_IQR_FACTOR` | 1.5 | ตัวคูณ Tukey มาตรฐาน |
+
+**เวลาที่ใช้:** ~500ms ต่อการอ่าน (เพิ่มจาก ~100ms แต่ robust กว่ามาก)
+
 ### การตรวจจับจุดสมมูล (Equivalence Point Detection)
 
 ระบบใช้วิธี derivative เพื่อหาจุดสมมูล โดยแต่ละจุดห่างกัน 0.2 mL:
@@ -880,6 +906,23 @@ C_analyte = (C_titrant * V_titrant) / V_analyte
 - ล้างหัววัดด้วยน้ำ DI
 - คนสารละลายเบาๆ ขณะวัด
 - ตรวจสอบสภาพหัววัด (ควรเปลี่ยนทุก 1-2 ปี)
+
+---
+
+### ปัญหา: ค่า pH ผิดปกติรุนแรง (Extreme pH reading errors)
+
+**ตัวอย่าง:** pH อ่านได้ 26.9 หรือ 0.8 แทนที่จะเป็น ~11.7
+
+**สาเหตุ:**
+- ADC glitch จากสัญญาณรบกวนไฟฟ้า
+- สัญญาณรบกวนจากมอเตอร์ปั๊ม
+
+**วิธีแก้:**
+- ระบบใช้ **IQR-based outlier rejection** (Tukey's Fences) อัตโนมัติ
+- เก็บตัวอย่าง 25 ค่า คำนวณ Q1, Q3, IQR แล้วตัดค่านอกขอบเขตออก
+- ถ้ายังมีปัญหา: ตรวจสอบการต่อสายกราวด์และห่างจากมอเตอร์
+
+**หมายเหตุ:** การกรองแบบ robust ทำงานอัตโนมัติ ไม่ต้องตั้งค่าเพิ่มเติม
 
 ---
 
@@ -1230,9 +1273,18 @@ TitraLab/                    <-- โฟลเดอร์หลักของ�
 
 ---
 
-*Version 3.4.0 - Enhanced User Interface and Full Data Collection*
+*Version 3.5.0 - Robust pH Reading with IQR-based Outlier Rejection*
 *สร้างเมื่อ: มกราคม 2026*
 *อัปเดตล่าสุด: มกราคม 2026*
+
+**การเปลี่ยนแปลงใน v3.5.0:**
+- **Robust pH Reading**: เพิ่มการกรองสัญญาณ ADC แบบ IQR-based Outlier Rejection (Tukey's Fences)
+  - แก้ปัญหาค่า pH ผิดปกติรุนแรง (เช่น 26.9, 20.1, 0.8 แทนที่จะเป็น ~11.7)
+  - เก็บตัวอย่าง 25 ค่า คำนวณ Q1, Q3, IQR แล้วตัดค่านอกขอบเขต [Q1-1.5*IQR, Q3+1.5*IQR]
+  - ใช้อัตโนมัติใน `ph_sensor.read()` และ `ph_sensor.read_voltage()`
+  - เพิ่มเมธอด `read_voltage_simple()` สำหรับวิธีเดิม (trimmed mean) ถ้าต้องการเร็วกว่า
+- **New config.py constants**: `ADC_ROBUST_SAMPLES=25`, `ADC_SAMPLE_DELAY_MS=20`, `ADC_IQR_FACTOR=1.5`
+- **Time impact**: การอ่าน pH เพิ่มจาก ~100ms เป็น ~500ms ต่อครั้ง (เวลาไทเทรชันรวมเพิ่ม ~4%)
 
 **การเปลี่ยนแปลงใน v3.4.0:**
 - **Mode 4 (Test Flow Rate)**: แสดงเวลาที่คำนวณจาก flow rate, รอกด BTN1 ก่อนเริ่ม
