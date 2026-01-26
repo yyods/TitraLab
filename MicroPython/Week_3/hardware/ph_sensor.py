@@ -179,7 +179,17 @@ class PHSensor:
         Args:
             slope (float): slope_m (pH/mV)
             intercept (float): intercept_b (pH)
+
+        หมายเหตุ (Note):
+            FIX Issue #21: slope ควรเป็นค่าลบ (pH ลดเมื่อ mV เพิ่ม)
+            slope should be negative (pH decreases as mV increases)
         """
+        # FIX Issue #21: ตรวจสอบและแก้ไข slope ที่เป็นบวก
+        # Validate and auto-correct positive slope
+        if slope > 0:
+            print(f"คำเตือน: slope ควรเป็นค่าลบ! ({slope:.6f} -> {-abs(slope):.6f})")
+            print(f"WARNING: Slope should be negative! Auto-correcting...")
+            slope = -abs(slope)
         self._slope = slope
         self._intercept = intercept
         print(f"สมการใหม่: pH = {slope:.6f} * mV + {intercept:.4f} "
@@ -414,9 +424,24 @@ class PHSensor:
             tuple: (voltage_mv, pH)
                 - voltage_mv (float): แรงดันเป็นมิลลิโวลต์ (voltage in mV)
                 - pH (float): ค่า pH ที่คำนวณได้
+
+        หมายเหตุ (Note):
+            FIX Issue #6: ตรวจสอบค่า pH อยู่ในช่วงที่เป็นไปได้
+            Validates pH is within reasonable range (-2.0 to 16.0)
         """
         voltage_mv = self.read_voltage()
         ph_value = self._slope * voltage_mv + self._intercept
+
+        # FIX Issue #6: ตรวจสอบค่า pH อยู่ในช่วงที่เป็นไปได้
+        # Validate pH is within reasonable range
+        # ค่า pH ที่เป็นไปได้: -2.0 ถึง 16.0 (รวม outlier เล็กน้อย)
+        # Reasonable pH range: -2.0 to 16.0 (including slight outliers)
+        # ตรวจสอบ NaN ด้วย ph_value != ph_value (NaN check)
+        if ph_value < -2.0 or ph_value > 16.0 or ph_value != ph_value:
+            print(f"คำเตือน: pH นอกช่วง ({ph_value:.2f}), ใช้ค่าเริ่มต้น 7.0")
+            print(f"WARNING: pH out of bounds ({ph_value:.2f}), using default 7.0")
+            ph_value = 7.0  # ค่าเริ่มต้นที่ปลอดภัย (Safe default)
+
         return voltage_mv, ph_value
 
     def read_ph(self):

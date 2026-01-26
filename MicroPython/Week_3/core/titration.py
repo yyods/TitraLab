@@ -50,10 +50,11 @@ class TitrationController:
     DEFAULT_SAMPLE_VOLUME = 5.0    # ปริมาตรสารตัวอย่าง (sample volume mL)
     DEFAULT_PH_THRESHOLD = 0.01    # ค่า threshold สำหรับ pH คงที่
 
-    # ปริมาตรสำหรับเตือนใกล้จุดสมมูล (Volume for near-equivalence alert)
+    # ปริมาตรเริ่มต้นสำหรับเตือนใกล้จุดสมมูล (Default volume for near-equivalence alert)
     # สำหรับการทดลอง HCl 0.1M 5mL + NaOH 0.1M → จุดสมมูลที่ 5.0 mL
     # For HCl 0.1M 5mL + NaOH 0.1M experiment → equivalence at 5.0 mL
-    ALERT_VOLUME_ML = 4.80         # เตือนที่ 4.80 mL (alert at 4.80 mL)
+    # หมายเหตุ: สามารถเปลี่ยนได้ผ่าน configure() (Note: configurable via configure())
+    DEFAULT_ALERT_VOLUME_ML = 4.80  # ค่าเริ่มต้นเตือนที่ 4.80 mL (default alert at 4.80 mL)
 
     # CSV Header สำหรับบันทึกข้อมูล (CSV Header for data logging)
     # ชื่อคอลัมน์ตรงกับ EquivPoint analysis tool (Column names match EquivPoint)
@@ -107,13 +108,19 @@ class TitrationController:
         # เพื่อให้ได้กราฟ S-curve ที่สมบูรณ์ทั้งก่อนและหลังจุดสมมูล
         # For a complete S-curve with data before and after equivalence point
         self.max_volume = 2 * self.sample_volume
+        # ปริมาตรสำหรับเตือนใกล้จุดสมมูล (Volume for near-equivalence alert)
+        # สามารถเปลี่ยนได้ผ่าน configure() (configurable via configure())
+        self.alert_volume = self.DEFAULT_ALERT_VOLUME_ML
+        # จำนวน step ทั้งหมด คำนวณครั้งเดียวใน configure() (Total steps, calculated once in configure())
+        self.total_steps = int(self.max_volume / self.dose_volume)
 
         # สถานะการทำงาน (Operation state)
         self._is_running = False
         self._should_stop = False
         self._current_filename = None
 
-    def configure(self, dose_volume=None, stabilize_time=None, sample_volume=None):
+    def configure(self, dose_volume=None, stabilize_time=None, sample_volume=None,
+                  alert_volume=None):
         """
         ตั้งค่าพารามิเตอร์การไทเทรชัน
         Configure titration parameters
@@ -127,6 +134,9 @@ class TitrationController:
             sample_volume: ปริมาตรสารตัวอย่าง (sample volume mL)
                           max_volume จะถูกคำนวณเป็น 2 * sample_volume
                           max_volume is auto-calculated as 2 * sample_volume
+            alert_volume: ปริมาตรสำหรับเตือนใกล้จุดสมมูล (mL)
+                          (volume for near-equivalence alert)
+                          ค่าเริ่มต้น: 4.80 mL (default: 4.80 mL)
         """
         if dose_volume is not None:
             self.dose_volume = dose_volume
@@ -136,16 +146,21 @@ class TitrationController:
             self.sample_volume = sample_volume
             # ปริมาตรสูงสุด = 2 เท่าของปริมาตรตัวอย่าง (Max = 2x sample volume)
             self.max_volume = 2 * self.sample_volume
+        if alert_volume is not None:
+            self.alert_volume = alert_volume
 
-        # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
-        total_steps = int(self.max_volume / self.dose_volume)
+        # คำนวณจำนวน step ทั้งหมดและเก็บเป็น instance variable
+        # Calculate total steps and store as instance variable
+        # FIX: คำนวณครั้งเดียวเพื่อความสอดคล้อง (Calculate once for consistency)
+        self.total_steps = int(self.max_volume / self.dose_volume)
 
         print(f"ตั้งค่าการไทเทรชัน (Titration configured):")
         print(f"  - ปริมาตรตัวอย่าง (Sample volume): {self.sample_volume} mL")
         print(f"  - ปริมาตรสูงสุด (Max volume): {self.max_volume} mL (2x sample)")
         print(f"  - ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
-        print(f"  - จำนวน step ทั้งหมด (Total steps): {total_steps}")
+        print(f"  - จำนวน step ทั้งหมด (Total steps): {self.total_steps}")
         print(f"  - เวลารอ (Stabilize): {self.stabilize_time} s")
+        print(f"  - ปริมาตรเตือน (Alert volume): {self.alert_volume} mL")
 
     def reset(self):
         """
@@ -174,11 +189,17 @@ class TitrationController:
         ph_value = self.ph_sensor.read_ph() if self.ph_sensor else 7.0
 
         # อ่านค่าอุณหภูมิ (Read temperature)
+        # FIX Issue #2: ใช้ read() แทน read_temperature() ตาม TemperatureSensor class
+        # FIX Issue #14: เพิ่มคำเตือนเมื่อเซ็นเซอร์อุณหภูมิผิดพลาด
         temp_value = 25.0  # ค่าเริ่มต้น (default)
         if self.temp_sensor:
             try:
-                temp_value = self.temp_sensor.read_temperature()
-            except Exception:
+                # ใช้ read() method ตาม TemperatureSensor class (Use read() per TemperatureSensor class)
+                temp_value = self.temp_sensor.read()
+            except Exception as e:
+                # FIX Issue #14: แสดงคำเตือนแทนการเงียบ (Show warning instead of silent failure)
+                print(f"คำเตือน: เซ็นเซอร์อุณหภูมิผิดพลาด ({e}), ใช้ค่าเริ่มต้น 25.0°C")
+                print(f"WARNING: Temp sensor error ({e}), using default 25.0°C")
                 temp_value = 25.0
 
         return (ph_value, temp_value)
@@ -190,6 +211,12 @@ class TitrationController:
 
         Args:
             volume_ml: ปริมาตรที่จะเติม (volume to dispense in mL)
+
+        หมายเหตุ (Note):
+            FIX Issue #1: ปริมาตรรวมคำนวณจาก cycle_count * dose_volume
+            แทนการสะสม += เพื่อหลีกเลี่ยงปัญหา floating-point drift
+            Total volume calculated from cycle_count * dose_volume
+            instead of += accumulation to avoid floating-point drift
         """
         if self.pump:
             # ใช้ run_for_volume ถ้ามี มิฉะนั้นใช้ pump_volume
@@ -198,7 +225,11 @@ class TitrationController:
                 self.pump.run_for_volume(volume_ml)
             elif hasattr(self.pump, 'pump_volume'):
                 self.pump.pump_volume(volume_ml)
-            self.current_volume += volume_ml
+            # FIX Issue #1: คำนวณปริมาตรจาก cycle_count แทนการสะสม +=
+            # Calculate volume from cycle_count instead of += accumulation
+            # เพื่อหลีกเลี่ยง floating-point drift (e.g., 50 x 0.2 = 9.999999 instead of 10.0)
+            # To avoid floating-point drift
+            self.current_volume = self.cycle_count * self.dose_volume
 
     def _log_data_point(self, cycle, elapsed_time, volume, ph, temperature):
         """
@@ -228,6 +259,10 @@ class TitrationController:
                 data_row = f"{volume:.3f},{ph:.3f},{cycle},{elapsed_time:.2f},{temperature:.2f}\n"
                 with open(self._current_filename, 'a') as f:
                     f.write(data_row)
+                    # FIX Issue #5: flush เพื่อให้แน่ใจว่าข้อมูลถูกเขียนลง flash
+                    # Flush to ensure data is written to flash
+                    # ป้องกันการสูญหายของข้อมูลถ้าไฟดับ (Prevent data loss on power failure)
+                    f.flush()
             except Exception as e:
                 print(f"ข้อผิดพลาดบันทึกข้อมูล (Data logging error): {e}")
 
@@ -245,15 +280,13 @@ class TitrationController:
         """
         if self.display:
             try:
-                # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
-                total_steps = int(self.max_volume / self.dose_volume)
-
+                # ใช้ self.total_steps แทนการคำนวณซ้ำ (Use self.total_steps instead of recalculating)
                 # ใช้เมธอด show_titration_status ถ้ามี
                 # Use show_titration_status method if available
                 if hasattr(self.display, 'show_titration_status'):
                     self.display.show_titration_status(
                         step=cycle,
-                        total_steps=total_steps,
+                        total_steps=self.total_steps,
                         volume=volume,
                         max_volume=self.max_volume,
                         ph=ph,
@@ -290,7 +323,11 @@ class TitrationController:
         delta_ph = current['ph'] - previous['ph']
 
         # ป้องกันหารด้วยศูนย์ (Prevent division by zero)
-        if abs(delta_v) < 0.0001:
+        # FIX Issue #4: เปลี่ยน threshold จาก 0.0001 เป็น 0.01 mL
+        # Changed threshold from 0.0001 to 0.01 mL
+        # 0.01 mL = 5% ของ dose 0.2 mL, ปลอดภัยจาก floating-point errors
+        # 0.01 mL = 5% of 0.2 mL dose, safe from floating-point errors
+        if abs(delta_v) < 0.01:
             return 0.0
 
         derivative = delta_ph / delta_v
@@ -470,16 +507,15 @@ class TitrationController:
         Returns:
             dict: ผลลัพธ์การไทเทรชัน (Titration results)
         """
-        # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
-        total_steps = int(self.max_volume / self.dose_volume)
-
+        # ใช้ self.total_steps ที่คำนวณไว้ใน configure() แล้ว
+        # Use self.total_steps already calculated in configure()
         print("\n" + "=" * 50)
         print("ไทเทรชันอัตโนมัติ (Auto Titration)")
         print("=" * 50)
         print(f"ปริมาตรตัวอย่าง (Sample): {self.sample_volume} mL")
         print(f"ปริมาตรสูงสุด (Max): {self.max_volume} mL (2x sample)")
         print(f"ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
-        print(f"จำนวน step (Total steps): {total_steps}")
+        print(f"จำนวน step (Total steps): {self.total_steps}")
         print("-" * 50)
         print("กดปุ่ม 1 เริ่ม, ปุ่ม 3 ยกเลิก (BTN1:Start BTN3:Cancel)")
 
@@ -491,7 +527,7 @@ class TitrationController:
                         sample_vol=self.sample_volume,
                         max_vol=self.max_volume,
                         dose_vol=self.dose_volume,
-                        total_steps=total_steps
+                        total_steps=self.total_steps
                     )
                 else:
                     self.display.show_message("Auto Titration", "BTN1:Start BTN3:Cancel")
@@ -531,8 +567,35 @@ class TitrationController:
                 f.write(','.join(self.CSV_HEADERS) + '\n')
             print(f"\nสร้างไฟล์: {self._current_filename} (File created)")
         except Exception as e:
-            print(f"ไม่สามารถสร้างไฟล์ (Cannot create file): {e}")
+            # FIX Issue #23: แสดงข้อผิดพลาดชัดเจนและเตือนผู้ใช้
+            # Show clear error and warn user that data won't be saved
+            print(f"ข้อผิดพลาด: ไม่สามารถสร้างไฟล์! (ERROR: Cannot create file!): {e}")
             self._current_filename = None
+            # แสดงข้อความบนจอ (Show message on display)
+            if self.display:
+                try:
+                    if hasattr(self.display, 'show_message'):
+                        self.display.show_message("FILE ERROR!", "Data won't be saved")
+                except Exception:
+                    pass
+            # ส่งเสียงเตือน (Play error sound)
+            if self.buzzer:
+                try:
+                    if hasattr(self.buzzer, 'error_sound'):
+                        self.buzzer.error_sound()
+                    else:
+                        # Fallback: เสียงเตือน 3 ครั้ง (3 warning beeps)
+                        for _ in range(3):
+                            self.buzzer.play_tone(500, 100)
+                            time.sleep(0.1)
+                except Exception:
+                    pass
+            # รอให้ผู้ใช้เห็นข้อความ (Wait for user to see message)
+            time.sleep(2)
+            # หมายเหตุ: ไทเทรชันจะดำเนินต่อแต่ไม่บันทึกข้อมูล
+            # Note: Titration continues but data won't be saved
+            print("คำเตือน: ไทเทรชันจะดำเนินต่อแต่ข้อมูลจะไม่ถูกบันทึก!")
+            print("WARNING: Titration will continue but data will NOT be saved!")
 
         print("\n" + "=" * 50)
         print("เริ่มการไทเทรชัน! (Starting Titration!)")
@@ -571,17 +634,16 @@ class TitrationController:
         previous_derivative = 0.0
         alert_played = False  # Flag: เตือนใกล้จุดสมมูลแล้วหรือยัง (near-EP alert played?)
 
-        # คำนวณจำนวน step ทั้งหมด (Calculate total steps)
+        # ใช้ self.total_steps ที่คำนวณไว้แล้ว (Use pre-calculated self.total_steps)
         # FIX Bug 2: ใช้ step count แทน volume เพื่อหลีกเลี่ยงปัญหา floating-point
         # Use step count instead of volume to avoid floating-point precision issues
-        total_steps = int(self.max_volume / self.dose_volume)
-        print(f"\n[Titration] จำนวน step ทั้งหมด: {total_steps} (Total steps)")
+        print(f"\n[Titration] จำนวน step ทั้งหมด: {self.total_steps} (Total steps)")
 
         try:
             # ลูปการไทเทรชันหลัก (Main titration loop)
-            # FIX Bug 2: ใช้ cycle_count < total_steps แทน current_volume < max_volume
-            # Use cycle_count < total_steps instead of current_volume < max_volume
-            while not self._should_stop and self.cycle_count < total_steps:
+            # FIX Bug 2: ใช้ cycle_count < self.total_steps แทน current_volume < max_volume
+            # Use cycle_count < self.total_steps instead of current_volume < max_volume
+            while not self._should_stop and self.cycle_count < self.total_steps:
                 self.cycle_count += 1
 
                 # เติมสารละลาย (Dispense titrant)
@@ -616,12 +678,13 @@ class TitrationController:
                 # =============================================================
                 # เตือนใกล้จุดสมมูล (Near-equivalence point alert)
                 # สำหรับ HCl 0.1M 5mL + NaOH 0.1M: จุดสมมูลที่ ~5.0 mL
-                # เตือนที่ 4.80 mL เพื่อให้นิสิตเตรียมสังเกต
+                # เตือนที่ 4.80 mL (ค่าเริ่มต้น) เพื่อให้นิสิตเตรียมสังเกต
+                # FIX Issue #22: ใช้ self.alert_volume แทน hardcoded ALERT_VOLUME_ML
                 # =============================================================
                 # FIX: ใช้ step count แทน volume เพื่อหลีกเลี่ยงปัญหา floating-point
                 # Use step count instead of volume to avoid floating-point issues
-                # alert_step = 4.80 / 0.2 = 24
-                alert_step = int(self.ALERT_VOLUME_ML / self.dose_volume)
+                # เช่น alert_step = 4.80 / 0.2 = 24 (example)
+                alert_step = int(self.alert_volume / self.dose_volume)
                 if not alert_played and self.cycle_count >= alert_step:
                     alert_played = True
                     print("\n" + "!" * 50)
@@ -641,11 +704,11 @@ class TitrationController:
                     # อัปเดตจอแสดงผลพร้อมข้อความเตือน (Update display with alert)
                     if self.display:
                         try:
-                            total_steps = int(self.max_volume / self.dose_volume)
+                            # ใช้ self.total_steps แทนการคำนวณซ้ำ (Use self.total_steps instead of recalculating)
                             if hasattr(self.display, 'show_titration_status'):
                                 self.display.show_titration_status(
                                     step=self.cycle_count,
-                                    total_steps=total_steps,
+                                    total_steps=self.total_steps,
                                     volume=self.current_volume,
                                     max_volume=self.max_volume,
                                     ph=ph_value,

@@ -188,8 +188,13 @@ def main():
         # ตั้งค่าพารามิเตอร์ไทเทรชัน (Configure titration parameters)
         # stabilize_time=2.0 สำหรับทดสอบ, ใช้ 10.0 สำหรับการทดลองจริง
         # stabilize_time=2.0 for testing, use 10.0 for real experiments
+        # alert_volume: ปริมาตรที่จะเตือนใกล้จุดสมมูล (volume to alert near equivalence)
+        #   - สำหรับ HCl 0.1M 5mL + NaOH 0.1M: จุดสมมูล ~5.0 mL, เตือนที่ 4.80 mL
+        #   - For HCl 0.1M 5mL + NaOH 0.1M: equiv point ~5.0 mL, alert at 4.80 mL
+        #   - ปรับค่านี้ตามการทดลอง (adjust for your experiment)
         titration.configure(
-            stabilize_time=10.0  # วินาที (seconds) - เปลี่ยนเป็น 2.0 สำหรับทดสอบ
+            stabilize_time=10.0,  # วินาที (seconds) - เปลี่ยนเป็น 2.0 สำหรับทดสอบ
+            alert_volume=4.80     # mL - เตือน 3 เสียงเมื่อใกล้จุดสมมูล (3 beeps near equiv point)
         )
 
         # สร้าง Menu System (Create Menu System)
