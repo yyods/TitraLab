@@ -168,6 +168,24 @@ def main():
         # บันทึกข้อมูลใน ESP32 flash storage (Save data to ESP32 flash storage)
         data_manager = DataManager()
 
+        # โหลดค่าสอบเทียบ pH จากไฟล์ (ถ้ามี) (Load pH calibration from file if exists)
+        # FIX: ก่อนหน้านี้ค่าสอบเทียบไม่ถูกโหลดเมื่อเริ่มโปรแกรมใหม่
+        # FIX: Previously calibration was not loaded when program restarted
+        slope_m, intercept_b, r_squared, cal_temp = data_manager.load_ph_calibration()
+        if slope_m is not None and intercept_b is not None:
+            hardware.ph_sensor.set_calibration(slope_m, intercept_b)
+            print(f"นำค่าสอบเทียบ pH มาใช้แล้ว (pH calibration applied)")
+        else:
+            print("ใช้ค่าสอบเทียบ pH เริ่มต้น (Using default pH calibration)")
+
+        # โหลดค่าอัตราการไหลจากไฟล์ (ถ้ามี) (Load flow rate from file if exists)
+        flow_rate, _ = data_manager.load_flow_rate()
+        if flow_rate is not None:
+            hardware.pump.flow_rate = flow_rate
+            print(f"นำค่าอัตราการไหลมาใช้แล้ว (Flow rate applied): {flow_rate:.4f} mL/s")
+        else:
+            print("ใช้ค่าอัตราการไหลเริ่มต้น (Using default flow rate)")
+
         # สร้าง Calibrator (Create Calibrator)
         calibrator = Calibrator(
             ph_sensor=hardware.ph_sensor,
