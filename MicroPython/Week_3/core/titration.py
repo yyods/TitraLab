@@ -517,6 +517,23 @@ class TitrationController:
         print(f"ปริมาตรต่อครั้ง (Dose): {self.dose_volume} mL")
         print(f"จำนวน step (Total steps): {self.total_steps}")
         print("-" * 50)
+
+        # แสดงสถานะการสอบเทียบ (Show calibration status)
+        # อัตราการไหล (Flow rate)
+        if self.pump and hasattr(self.pump, 'flow_rate') and self.pump.flow_rate:
+            print(f"อัตราการไหล (Flow rate): {self.pump.flow_rate:.4f} mL/s")
+        else:
+            print("อัตราการไหล (Flow rate): ค่าเริ่มต้น! (DEFAULT - not calibrated!)")
+
+        # สมการ pH (pH calibration equation)
+        if self.ph_sensor and hasattr(self.ph_sensor, 'slope') and hasattr(self.ph_sensor, 'intercept'):
+            slope = self.ph_sensor.slope
+            intercept = self.ph_sensor.intercept
+            print(f"สมการ pH (pH equation): pH = {slope:.4f} * mV + {intercept:.4f}")
+        else:
+            print("สมการ pH (pH equation): ไม่พบข้อมูล! (NOT calibrated!)")
+
+        print("-" * 50)
         print("กดปุ่ม 1 เริ่ม, ปุ่ม 3 ยกเลิก (BTN1:Start BTN3:Cancel)")
 
         # แสดงหน้าจอพร้อมเริ่ม (Show ready screen)
@@ -527,7 +544,9 @@ class TitrationController:
                         sample_vol=self.sample_volume,
                         max_vol=self.max_volume,
                         dose_vol=self.dose_volume,
-                        total_steps=self.total_steps
+                        total_steps=self.total_steps,
+                        flow_rate=self.pump.flow_rate if self.pump and hasattr(self.pump, 'flow_rate') else None,
+                        ph_equation=(self.ph_sensor.slope, self.ph_sensor.intercept) if self.ph_sensor and hasattr(self.ph_sensor, 'slope') and hasattr(self.ph_sensor, 'intercept') else None
                     )
                 else:
                     self.display.show_message("Auto Titration", "BTN1:Start BTN3:Cancel")

@@ -444,30 +444,52 @@ class DisplayManager:
         else:
             self.draw_status_bar("BTN3: Cancel", Colors.TEXT_WARNING)
 
-    def show_titration_ready(self, sample_vol, max_vol, dose_vol, total_steps):
+    def show_titration_ready(self, sample_vol, max_vol, dose_vol, total_steps,
+                             flow_rate=None, ph_equation=None):
         """
         แสดงหน้าจอพร้อมเริ่มไทเทรชัน (Display titration ready screen)
 
-        แสดงข้อมูลการตั้งค่าและรอกดปุ่มเริ่ม
-        Shows configuration and waits for start button
+        แสดงข้อมูลการตั้งค่าและสถานะการสอบเทียบ รอกดปุ่มเริ่ม
+        Shows configuration, calibration status, and waits for start button
 
         Args:
             sample_vol (float): ปริมาตรตัวอย่าง (Sample volume in mL)
             max_vol (float): ปริมาตรสูงสุด (Maximum volume in mL)
             dose_vol (float): ปริมาตรต่อครั้ง (Dose volume in mL)
             total_steps (int): จำนวน step ทั้งหมด (Total steps)
+            flow_rate (float): อัตราการไหล mL/s (Flow rate, optional)
+            ph_equation (tuple): (slope, intercept) สมการ pH (pH equation, optional)
         """
         self.clear()
         self.draw_header("Auto Titration")
 
-        # แสดงข้อมูลการตั้งค่า (Show configuration)
-        self.draw_text(10, 45, f"Sample: {sample_vol:.1f} mL", Colors.WHITE)
-        self.draw_text(10, 75, f"Max Vol: {max_vol:.1f} mL", Colors.CYAN)
-        self.draw_text(10, 105, f"Dose: {dose_vol:.2f} mL", Colors.WHITE)
-        self.draw_text(10, 135, f"Steps: {total_steps}", Colors.WHITE)
+        # แสดงข้อมูลการตั้งค่า (Show configuration) - ใช้ระยะ 20px
+        y = 40
+        self.draw_text(10, y, f"Sample: {sample_vol:.1f} mL", Colors.WHITE)
+        y += 20
+        self.draw_text(10, y, f"Max: {max_vol:.1f} mL  Dose: {dose_vol:.2f} mL", Colors.CYAN)
+        y += 20
+        self.draw_text(10, y, f"Steps: {total_steps}", Colors.WHITE)
+        y += 25
+
+        # แสดงสถานะการสอบเทียบ (Show calibration status)
+        # อัตราการไหล (Flow rate)
+        if flow_rate is not None:
+            self.draw_text(10, y, f"Flow: {flow_rate:.4f} mL/s", Colors.CYAN)
+        else:
+            self.draw_text(10, y, "Flow: DEFAULT!", Colors.YELLOW)
+        y += 20
+
+        # สมการ pH (pH calibration equation)
+        if ph_equation is not None:
+            slope, intercept = ph_equation
+            self.draw_text(10, y, f"pH={slope:.3f}*mV+{intercept:.3f}", Colors.CYAN)
+        else:
+            self.draw_text(10, y, "pH: NOT CALIBRATED!", Colors.YELLOW)
+        y += 25
 
         # แสดงคำแนะนำ (Show instructions)
-        self.draw_text(10, 175, "Press BTN1 to START", Colors.GREEN)
+        self.draw_text(10, y, "Press BTN1 to START", Colors.GREEN)
         self.draw_status_bar("BTN1:Start BTN3:Cancel", Colors.TEXT_WARNING)
 
     def show_titration_complete(self, total_vol, eq_vol=None, eq_ph=None, filename=None):

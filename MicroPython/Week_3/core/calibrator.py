@@ -939,9 +939,12 @@ class Calibrator:
                                 # คำนวณสถิติสุดท้าย (Calculate final statistics)
                                 stats = self._calculate_flow_stats(calibration_data)
 
-                                # อัปเดต flow rate ใน calibrator
+                                # อัปเดต flow rate ใน calibrator และ pump
+                                # Update flow rate in both calibrator and pump
                                 self._flow_rate = stats['avg_flow_rate']
                                 self._flow_calibrated = True
+                                if self._pump:
+                                    self._pump.flow_rate = self._flow_rate
 
                                 # บันทึกลงไฟล์พร้อมข้อมูลการวัดทั้งหมด
                                 success = self.save_flow_rate(

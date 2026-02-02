@@ -734,7 +734,22 @@ titration = TitrationController(
     led_indicator=hardware.leds.green
 )
 # หมายเหตุ: CSV บันทึกใน ESP32 flash โดยตรง (ดาวน์โหลดผ่าน Thonny IDE)
+
+# โหลดค่าสอบเทียบที่บันทึกไว้ (Load saved calibration at startup)
+slope_m, intercept_b, r_squared, cal_temp = data_manager.load_ph_calibration()
+if slope_m is not None and intercept_b is not None:
+    hardware.ph_sensor.set_calibration(slope_m, intercept_b)
+
+flow_rate, _ = data_manager.load_flow_rate()
+if flow_rate is not None:
+    hardware.pump.flow_rate = flow_rate
 ```
+
+> **หมายเหตุสำคัญ:** เมื่อเริ่มโปรแกรม `main.py` จะโหลดค่าสอบเทียบ pH (`data_calibrate.txt`) และ flow rate (`data_flowrate.txt`) อัตโนมัติ
+> ทำให้ไม่ต้องสอบเทียบใหม่ทุกครั้งที่รีสตาร์ท หากยังไม่เคยสอบเทียบ ระบบจะใช้ค่า default
+>
+> **Important:** On startup, `main.py` automatically loads saved pH calibration and flow rate from files.
+> Students don't need to recalibrate after every restart. If no calibration files exist, default values are used.
 
 **ข้อดี:**
 - ทดสอบง่าย (สามารถส่ง mock objects ได้)

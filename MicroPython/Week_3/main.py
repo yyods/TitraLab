@@ -196,6 +196,12 @@ def main():
             data_manager=data_manager
         )
 
+        # ซิงค์ค่าอัตราการไหลที่โหลดจากไฟล์ไปยัง Calibrator ด้วย
+        # Sync loaded flow rate to Calibrator (it has its own _flow_rate copy)
+        if flow_rate is not None:
+            calibrator._flow_rate = flow_rate
+            calibrator._flow_calibrated = True
+
         # สร้าง Titration Controller (Create Titration Controller)
         # บันทึก CSV ใน ESP32 flash (CSV saved to ESP32 flash)
         titration = TitrationController(

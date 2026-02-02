@@ -168,6 +168,10 @@ from core.data_manager import DataManager
 
 dm = DataManager()  # ใช้ ESP32 flash storage
 
+# หมายเหตุ: main.py จะเรียก load_ph_calibration() และ load_flow_rate()
+# อัตโนมัติตอนเริ่มโปรแกรม เพื่อนำค่าที่บันทึกไว้มาใช้งานทันที
+# (main.py automatically loads saved calibration at startup)
+
 # บันทึก/โหลด ค่าสอบเทียบ pH (direct-use form: pH = slope_m * mV + intercept_b)
 dm.save_ph_calibration(slope_m=-0.016911, intercept_b=34.98, r_squared=0.9995, cal_temp=25.2)
 slope_m, intercept_b, r_squared, cal_temp = dm.load_ph_calibration()
