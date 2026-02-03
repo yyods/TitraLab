@@ -16,6 +16,7 @@
 # ==============================================================================
 
 import time
+import gc
 
 
 class TitrationController:
@@ -280,6 +281,7 @@ class TitrationController:
         """
         if self.display:
             try:
+                gc.collect()  # ต้อง gc ก่อนทุกครั้งที่ใช้ display (GC before every display use)
                 # ใช้ self.total_steps แทนการคำนวณซ้ำ (Use self.total_steps instead of recalculating)
                 # ใช้เมธอด show_titration_status ถ้ามี
                 # Use show_titration_status method if available
@@ -536,8 +538,26 @@ class TitrationController:
         print("-" * 50)
         print("กดปุ่ม 1 เริ่ม, ปุ่ม 3 ยกเลิก (BTN1:Start BTN3:Cancel)")
 
-        # แสดงหน้าจอพร้อมเริ่ม (Show ready screen)
+        # เก็บกวาดหน่วยความจำก่อนแสดงผล (GC before display - need 5120 bytes for buffer)
+        gc.collect()
+
+        # แสดงหน้าจอพร้อมเริ่ม (Show ready screen on TFT)
         if self.display:
+            # เตรียมข้อมูลการสอบเทียบก่อนเรียก display
+            # Prepare calibration data before calling display
+            _flow = None
+            _ph_eq = None
+            try:
+                if self.pump and hasattr(self.pump, 'flow_rate'):
+                    _flow = self.pump.flow_rate
+            except Exception:
+                pass
+            try:
+                if self.ph_sensor and hasattr(self.ph_sensor, 'slope') and hasattr(self.ph_sensor, 'intercept'):
+                    _ph_eq = (self.ph_sensor.slope, self.ph_sensor.intercept)
+            except Exception:
+                pass
+
             try:
                 if hasattr(self.display, 'show_titration_ready'):
                     self.display.show_titration_ready(
@@ -545,13 +565,21 @@ class TitrationController:
                         max_vol=self.max_volume,
                         dose_vol=self.dose_volume,
                         total_steps=self.total_steps,
-                        flow_rate=self.pump.flow_rate if self.pump and hasattr(self.pump, 'flow_rate') else None,
-                        ph_equation=(self.ph_sensor.slope, self.ph_sensor.intercept) if self.ph_sensor and hasattr(self.ph_sensor, 'slope') and hasattr(self.ph_sensor, 'intercept') else None
+                        flow_rate=_flow,
+                        ph_equation=_ph_eq
                     )
                 else:
                     self.display.show_message("Auto Titration", "BTN1:Start BTN3:Cancel")
+            except TypeError as e:
+                print(f"Display TypeError (fallback): {e}")
+                try:
+                    self.display.show_message("Auto Titration", "BTN1:Start BTN3:Cancel")
+                except Exception:
+                    pass
             except Exception as e:
-                print(f"Display error: {e}")
+                # ไม่ล้างจอ! ข้อมูลที่วาดบางส่วนดีกว่าไม่มีเลย
+                # Do NOT clear screen! Partial content is better than nothing
+                print(f"Display error (partial shown): {e}")
 
         # รอกดปุ่ม 1 เริ่ม หรือปุ่ม 3 ยกเลิก (Wait for BTN1 to start or BTN3 to cancel)
         if self.buttons:
@@ -562,8 +590,12 @@ class TitrationController:
                 if self.buttons.is_pressed(3):
                     # ยกเลิก (Cancel)
                     print("\n[CANCELLED] ยกเลิกการไทเทรชัน (Titration cancelled)")
+                    gc.collect()
                     if self.display:
-                        self.display.show_message("Cancelled", "Returning to menu")
+                        try:
+                            self.display.show_message("Cancelled", "Returning to menu")
+                        except MemoryError:
+                            pass
                     if self.buzzer:
                         try:
                             self.buzzer.error_sound()
@@ -797,6 +829,7 @@ class TitrationController:
         print("=" * 50)
 
         # แสดงหน้าจอเสร็จสิ้น (Show completion screen)
+        gc.collect()
         if self.display:
             try:
                 eq_vol = results['equivalence_point'][0] if results['equivalence_point'] else None

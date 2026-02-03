@@ -164,10 +164,13 @@ class DisplayManager:
         """
         ล้างหน้าจอด้วยสีที่กำหนด (Clear screen with specified color)
 
+        ใช้ hlines=1 เพื่อลดการใช้หน่วยความจำ (320*2*1=640 bytes)
+        Uses hlines=1 to reduce memory usage (320*2*1=640 bytes)
+
         Args:
             color (int): สี RGB565 (RGB565 color), default=BLACK
         """
-        self._display.clear(color)
+        self._display.clear(color, hlines=1)
 
     def fill_rect(self, x, y, width, height, color):
         """
@@ -248,9 +251,11 @@ class DisplayManager:
             Font must be set in constructor before use
         """
         if self.font is None:
-            # ใช้ฟอนต์ 8x8 ในตัว ถ้าไม่มีฟอนต์กำหนด
-            # Use built-in 8x8 font if no font specified
-            self._display.draw_text8x8(x, y, text, color, background)
+            # วาดทีละตัวอักษร เพื่อใช้หน่วยความจำน้อย (128 bytes/ตัว แทน len*128)
+            # Draw character-by-character to reduce memory (128 bytes/char vs len*128)
+            for ch in text:
+                self._display.draw_text8x8(x, y, ch, color, background)
+                x += 8
         else:
             self._display.draw_text(x, y, text, self.font, color, background)
 
@@ -337,6 +342,8 @@ class DisplayManager:
             message (str): ข้อความ (Message)
             color (int): สีข้อความ (Text color)
         """
+        import gc
+        gc.collect()
         self.clear()
         self.draw_header(title)
         self.draw_text_centered(100, message, color)
@@ -407,6 +414,8 @@ class DisplayManager:
             temperature (float): อุณหภูมิ (Temperature in C, optional)
             status_text (str): ข้อความสถานะ (Status text, optional)
         """
+        import gc
+        gc.collect()
         self.clear()
         self.draw_header("Auto Titration")
 
@@ -460,36 +469,41 @@ class DisplayManager:
             flow_rate (float): อัตราการไหล mL/s (Flow rate, optional)
             ph_equation (tuple): (slope, intercept) สมการ pH (pH equation, optional)
         """
+        import gc
+        gc.collect()
         self.clear()
         self.draw_header("Auto Titration")
 
-        # แสดงข้อมูลการตั้งค่า (Show configuration) - ใช้ระยะ 20px
-        y = 40
+        # แสดงข้อมูลการตั้งค่า (Show configuration)
+        y = 35
         self.draw_text(10, y, f"Sample: {sample_vol:.1f} mL", Colors.WHITE)
-        y += 20
-        self.draw_text(10, y, f"Max: {max_vol:.1f} mL  Dose: {dose_vol:.2f} mL", Colors.CYAN)
-        y += 20
+        y += 18
+        self.draw_text(10, y, f"Max:{max_vol:.1f} Dose:{dose_vol:.2f}mL", Colors.CYAN)
+        y += 18
         self.draw_text(10, y, f"Steps: {total_steps}", Colors.WHITE)
-        y += 25
+        y += 22
 
         # แสดงสถานะการสอบเทียบ (Show calibration status)
-        # อัตราการไหล (Flow rate)
         if flow_rate is not None:
             self.draw_text(10, y, f"Flow: {flow_rate:.4f} mL/s", Colors.CYAN)
         else:
             self.draw_text(10, y, "Flow: DEFAULT!", Colors.YELLOW)
-        y += 20
+        y += 18
 
-        # สมการ pH (pH calibration equation)
         if ph_equation is not None:
             slope, intercept = ph_equation
-            self.draw_text(10, y, f"pH={slope:.3f}*mV+{intercept:.3f}", Colors.CYAN)
+            self.draw_text(10, y, f"pH={slope:.6f}*mV", Colors.CYAN)
+            y += 12
+            self.draw_text(10, y, f"   +{intercept:.4f}", Colors.CYAN)
         else:
             self.draw_text(10, y, "pH: NOT CALIBRATED!", Colors.YELLOW)
-        y += 25
+        y += 22
 
-        # แสดงคำแนะนำ (Show instructions)
         self.draw_text(10, y, "Press BTN1 to START", Colors.GREEN)
+
+        # gc ก่อน status bar เพราะ fill_rect ต้องการ ~1920 bytes
+        # GC before status bar since fill_rect needs ~1920 bytes
+        gc.collect()
         self.draw_status_bar("BTN1:Start BTN3:Cancel", Colors.TEXT_WARNING)
 
     def show_titration_complete(self, total_vol, eq_vol=None, eq_ph=None, filename=None):
@@ -502,6 +516,8 @@ class DisplayManager:
             eq_ph (float): pH จุดสมมูล (Equivalence point pH, optional)
             filename (str): ชื่อไฟล์ที่บันทึก (Saved filename, optional)
         """
+        import gc
+        gc.collect()
         self.clear()
         self.draw_header("Titration Complete")
 

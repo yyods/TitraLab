@@ -34,13 +34,10 @@ from hardware.leds import LEDManager
 # ไฟล์ CSV จะบันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
 # CSV files are saved to ESP32 flash storage and downloaded via Thonny IDE
 
-# นำเข้า Core Modules (Import Core Modules)
-from core.calibrator import Calibrator
-from core.data_manager import DataManager
-from core.titration import TitrationController
-
-# นำเข้า UI Modules (Import UI Modules)
-from ui.menu import MenuSystem
+# หมายเหตุ: Core และ UI Modules จะนำเข้าภายใน main() เพื่อประหยัดหน่วยความจำ
+# Note: Core and UI Modules are imported inside main() to save memory
+# เนื่องจาก display ต้องการหน่วยความจำต่อเนื่อง 5120 bytes สำหรับ buffer
+# Because display needs 5120 bytes contiguous memory for its buffer
 
 
 # ==============================================================================
@@ -142,7 +139,11 @@ class HardwareHub:
 
         # ปิดจอแสดงผล (Clear display)
         if self.display:
-            self.display.clear()
+            try:
+                gc.collect()  # เก็บกวาดก่อน clear เพื่อให้มี buffer เพียงพอ
+                self.display.clear()
+            except MemoryError:
+                pass  # ข้ามถ้าหน่วยความจำไม่พอ (Skip if out of memory)
             self.display.deinit()
 
         print("ปิด Hardware เสร็จสิ้น (Hardware shutdown complete)")
@@ -163,6 +164,22 @@ def main():
     try:
         # เริ่มต้น Hardware ทั้งหมด (Initialize all hardware)
         hardware.init_all()
+
+        # นำเข้า Core/UI Modules หลังจาก hardware พร้อมแล้ว (เพื่อประหยัด RAM)
+        # Import Core/UI Modules AFTER hardware init (to save RAM for display buffer)
+        # นำเข้าทีละกลุ่มพร้อม gc.collect() เพื่อลด memory fragmentation
+        # Import in stages with gc.collect() to reduce memory fragmentation
+        gc.collect()
+        print(f"Free memory before imports: {gc.mem_free()} bytes")
+        from core.data_manager import DataManager
+        gc.collect()
+        from core.calibrator import Calibrator
+        gc.collect()
+        from ui.menu import MenuSystem
+        gc.collect()
+        print(f"Free memory after imports: {gc.mem_free()} bytes")
+        # หมายเหตุ: TitrationController จะนำเข้าเมื่อเลือก Menu 6 เท่านั้น
+        # Note: TitrationController imported only when Menu 6 is selected (saves ~15KB RAM)
 
         # สร้าง Data Manager (Create Data Manager)
         # บันทึกข้อมูลใน ESP32 flash storage (Save data to ESP32 flash storage)
@@ -202,29 +219,35 @@ def main():
             calibrator._flow_rate = flow_rate
             calibrator._flow_calibrated = True
 
-        # สร้าง Titration Controller (Create Titration Controller)
-        # บันทึก CSV ใน ESP32 flash (CSV saved to ESP32 flash)
-        titration = TitrationController(
-            pump=hardware.pump,
-            ph_sensor=hardware.ph_sensor,
-            temp_sensor=hardware.temp_sensor,
-            display=hardware.display,
-            buzzer=hardware.buzzer,
-            led_indicator=hardware.leds.green,
-            buttons=hardware.buttons  # สำหรับ BTN3 ยกเลิก (for BTN3 cancel)
-        )
+        # สร้าง Titration Controller แบบ lazy (สร้างเมื่อเลือก Menu 6 เท่านั้น)
+        # Create TitrationController lazily (only when Menu 6 is selected)
+        # เพื่อประหยัด RAM ~15KB สำหรับเมนูอื่นที่ไม่ต้องใช้
+        # Saves ~15KB RAM for other menus that don't need it
+        _titration = [None]  # ใช้ list เพื่อให้ lambda เข้าถึงได้ (use list for lambda access)
 
-        # ตั้งค่าพารามิเตอร์ไทเทรชัน (Configure titration parameters)
-        # stabilize_time=2.0 สำหรับทดสอบ, ใช้ 10.0 สำหรับการทดลองจริง
-        # stabilize_time=2.0 for testing, use 10.0 for real experiments
-        # alert_volume: ปริมาตรที่จะเตือนใกล้จุดสมมูล (volume to alert near equivalence)
-        #   - สำหรับ HCl 0.1M 5mL + NaOH 0.1M: จุดสมมูล ~5.0 mL, เตือนที่ 4.80 mL
-        #   - For HCl 0.1M 5mL + NaOH 0.1M: equiv point ~5.0 mL, alert at 4.80 mL
-        #   - ปรับค่านี้ตามการทดลอง (adjust for your experiment)
-        titration.configure(
-            stabilize_time=10.0,  # วินาที (seconds) - เปลี่ยนเป็น 2.0 สำหรับทดสอบ
-            alert_volume=4.80     # mL - เตือน 3 เสียงเมื่อใกล้จุดสมมูล (3 beeps near equiv point)
-        )
+        def _run_titration():
+            """สร้าง TitrationController ครั้งแรกที่ใช้ แล้วรัน (Create on first use, then run)"""
+            gc.collect()
+            if _titration[0] is None:
+                from core.titration import TitrationController
+                gc.collect()
+                _titration[0] = TitrationController(
+                    pump=hardware.pump,
+                    ph_sensor=hardware.ph_sensor,
+                    temp_sensor=hardware.temp_sensor,
+                    display=hardware.display,
+                    buzzer=hardware.buzzer,
+                    led_indicator=hardware.leds.green,
+                    buttons=hardware.buttons
+                )
+                _titration[0].configure(
+                    stabilize_time=10.0,
+                    alert_volume=4.80
+                )
+            return _titration[0].run_titration()
+
+        # เก็บกวาดหน่วยความจำก่อนสร้าง Menu (GC before Menu creation)
+        gc.collect()
 
         # สร้าง Menu System (Create Menu System)
         menu = MenuSystem(
@@ -241,8 +264,11 @@ def main():
             3: lambda: calibrator.calibrate_flow_rate_interactive(), # สอบเทียบ Flow Rate
             4: lambda: calibrator.test_flow_rate(),                  # ทดสอบ Flow Rate
             5: lambda: calibrator.purge_tubing(),                    # ล้างท่อ (with BTN3)
-            6: lambda: titration.run_titration()                     # ไทเทรชันอัตโนมัติ
+            6: lambda: _run_titration()                              # ไทเทรชันอัตโนมัติ (lazy load)
         }
+
+        # เก็บกวาดหน่วยความจำก่อนแสดงผล (GC before display operations)
+        gc.collect()
 
         # แสดงหน้าจอต้อนรับ (Show welcome screen)
         hardware.display.show_logo("TitraLab", "Chemistry Automation")

@@ -246,8 +246,10 @@ class MenuSystem:
 
         # Simple menu state (สถานะเมนูแบบง่าย)
         self._selected_index = 0
+        self._prev_index = -1  # ดัชนีก่อนหน้า สำหรับ partial update (-1 = ยังไม่เคยวาด)
         self._menu_items = self.MENU_ITEMS  # ใช้ reference แทน copy เพื่อประหยัด memory
-        self._needs_redraw = True  # Flag: ต้องวาดใหม่หรือไม่
+        self._needs_redraw = True  # Flag: ต้องวาดทั้งหน้าใหม่ (full redraw)
+        self._needs_partial = False  # Flag: วาดเฉพาะรายการที่เปลี่ยน (partial update)
 
         # State Machine (ใช้สำหรับ advanced mode)
         self.state = MenuState.MAIN_MENU
@@ -271,54 +273,73 @@ class MenuSystem:
     # Simple API (ใช้โดย main.py)
     # ==========================================================================
 
+    # ค่าคงที่สำหรับการวาดเมนู (Menu drawing constants)
+    _Y_START = 50
+    _LINE_H = 28
+
     def show(self, force=False):
         """
         แสดงเมนูบนจอ TFT (Display menu on TFT screen)
 
-        แสดงรายการเมนูพร้อมไฮไลท์รายการที่เลือก
-        Shows menu items with highlighted selection
+        ใช้ partial update เมื่อเลื่อนเคอร์เซอร์ เพื่อลดการกระพริบ
+        Uses partial update on cursor move to reduce flicker
 
         Args:
-            force (bool): บังคับวาดใหม่แม้ไม่มีการเปลี่ยนแปลง
+            force (bool): บังคับวาดใหม่ทั้งหน้า (Force full redraw)
         """
-        # ข้ามถ้าไม่ต้องวาดใหม่ (Skip if no redraw needed)
-        if not self._needs_redraw and not force:
+        if force:
+            self._needs_redraw = True
+
+        # ---- Partial update: วาดเฉพาะ 2 แถวที่เปลี่ยน (only 2 changed rows) ----
+        if self._needs_partial and not self._needs_redraw:
+            try:
+                self._draw_item(self._prev_index, selected=False)
+                self._draw_item(self._selected_index, selected=True)
+                self._needs_partial = False
+                self._prev_index = self._selected_index
+            except Exception as e:
+                print(f"Partial update error: {e}")
+                self._needs_redraw = True  # fallback to full redraw
+            return
+
+        # ---- Full redraw: วาดทั้งหน้า (draw entire screen) ----
+        if not self._needs_redraw:
             return
 
         try:
-            # เคลียร์ memory ก่อนวาด (Clear memory before drawing)
             gc.collect()
-
-            # ล้างจอและวาดหัวข้อ (Clear and draw header)
             self.display.clear()
             self.display.draw_header("TitraLab Menu")
 
-            # วาดรายการเมนู - ใช้การวาดแบบง่าย (Draw menu items - simple method)
-            y_start = 50
-            line_height = 28
-
             for i in range(len(self._menu_items)):
-                y = y_start + (i * line_height)
-                item = self._menu_items[i]
+                self._draw_item(i, selected=(i == self._selected_index))
 
-                # ไฮไลท์รายการที่เลือก (Highlight selected item)
-                if i == self._selected_index:
-                    # วาดพื้นหลังไฮไลท์ (Draw highlight background)
-                    self.display.fill_rect(5, y - 2, 310, line_height, 0x001F)  # Blue
-                    self.display.draw_text(10, y, "> " + item, 0xFFFF)  # White text
-                else:
-                    self.display.draw_text(10, y, "  " + item, 0xFFFF)  # White text
-
-            # แสดงคำแนะนำ (Show instructions)
             self.display.draw_status_bar("BTN1:OK BTN2:Up BTN3:Dn")
-
-            # รีเซ็ต flag (Reset flag)
             self._needs_redraw = False
+            self._needs_partial = False
+            self._prev_index = self._selected_index
 
         except Exception as e:
             print(f"Menu display error: {e}")
-            # พยายามเคลียร์ memory และลองใหม่
             gc.collect()
+
+    def _draw_item(self, index, selected):
+        """
+        วาดรายการเมนู 1 รายการ (Draw a single menu item)
+
+        Args:
+            index (int): ดัชนีรายการ (Item index)
+            selected (bool): เป็นรายการที่เลือกหรือไม่ (Is selected)
+        """
+        y = self._Y_START + (index * self._LINE_H)
+        item = self._menu_items[index]
+        # ลบพื้นที่เดิมก่อน (Clear row area first)
+        self.display.fill_rect(5, y - 2, 310, self._LINE_H, 0x0000)
+        if selected:
+            self.display.fill_rect(5, y - 2, 310, self._LINE_H, 0x001F)
+            self.display.draw_text(10, y, "> " + item, 0xFFFF)
+        else:
+            self.display.draw_text(10, y, "  " + item, 0xFFFF)
 
     def get_selected(self):
         """
@@ -333,23 +354,23 @@ class MenuSystem:
         """
         เลื่อนขึ้น (Move selection up)
         """
+        self._prev_index = self._selected_index
         if self._selected_index > 0:
             self._selected_index -= 1
         else:
-            # วนกลับไปรายการสุดท้าย (Wrap to last item)
             self._selected_index = len(self._menu_items) - 1
-        self._needs_redraw = True  # ต้องวาดใหม่
+        self._needs_partial = True  # วาดเฉพาะแถวที่เปลี่ยน (partial update only)
 
     def move_down(self):
         """
         เลื่อนลง (Move selection down)
         """
+        self._prev_index = self._selected_index
         if self._selected_index < len(self._menu_items) - 1:
             self._selected_index += 1
         else:
-            # วนกลับไปรายการแรก (Wrap to first item)
             self._selected_index = 0
-        self._needs_redraw = True  # ต้องวาดใหม่
+        self._needs_partial = True  # วาดเฉพาะแถวที่เปลี่ยน (partial update only)
 
     def request_redraw(self):
         """

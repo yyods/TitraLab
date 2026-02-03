@@ -6,6 +6,7 @@
 # ==============================================================================
 
 from time import ticks_us, ticks_diff, sleep_ms
+import gc  # สำหรับจัดการหน่วยความจำ (for memory management)
 
 # นำเข้าคลาสที่จำเป็น (Import required classes)
 try:
@@ -560,6 +561,9 @@ class Calibrator:
         """
         from time import sleep_ms
 
+        # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
+        gc.collect()
+
         if not self._ph_sensor:
             print("Error: No pH sensor configured")
             return False
@@ -649,6 +653,9 @@ class Calibrator:
         """
         from time import sleep_ms
 
+        # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
+        gc.collect()
+
         if not self._ph_sensor:
             print("Error: No pH sensor configured")
             return
@@ -658,35 +665,58 @@ class Calibrator:
         print("กดปุ่ม 3 เพื่อออก (Press BTN3 to exit)")
         print("=" * 50)
 
+        # แสดงสมการ pH ที่ใช้งาน (Show active pH equation)
+        if self._ph_sensor:
+            slope = self._ph_sensor.slope
+            intercept = self._ph_sensor.intercept
+            print(f"สมการ: pH = {slope:.6f} * mV + {intercept:.4f}")
+            print(f"Equation: pH = {slope:.6f} * mV + {intercept:.4f}")
+
         if self._display:
+            # วาดหน้าจอครั้งเดียว แล้วอัปเดตเฉพาะค่าที่เปลี่ยน
+            # Draw screen once, then only update changing values
             self._display.clear()
             self._display.draw_header("pH Sensor Test")
+            # แสดงสมการ pH คงที่ (Show static pH equation)
+            slope = self._ph_sensor.slope
+            intercept = self._ph_sensor.intercept
+            self._display.draw_text(10, 45, f"pH={slope:.4f}*mV+{intercept:.2f}", 0x07FF)  # CYAN
+            self._display.draw_status_bar("BTN3: Exit")
 
-        while True:
-            # อ่านค่า (Read values)
-            voltage = self._ph_sensor.read_voltage_averaged(num_samples=5)
-            ph_value = self._ph_sensor.read_ph()
+        try:
+            while True:
+                # อ่านค่า (Read values)
+                voltage = self._ph_sensor.read_voltage_averaged(num_samples=5)
+                ph_value = self._ph_sensor.read_ph()
 
-            print(f"pH: {ph_value:.2f}  |  mV: {voltage:.1f}")
+                print(f"pH: {ph_value:.2f}  |  mV: {voltage:.1f}")
 
-            if self._display:
-                self._display.clear()
-                self._display.draw_header("pH Sensor Test")
-                self._display.draw_text(20, 60, f"pH: {ph_value:.2f}", 0x07E0)
-                self._display.draw_text(20, 100, f"mV: {voltage:.1f}", 0xFFFF)
-                self._display.draw_status_bar("BTN3: Exit")
+                if self._display:
+                    # ล้างเฉพาะบริเวณค่าที่เปลี่ยน แทนการ clear ทั้งจอ
+                    # Clear only the changing value areas instead of full screen clear
+                    self._display.fill_rect(20, 80, 280, 30, 0x0000)   # ล้างบริเวณ pH
+                    self._display.fill_rect(20, 115, 280, 30, 0x0000)  # ล้างบริเวณ mV
+                    # แสดงค่าวัดใหม่ (Show updated readings)
+                    self._display.draw_text(20, 80, f"pH: {ph_value:.2f}", 0x07E0)   # GREEN
+                    self._display.draw_text(20, 115, f"mV: {voltage:.1f}", 0xFFFF)   # WHITE
 
-            # ตรวจสอบปุ่มออก (Check exit button - BTN3)
-            if self._buttons and self._buttons.is_pressed(3):
-                break
+                # ตรวจสอบปุ่มออก (Check exit button - BTN3)
+                if self._buttons and self._buttons.is_pressed(3):
+                    break
 
-            sleep_ms(500)
+                sleep_ms(500)
+        finally:
+            # เก็บกวาดหน่วยความจำหลังออกจากลูป (GC after exiting loop)
+            gc.collect()
 
         print("ออกจากการทดสอบ (Exiting test)")
 
     def calibrate_flow_rate_interactive(self):
         """สอบเทียบ flow rate แบบ interactive พร้อมการวัดหลายครั้ง"""
         from time import sleep_ms, ticks_ms, ticks_diff
+
+        # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
+        gc.collect()
 
         if not self._pump:
             print("Error: No pump configured")
@@ -999,6 +1029,8 @@ class Calibrator:
             # ตรวจสอบว่าปั๊มปิดแล้ว (Ensure pump is stopped)
             if pump_running:
                 self._pump.stop()
+            # เก็บกวาดหน่วยความจำ (GC after calibration)
+            gc.collect()
 
     def test_flow_rate(self):
         """
@@ -1014,6 +1046,9 @@ class Calibrator:
         4. กด BTN3 เพื่อยกเลิกได้ (Press BTN3 to cancel)
         """
         from time import sleep_ms, ticks_ms, ticks_diff
+
+        # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
+        gc.collect()
 
         if not self._pump:
             print("Error: No pump configured")
@@ -1126,6 +1161,9 @@ class Calibrator:
         หมายเหตุ: BTN3 ยกเลิกก่อนเริ่ม (BTN3 cancels before starting)
         """
         from time import sleep_ms, ticks_ms, ticks_diff
+
+        # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
+        gc.collect()
 
         if not self._pump:
             print("Error: No pump configured")
