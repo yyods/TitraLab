@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy for SciLabPro MicroPad</title>
+  <style>
+    body {
+      color: #17201c;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      margin: 0;
+      background: #f7faf8;
+    }
+    main {
+      max-width: 840px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+      background: #ffffff;
+      min-height: 100vh;
+    }
+    h1, h2 {
+      line-height: 1.2;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #c9d6d0;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #edf5f1;
+    }
+    code {
+      background: #eef4f1;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy for SciLabPro MicroPad</h1>
+  <p><strong>Last updated:</strong> 2026-05-09</p>
+  <p>This Privacy Policy applies to the SciLabPro MicroPad Android app,
+  including the proof-of-concept release <code>0.1.0</code>.</p>
+
+  <h2>Developer and Contact</h2>
+  <p>SciLabPro MicroPad is developed by SciLabPro for TitraLab classroom board
+  testing and STEM education workflows.</p>
+  <p>Privacy contact: <a href="mailto:viwat.v@chula.ac.th">viwat.v@chula.ac.th</a></p>
+
+  <h2>Summary</h2>
+  <p>SciLabPro MicroPad is an offline-first tablet coding workspace for TitraLab
+  boards. The app scans the temporary QR code shown on the board LCD, connects
+  to the board over Bluetooth Low Energy (BLE), edits MicroPython files, uploads
+  code to the board, runs code on the board, and displays console output.</p>
+  <p>The app does not include ads, analytics SDKs, cloud accounts, or a
+  developer server. The release Android app does not request Internet
+  permission.</p>
+
+  <h2>Permissions Used</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Permission</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Camera</td>
+        <td>Used only to scan the temporary pairing QR code shown on the TitraLab LCD.</td>
+      </tr>
+      <tr>
+        <td>Bluetooth scan/connect</td>
+        <td>Used to discover and connect to the assigned TitraLab board over BLE.</td>
+      </tr>
+      <tr>
+        <td>Location on Android 11 and lower</td>
+        <td>Required by older Android versions for BLE scanning. The app does not use GPS location.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>Camera frames are processed on the device for QR decoding. The app does not
+  take photos, record video, or send camera data to SciLabPro.</p>
+
+  <h2>Data Accessed or Stored Locally</h2>
+  <p>The app may store the following data locally on the tablet:</p>
+  <ul>
+    <li>Paired board identifiers and pairing state.</li>
+    <li>Local workspace file cache and MicroPython code snapshots.</li>
+    <li>Console output and run logs from the connected board.</li>
+    <li>App preferences, such as language selection.</li>
+  </ul>
+  <p>This local data stays on the tablet unless the user explicitly transfers it
+  by another mechanism outside the app.</p>
+
+  <h2>Data Collection and Sharing</h2>
+  <p>SciLabPro MicroPad does not collect app data on a SciLabPro server and does
+  not share app data with third parties. BLE communication occurs directly
+  between the tablet and the nearby TitraLab board.</p>
+  <p>The app does not sell personal or sensitive user data.</p>
+
+  <h2>Data Retention and Deletion</h2>
+  <p>Local app data remains on the tablet until the user deletes it through app
+  features where available, clears the app data in Android settings, or
+  uninstalls the app. Because SciLabPro MicroPad does not collect app data on a
+  developer server, there is no server-side user account or server-side data
+  deletion flow.</p>
+
+  <h2>Security</h2>
+  <p>SciLabPro MicroPad requests camera and Bluetooth permissions only when
+  needed for the pairing and board-control workflow. Pairing data and workspace
+  files are stored locally by the Android app. BLE communication is limited to
+  the nearby TitraLab board selected during pairing.</p>
+
+  <h2>Children and Classroom Use</h2>
+  <p>The proof-of-concept release is intended for trusted internal testing with
+  colleagues and classroom hardware. Broader classroom deployment should be
+  managed by the responsible instructor or institution according to local
+  privacy and education policies.</p>
+
+  <h2>Changes</h2>
+  <p>This policy may be updated as SciLabPro MicroPad adds features. Material
+  changes will be reflected by updating this page and the effective date.</p>
+</main>
+</body>
+</html>
