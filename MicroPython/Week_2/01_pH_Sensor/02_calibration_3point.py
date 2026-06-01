@@ -178,6 +178,12 @@ spi = SPI(1, baudrate=40000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, dc=Pin(27), cs=Pin(15), rst=Pin(0), width=320, height=240, rotation=90)
 
 # โหลดฟอนต์ (Load font)
+# รวม heap ก่อนจองบัฟเฟอร์ฟอนต์ 5280 ไบต์ (ต้องเป็นบล็อกต่อเนื่อง)  บนเส้นทางแอป
+# (BLE ค้างใน heap) ช่องว่างต่อเนื่องหายาก จึงเก็บกวาดเศษ import ก่อนจอง
+# Coalesce the heap before the font's single 5280-byte contiguous bytearray.
+# On the App path (live BLE resident) a contiguous hole is scarce; sweep the
+# import-time garbage first so the allocation finds one block.
+gc.collect()
 font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
 
 # ==============================================================================
