@@ -486,6 +486,16 @@ timer = None                 # Timer object
 start_time = 0               # เวลาเริ่มบันทึก (Recording start time)
 elapsed_seconds = 0          # เวลาที่ผ่านไป (Elapsed time)
 
+# === ธงสื่อสารระหว่าง callback/IRQ กับ main loop (callback->main-loop flags) ===
+# Timer callback และ button IRQ ทำงานใน soft-IRQ/scheduled context ซึ่ง "ห้าม"
+# ทำงานหนักหรือไม่ปลอดภัย เช่น timer.deinit() ตัวเอง หรือเขียนไฟล์ลง flash
+# จึงให้ callback แค่ "ตั้งธง" แล้วให้ main loop ทำงานจริงใน normal context
+# Timer callback and button IRQ run in soft-IRQ/scheduled context, where unsafe
+# work (self-deinit of the running timer, flash file I/O) can HANG the board.
+# So callbacks only SET flags; the main loop performs the real work safely.
+stop_pending = False         # ธงขอหยุด+บันทึกไฟล์ (request safe stop + CSV save)
+toggle_pending = False       # ธงขอสลับสถานะจากปุ่ม (button toggle request)
+
 # ค่าแสดงผลปัจจุบัน - ใช้ตรวจสอบการเปลี่ยนแปลง
 current_voltage_display = None
 current_time_display = None
@@ -672,9 +682,11 @@ def record_data_callback(t):
     Args:
         t: Timer object (ไม่ได้ใช้แต่ต้องรับ parameter)
     """
-    global data_buffer, recording, elapsed_seconds
+    global data_buffer, recording, elapsed_seconds, stop_pending
 
-    if not recording:
+    # ถ้าหยุดแล้ว หรือกำลังรอ main loop หยุดให้ ไม่ต้องสุ่มตัวอย่างเพิ่ม
+    # If not recording, or a stop is already pending the main loop, do nothing.
+    if not recording or stop_pending:
         return
 
     # เพิ่มตัวนับเวลา (Increment time counter)
@@ -689,6 +701,10 @@ def record_data_callback(t):
     data_buffer.append((elapsed_seconds, voltage_mv))
 
     # แสดงผลบนจอ (Update display)
+    # การสุ่มตัวอย่าง+วาดจอ+เก็บลงบัฟเฟอร์ในหน่วยความจำ ปลอดภัยใน callback context
+    # (พิสูจน์แล้วว่าทำงานได้ที่ t=1..45) จึงคงไว้ในนี้
+    # Sampling + TFT draw + in-memory append are safe in callback context
+    # (proven working for t=1..45), so they stay here.
     show_voltage(voltage_mv)
     show_time(elapsed_seconds, RECORDING_DURATION_S)
 
@@ -696,8 +712,14 @@ def record_data_callback(t):
     print(f"Time: {elapsed_seconds:3d} s | Voltage: {voltage_mv:7.1f} mV")
 
     # ตรวจสอบว่าครบเวลาหรือยัง (Check if duration reached)
+    # *** ห้าม*** เรียก stop_recording() ที่นี่ เพราะมันจะ deinit timer ตัวเอง
+    # และเขียนไฟล์ลง flash จาก callback context -> บอร์ดค้าง (HANG)
+    # แทนที่จะหยุดเอง ให้ตั้งธงแล้วปล่อยให้ main loop หยุดอย่างปลอดภัย
+    # Do NOT call stop_recording() here: it would deinit this very timer and
+    # write to flash from callback context -> the board HANGS. Instead, set a
+    # flag and let the main loop perform the safe stop in normal context.
     if elapsed_seconds >= RECORDING_DURATION_S:
-        stop_recording()
+        stop_pending = True
 
 
 def start_recording():
@@ -821,13 +843,13 @@ def button_callback(pin):
     """
     Callback function เมื่อกดปุ่ม (Button press callback)
 
-    จัดการ debounce และสลับสถานะการบันทึก
-    Handle debounce and toggle recording state
+    จัดการ debounce แล้ว "ตั้งธง" ขอสลับสถานะ (ไม่ทำงานหนักใน IRQ context)
+    Handle debounce, then SET a flag to request a toggle (no heavy work in IRQ).
 
     Args:
         pin: Pin object ที่เรียก callback
     """
-    global last_button_time
+    global last_button_time, toggle_pending
 
     current_time = time.ticks_ms()
 
@@ -839,11 +861,12 @@ def button_callback(pin):
 
     # ตรวจสอบว่าปุ่มถูกกด (Check if button is pressed)
     # หมายเหตุ: วงจร Schmitt trigger (74HC14D) ทำให้สัญญาณเป็น active-low
+    # *** ห้าม *** เรียก start_recording()/stop_recording() ที่นี่ เพราะ stop
+    # จะ deinit timer + เขียนไฟล์จาก IRQ context -> ค้าง  เพียงตั้งธงให้ main loop
+    # Do NOT call start/stop here: stop would deinit the timer + write a file
+    # from IRQ context -> hang. Just flag the main loop to act in normal context.
     if pin.value() == 0:
-        if not recording:
-            start_recording()
-        else:
-            stop_recording()
+        toggle_pending = True
 
 # ==============================================================================
 # โปรแกรมหลัก (Main Program)
@@ -895,12 +918,46 @@ try:
                 stop_recording()  # ปิด Timer + บันทึกไฟล์ก่อนออก (flush before exit)
             break
 
+        # ----------------------------------------------------------------------
+        # จัดการธงจากปุ่ม (handle button toggle flag) - ทำใน normal context
+        # ----------------------------------------------------------------------
+        # ปุ่มกด IRQ เพียงตั้ง toggle_pending  เราเคลียร์ธงก่อนทำงานเสมอ เพื่อไม่ให้
+        # การกดครั้งถัดไประหว่างทำงานสูญหายหรือถูกประมวลผลซ้ำ
+        # The button IRQ only sets toggle_pending. Clear it BEFORE acting so a
+        # second press during the work is neither lost nor double-processed.
+        if toggle_pending:
+            toggle_pending = False
+            if not recording:
+                # เริ่มบันทึก: สร้าง Timer ใน normal context (ปลอดภัย)
+                # Start: Timer creation happens here in normal context (safe).
+                start_recording()
+            else:
+                # ขอหยุด: ตั้งธง stop_pending ให้บล็อกหยุดด้านล่างทำงานปลอดภัย
+                # Request stop: defer to the safe stop block below.
+                stop_pending = True
+
+        # ----------------------------------------------------------------------
+        # จัดการธงขอหยุด (handle stop flag) - หยุดแบบปลอดภัยใน normal context
+        # ----------------------------------------------------------------------
+        # ธงนี้ถูกตั้งโดย: (1) timer callback เมื่อครบ 45 วินาที (auto-stop)
+        # หรือ (2) การกดปุ่มขณะกำลังบันทึก  ตอนนี้เราอยู่ใน normal context จึง
+        # deinit timer (ไม่ใช่จาก callback ของตัวมันเอง) และเขียนไฟล์ได้อย่างปลอดภัย
+        # Set by (1) the timer callback at 45 s (auto-stop) or (2) a button press
+        # while recording. We are now in normal context, so deinit-ing the timer
+        # (not from its own callback) and writing the CSV file are safe.
+        if stop_pending:
+            stop_pending = False
+            if recording:
+                stop_recording()  # timer.deinit() + save CSV ใน normal context
+
         # อ่านและแสดงค่าแรงดันแบบ real-time (Read and show voltage in real-time)
         if not recording:
             voltage_mv = read_voltage_mv()
             show_voltage(voltage_mv)
 
         # หน่วงเวลาเล็กน้อย (Small delay)
+        # ทำให้ auto-stop เกิดขึ้นภายใน ~200 ms หลังครบ 45 วินาที (acceptable)
+        # Means auto-stop fires within ~200 ms of t=45 (acceptable).
         time.sleep_ms(200)
 
 except KeyboardInterrupt:
