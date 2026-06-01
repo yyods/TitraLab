@@ -154,12 +154,12 @@ class pHSensor:
     ADC_VREF = 3.3
     NERNST_SLOPE_25C = -59.16  # mV/pH ที่ 25C
 
-    def __init__(self, pin=25, slope=-5.79, intercept=16.77):
+    def __init__(self, pin=32, slope=-5.79, intercept=16.77):
         """
         สร้าง pH Sensor
 
         Args:
-            pin (int): GPIO pin สำหรับ ADC (ค่าเริ่มต้น: 25)
+            pin (int): GPIO pin สำหรับ ADC (ค่าเริ่มต้น: 32 / ADC1 — ADC2 GPIO25 ขัดแย้งกับ Wi-Fi)
             slope (float): ค่า slope จาก calibration
             intercept (float): ค่า intercept จาก calibration
         """

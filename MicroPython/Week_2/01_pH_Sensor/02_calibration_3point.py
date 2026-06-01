@@ -108,6 +108,25 @@ from onewire import OneWire
 from ds18x20 import DS18X20
 
 # ==============================================================================
+# การทำงานร่วมกับเฟิร์มแวร์ SciLabPro MicroPad (Interop with MicroPad firmware)
+# ==============================================================================
+# เฟิร์มแวร์ MicroPad ครอบครองบัส SPI ของจอ TFT (วาด boot splash) จนกว่าสคริปต์
+# จะเรียก release_tft()  ถ้าไม่เรียก SPI(1,...) ด้านล่างจะเกิด OSError: SPI host
+# already in use  บน MicroPython มาตรฐานเราตั้งค่าเป็น None แล้วข้ามไป
+# The MicroPad firmware owns the TFT SPI bus until a script calls release_tft();
+# without it SPI(1, ...) below raises OSError: SPI host already in use.  On
+# standard MicroPython (no scilabpro module) we fall back to None and skip.
+try:
+    from scilabpro import release_tft     # ปลดจอ TFT จากเฟิร์มแวร์ (yield TFT)
+except ImportError:
+    release_tft = None
+
+try:
+    from scilabpro import stop_requested  # ให้แอปสั่งหยุดได้ (cooperative stop)
+except ImportError:
+    stop_requested = None
+
+# ==============================================================================
 # ค่าคงที่ทางเคมี (Chemistry Constants)
 # ==============================================================================
 R_CONSTANT = 8.314       # ค่าคงที่ของก๊าซ (Gas constant) J/(mol.K)
@@ -141,6 +160,10 @@ pH_adc.atten(ADC.ATTN_11DB)  # ตั้งค่าให้อ่านแร�
 # การตั้งค่าจอแสดงผล TFT
 # TFT Display Setup
 # ==============================================================================
+# ปลดการครอบครองจอ TFT จากเฟิร์มแวร์ก่อนสร้างบัส SPI ของเราเอง (idempotent)
+# Yield the TFT from the firmware BEFORE we create our own SPI bus (idempotent).
+if release_tft is not None:
+    release_tft()
 spi = SPI(1, baudrate=40000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, dc=Pin(27), cs=Pin(15), rst=Pin(0), width=320, height=240, rotation=90)
 
@@ -1030,11 +1053,15 @@ try:
             print("Please check and recalibrate")
             print("!" * 60)
 
-    # รอจนกว่าจะกด Ctrl+C
+    # รอจนกว่าจะกด Ctrl+C หรือแอปสั่งหยุด
     print("\nการสอบเทียบเสร็จสิ้น (Calibration complete)")
     print("กด Ctrl+C เพื่อออก (Press Ctrl+C to exit)")
 
     while True:
+        # ตรวจคำสั่งหยุดจากแอป Student/Instructor (check for an app stop request)
+        if stop_requested is not None and stop_requested():
+            print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+            break
         sleep_ms(100)
 
 except KeyboardInterrupt:

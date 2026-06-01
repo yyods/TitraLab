@@ -341,6 +341,27 @@ from machine import Pin, SPI, ADC, Timer
 import time
 
 # ==============================================================================
+# การทำงานร่วมกับเฟิร์มแวร์ SciLabPro MicroPad (Interop with MicroPad firmware)
+# ==============================================================================
+# บนบอร์ด TitraLab ที่ใช้เฟิร์มแวร์ MicroPad เฟิร์มแวร์จะ "ครอบครอง" บัส SPI ของ
+# จอ TFT ไว้ (วาด boot splash) จนกว่าสคริปต์จะเรียก release_tft() เพื่อขอสิทธิ์
+# ควบคุมจอเอง  ถ้าไม่เรียก จะเกิด OSError: SPI host already in use ตอนสร้าง SPI(1,...)
+# On a TitraLab board running MicroPad firmware, the firmware OWNS the TFT SPI
+# bus until a student script calls release_tft().  Without it, SPI(1, ...) below
+# raises OSError: SPI host already in use.
+# บน MicroPython มาตรฐาน (ไม่มีโมดูล scilabpro) เราตั้งค่าเป็น None แล้วข้ามไป
+# On standard MicroPython (no scilabpro module) we fall back to None and skip.
+try:
+    from scilabpro import release_tft     # ปลดจอ TFT จากเฟิร์มแวร์ (yield TFT)
+except ImportError:
+    release_tft = None
+
+try:
+    from scilabpro import stop_requested  # ให้แอปสั่งหยุดได้ (cooperative stop)
+except ImportError:
+    stop_requested = None
+
+# ==============================================================================
 # ค่าคงที่สำหรับการตั้งค่า (Configuration Constants)
 # ==============================================================================
 # ระยะเวลาบันทึกข้อมูล (Recording duration)
@@ -387,6 +408,10 @@ button_1 = Pin(MY_BTN1_PIN, Pin.IN)
 # การตั้งค่าจอแสดงผล TFT ILI9341 (TFT Display Setup)
 # ==============================================================================
 # ขา TFT เป็นขาที่ต่อบน PCB แล้ว (FIXED pins - hardwired on PCB)
+# ปลดการครอบครองจอ TFT จากเฟิร์มแวร์ก่อนสร้างบัส SPI ของเราเอง (idempotent)
+# Yield the TFT from the firmware BEFORE we create our own SPI bus (idempotent).
+if release_tft is not None:
+    release_tft()
 spi = SPI(1, baudrate=10000000, sck=Pin(14), mosi=Pin(13))
 display = Display(spi, cs=Pin(15), dc=Pin(27), rst=Pin(0),
                   width=240, height=320, rotation=90)
@@ -840,6 +865,13 @@ show_time(0, RECORDING_DURATION_S)
 # ==============================================================================
 try:
     while True:
+        # ตรวจคำสั่งหยุดจากแอป Student/Instructor (check for an app stop request)
+        if stop_requested is not None and stop_requested():
+            print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+            if recording:
+                stop_recording()  # ปิด Timer + บันทึกไฟล์ก่อนออก (flush before exit)
+            break
+
         # อ่านและแสดงค่าแรงดันแบบ real-time (Read and show voltage in real-time)
         if not recording:
             voltage_mv = read_voltage_mv()

@@ -106,12 +106,15 @@ class PHSensor(Sensor):
       - read_ph() method เฉพาะ
     """
 
-    def __init__(self, pin=25, slope=-5.79, intercept=16.77):
+    def __init__(self, pin=32, slope=-5.79, intercept=16.77):
         """
         Constructor ของ PHSensor
 
         หลักสำคัญ: ต้องเรียก super().__init__() ก่อนเสมอ
         เพื่อให้ Sensor ทำการ initialize ก่อน
+
+        หมายเหตุ: ค่าเริ่มต้น pin=32 (ADC1) ไม่ใช่ GPIO25 (ADC2) เพราะ ADC2 ขัดแย้งกับ Wi-Fi
+        Note: default pin=32 (ADC1), not GPIO25 (ADC2) — ADC2 conflicts with Wi-Fi.
         """
         # ===== เรียก constructor ของคลาสแม่ (Sensor) =====
         # super() = คลาสแม่ (Sensor)

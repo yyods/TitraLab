@@ -20,7 +20,7 @@
 #   pH = slope * voltage + intercept
 #
 # Hardware Configuration:
-#   - GPIO 25: pH Sensor (ADC input)
+#   - GPIO 32: pH Sensor (ADC1 input) — ADC1 ไม่ขัดแย้งกับ Wi-Fi (wireless-safe)
 #   - ADC 12-bit: 0-4095 (0-3.3V)
 #
 # ==============================================================================
@@ -40,7 +40,8 @@ except ImportError:
 # ค่าคงที่สำหรับ pH Sensor (pH Sensor Constants)
 # ==============================================================================
 # GPIO และ ADC Configuration
-PH_PIN = 25                    # GPIO25 สำหรับ pH sensor
+PH_PIN = 32                    # GPIO32 (ADC1) สำหรับ pH sensor — ใช้ ADC1 ไม่ใช่ ADC2
+                               # GPIO32 (ADC1), NOT GPIO25 (ADC2): ADC2 conflicts with Wi-Fi
 ADC_MAX_VALUE = 4095           # 12-bit ADC maximum value
 ADC_REFERENCE_MV = 3300        # แรงดันอ้างอิง 3.3V = 3300 mV
 
@@ -115,7 +116,7 @@ class PHSensor(BaseSensor):
         3. จากนั้นจึงเริ่มต้น attributes เฉพาะของ child class
 
         Args:
-            pin (int): GPIO pin สำหรับ pH sensor (ค่าเริ่มต้น: GPIO25)
+            pin (int): GPIO pin สำหรับ pH sensor (ค่าเริ่มต้น: GPIO32 / ADC1)
             slope (float): ค่า slope ของสมการ calibration
             intercept (float): ค่า intercept ของสมการ calibration
         """

@@ -41,7 +41,10 @@ except ImportError:
     # เซ็นเซอร์ (Sensors)
     # ==============================================================================
     DS18B20_PIN = 16  # GPIO16 - เซ็นเซอร์อุณหภูมิ DS18B20 (Temperature sensor)
-    PH_PIN = 25       # GPIO25 - เซ็นเซอร์ pH (pH sensor ADC input)
+    PH_PIN = 32       # GPIO32 - เซ็นเซอร์ pH บน ADC1 (pH sensor on ADC1, wireless-safe)
+                      # ใช้ GPIO32 (ADC1) ไม่ใช่ GPIO25 (ADC2): ADC2 ขัดแย้งกับ Wi-Fi
+                      # Use GPIO32 (ADC1), NOT GPIO25 (ADC2): ADC2 conflicts with Wi-Fi.
+                      # ตรงกับ Week_1/pins.py และ 01_basic_ph_read.py (matches firmware path)
 
     # ==============================================================================
     # ตัวต้านทานปรับค่าได้ (Potentiometers)
