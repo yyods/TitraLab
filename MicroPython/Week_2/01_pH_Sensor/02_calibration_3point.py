@@ -923,7 +923,11 @@ def calibrate_pH():
         # Note: Student waits 30-60s before pressing, then program waits 10s more
         stabilization_time = 10  # วินาทีหลังกดปุ่ม (seconds after button press)
 
-        display.clear()
+        # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+        # Heap-tight board: defragment first, then clear with a small chunk
+        # (hlines=2 -> 320*2*2 = 1280 B, vs default hlines=8 -> 5120 B which fails)
+        gc.collect()
+        display.clear(hlines=2)
         display.draw_text(30, 30, f"Measuring pH {buffer_pH:.2f}", font, color565(255, 255, 255))
         display.draw_text(30, 70, "Stabilizing...", font, color565(255, 255, 0))
         display.draw_text(30, 120, "Time Left:", font, color565(200, 200, 200))
@@ -962,7 +966,11 @@ def calibrate_pH():
             temperatures[i] = 25.0  # ค่าเริ่มต้น (Default value)
 
         # แสดงผลลัพธ์ (Display results)
-        display.clear()
+        # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+        # Heap-tight board: defragment first, then clear with a small chunk
+        # (hlines=2 -> 320*2*2 = 1280 B, vs default hlines=8 -> 5120 B which fails)
+        gc.collect()
+        display.clear(hlines=2)
         display.draw_text(30, 30, f"pH {buffer_pH:.2f} Recorded!", font, color565(0, 255, 0))
         display.draw_text(30, 80, f"Voltage: {voltage_mv:.1f} mV", font, color565(255, 193, 34))
         display.draw_text(30, 120, f"Std Dev: {std_dev:.2f} mV", font, color565(200, 200, 200))
@@ -1091,5 +1099,9 @@ except KeyboardInterrupt:
 
 finally:
     # ทำความสะอาด (Cleanup)
-    display.clear()
+    # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+    # Heap-tight board: defragment first, then clear with a small chunk
+    # (hlines=2 -> 320*2*2 = 1280 B, vs default hlines=8 -> 5120 B which fails)
+    gc.collect()
+    display.clear(hlines=2)
     print("ปิดจอแล้ว (Display cleared)")
