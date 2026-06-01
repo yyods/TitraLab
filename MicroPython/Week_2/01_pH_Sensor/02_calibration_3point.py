@@ -100,10 +100,20 @@
 # - GPIO 34: Button 1 (Confirm calibration point) - input-only pin
 # ==============================================================================
 
+import gc                                 # เก็บกวาดหน่วยความจำก่อน import ไดรเวอร์ใหญ่
 from time import sleep_ms, ticks_ms, ticks_diff
 from machine import Pin, ADC, SPI
-from xglcd_font import XglcdFont
+# คอมไพล์ไดรเวอร์ใหญ่ (ili9341 ~37KB) ก่อน ขณะที่ heap ยังต่อเนื่องมากที่สุด แล้วค่อย
+# import โมดูลเล็ก  ถ้าสลับลำดับ (xglcd ก่อน) heap จะแตกเป็นชิ้น ทำให้คอมไพล์ ili9341
+# หา block ต่อเนื่องไม่พอ -> MemoryError  (gc.collect() คั่นเพื่อรวม heap ก่อนแต่ละครั้ง)
+# Compile the LARGE driver (ili9341 ~37KB) first while the heap is most contiguous,
+# then the small one.  Importing xglcd first fragments the heap and the ili9341
+# compile can't find a contiguous block -> MemoryError.  gc.collect() defragments
+# between the two heavy compiles.
+gc.collect()
 from ili9341 import Display, color565
+gc.collect()
+from xglcd_font import XglcdFont
 from onewire import OneWire
 from ds18x20 import DS18X20
 

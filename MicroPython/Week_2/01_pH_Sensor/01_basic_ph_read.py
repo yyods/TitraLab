@@ -335,7 +335,9 @@
 #
 # ==============================================================================
 
-from ili9341 import Display, color565
+import gc                                 # รวม heap ก่อนคอมไพล์ไดรเวอร์ใหญ่ (ili9341)
+gc.collect()                              # กัน MemoryError บน heap ที่แตกเป็นชิ้น
+from ili9341 import Display, color565     # ไดรเวอร์ใหญ่ (~37KB) คอมไพล์ก่อนเสมอ
 from xglcd_font import XglcdFont
 from machine import Pin, SPI, ADC, Timer
 import time
