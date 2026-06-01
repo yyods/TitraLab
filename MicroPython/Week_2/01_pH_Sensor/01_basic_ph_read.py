@@ -901,7 +901,11 @@ print("")
 button_1.irq(trigger=Pin.IRQ_FALLING, handler=button_callback)
 
 # ล้างหน้าจอและวาดหัวข้อ (Clear display and draw header)
-display.clear(COLOR_BLACK)
+# บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+# Heap-tight board: defragment first, then clear with a small chunk
+# (hlines=2 -> 1280 B, vs default hlines=8 -> 5120 B)
+gc.collect()
+display.clear(COLOR_BLACK, hlines=2)
 draw_header()
 
 # แสดงสถานะเริ่มต้น (Show initial status)

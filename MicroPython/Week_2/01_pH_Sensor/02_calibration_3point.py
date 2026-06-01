@@ -621,7 +621,11 @@ def display_raw_calibration_data():
     # ==============================================================================
     # แสดงบนจอ TFT (Display on TFT)
     # ==============================================================================
-    display.clear()
+    # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+    # Heap-tight board: defragment first, then clear with a small chunk
+    # (hlines=2 -> 320*2*2 = 1280 B, vs default hlines=8 -> 5120 B which fails)
+    gc.collect()
+    display.clear(hlines=2)
     display.draw_text(20, 5, "Raw Calibration Data", font, color565(255, 255, 255))
 
     # แสดงหัวตาราง (Table header) - x=mV, y=pH
@@ -731,7 +735,11 @@ def display_results(slope, intercept, r_squared, efficiency, avg_temp):
         eff_color = color565(255, 0, 0)   # แดง = ควรเปลี่ยนหัววัด
 
     # แสดงผลบนจอ TFT (Display on TFT)
-    display.clear()
+    # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+    # Heap-tight board: defragment first, then clear with a small chunk
+    # (hlines=2 -> 1280 B, vs default hlines=8 -> 5120 B which fails)
+    gc.collect()
+    display.clear(hlines=2)
     display.draw_text(30, 10, "Calibration Results", font, color565(255, 255, 255))
 
     display.draw_text(10, 50, f"Slope:", font, color565(200, 200, 200))
@@ -833,7 +841,11 @@ def calibrate_pH():
     for i, buffer_pH in enumerate(buffer_pH_values):
         # แสดงข้อความเตรียมการสอบเทียบ พร้อมค่า mV แบบ real-time
         # Display calibration preparation message with real-time mV reading
-        display.clear()
+        # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
+        # Heap-tight board: defragment first, then clear with a small chunk
+        # (hlines=2 -> 1280 B, vs default hlines=8 -> 5120 B which fails)
+        gc.collect()
+        display.clear(hlines=2)
         display.draw_text(20, 10, f"Calibration Point {i+1}/3", font, color565(255, 255, 255))
         display.draw_text(20, 40, f"Buffer pH: {buffer_pH:.2f}", font, color565(0, 255, 255))
 
