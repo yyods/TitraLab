@@ -413,8 +413,30 @@ button_1 = Pin(MY_BTN1_PIN, Pin.IN)
 if release_tft is not None:
     release_tft()
 spi = SPI(1, baudrate=10000000, sck=Pin(14), mosi=Pin(13))
+# จอแนวนอน (landscape): width=320, height=240 ให้สอดคล้องกับ rotation=90
+# Landscape orientation: width=320, height=240 to match rotation=90.
+# ผังการวาดทั้งหมดอิงพิกัด 320x240 (กึ่งกลางแนวนอน = 160, สูงสุด y = 239)
+# The whole drawing layout assumes a 320x240 canvas (center x = 160, max y = 239).
 display = Display(spi, cs=Pin(15), dc=Pin(27), rst=Pin(0),
-                  width=240, height=320, rotation=90)
+                  width=320, height=240, rotation=90)
+
+# === ค่าคงที่ผังหน้าจอแนวนอน 320x240 (Landscape 320x240 layout constants) ===
+# กึ่งกลางแนวนอนใช้จัดข้อความให้อยู่ตรงกลาง (Horizontal center for centering text)
+SCREEN_W = 320
+SCREEN_H = 240
+CENTER_X = SCREEN_W // 2     # = 160
+# ตำแหน่งแนวตั้งของแต่ละแถว (Vertical position of each row). ฟอนต์สูง 24 px
+# Row y-positions; font is 24 px tall so each row occupies y..y+23 (must stay <= 239)
+Y_TITLE = 8                  # หัวข้อ (Title)      ->   8..31
+Y_DIVIDER = 36              # เส้นแบ่ง (Divider)
+Y_VOLT_LABEL = 44          # ป้าย Voltage         ->  44..67
+Y_VOLT_VALUE = 70          # ค่า Voltage          ->  70..93
+Y_TIME_LABEL = 100         # ป้าย Time            -> 100..123
+Y_TIME_VALUE = 126         # ค่า Time             -> 126..149
+Y_STATUS_LABEL = 156       # ป้าย Status          -> 156..179
+Y_STATUS_VALUE = 182       # ค่า Status           -> 182..205
+Y_HINT = 210               # ข้อความคำแนะนำ (Hint) -> 210..233 (อยู่ในขอบ <= 239)
+FONT_H = 24                 # ความสูงฟอนต์ (Font height) สำหรับล้างพื้นที่
 
 # โหลดฟอนต์ (Load font)
 font = XglcdFont("fonts/EspressoDolce18x24.c", 18, 24)
@@ -517,29 +539,29 @@ def draw_header():
     """
     # หัวข้อหลัก (Main title)
     title = "Response Time Test"
-    title_x = 160 - int(font.measure_text(title, spacing=1) / 2)
-    display.draw_text(title_x, 10, title, font, COLOR_WHITE,
+    title_x = CENTER_X - int(font.measure_text(title, spacing=1) / 2)
+    display.draw_text(title_x, Y_TITLE, title, font, COLOR_WHITE,
                       background=COLOR_BLACK, landscape=False, spacing=1)
 
-    # เส้นแบ่ง (Divider line)
-    display.draw_hline(10, 40, 300, COLOR_YELLOW)
+    # เส้นแบ่ง (Divider line) - กว้าง 300 px เริ่มที่ x=10 -> สิ้นสุดที่ x=309 (<=319)
+    display.draw_hline(10, Y_DIVIDER, 300, COLOR_YELLOW)
 
     # ป้ายกำกับ Voltage (Voltage label)
     label_v = "Voltage:"
-    label_v_x = 160 - int(font.measure_text(label_v, spacing=1) / 2)
-    display.draw_text(label_v_x, 55, label_v, font, COLOR_YELLOW,
+    label_v_x = CENTER_X - int(font.measure_text(label_v, spacing=1) / 2)
+    display.draw_text(label_v_x, Y_VOLT_LABEL, label_v, font, COLOR_YELLOW,
                       background=COLOR_BLACK, landscape=False, spacing=1)
 
     # ป้ายกำกับ Time (Time label)
     label_t = "Time:"
-    label_t_x = 160 - int(font.measure_text(label_t, spacing=1) / 2)
-    display.draw_text(label_t_x, 130, label_t, font, COLOR_YELLOW,
+    label_t_x = CENTER_X - int(font.measure_text(label_t, spacing=1) / 2)
+    display.draw_text(label_t_x, Y_TIME_LABEL, label_t, font, COLOR_YELLOW,
                       background=COLOR_BLACK, landscape=False, spacing=1)
 
     # ป้ายกำกับ Status (Status label)
     label_s = "Status:"
-    label_s_x = 160 - int(font.measure_text(label_s, spacing=1) / 2)
-    display.draw_text(label_s_x, 195, label_s, font, COLOR_YELLOW,
+    label_s_x = CENTER_X - int(font.measure_text(label_s, spacing=1) / 2)
+    display.draw_text(label_s_x, Y_STATUS_LABEL, label_s, font, COLOR_YELLOW,
                       background=COLOR_BLACK, landscape=False, spacing=1)
 
 
@@ -558,16 +580,19 @@ def show_voltage(voltage_mv):
     if mv_rounded != current_voltage_display:
         current_voltage_display = mv_rounded
 
-        # ลบค่าเก่า (Clear old value)
-        clear_text = "        "  # 8 spaces to clear
-        clear_x = 160 - int(font.measure_text("9999.9 mV", spacing=1) / 2)
-        display.draw_text(clear_x, 85, clear_text + " mV", font, COLOR_BLACK,
-                          background=COLOR_BLACK, landscape=False, spacing=1)
+        # ลบค่าเก่าด้วยสี่เหลี่ยมทึบ (Clear old value with a solid rectangle)
+        # ใช้ fill_rectangle แทนการวาดสตริงช่องว่าง เพราะ glyph ช่องว่างกว้าง 0
+        # ทำให้ draw_text แจ้ง "Invalid width 0 or height 0"
+        # Use fill_rectangle instead of a spaces-string: the space glyph has
+        # zero width, which makes draw_text report "Invalid width 0 or height 0".
+        clear_w = font.measure_text("9999.9 mV", spacing=1)
+        clear_x = CENTER_X - int(clear_w / 2)
+        display.fill_rectangle(clear_x, Y_VOLT_VALUE, clear_w, FONT_H, COLOR_BLACK)
 
         # แสดงค่าใหม่ (Draw new value)
         mv_text = f"{mv_rounded:.1f} mV"
-        mv_x = 160 - int(font.measure_text(mv_text, spacing=1) / 2)
-        display.draw_text(mv_x, 85, mv_text, font, COLOR_CYAN,
+        mv_x = CENTER_X - int(font.measure_text(mv_text, spacing=1) / 2)
+        display.draw_text(mv_x, Y_VOLT_VALUE, mv_text, font, COLOR_CYAN,
                           background=COLOR_BLACK, landscape=False, spacing=1)
 
 
@@ -587,16 +612,15 @@ def show_time(elapsed, total):
     if time_key != current_time_display:
         current_time_display = time_key
 
-        # ลบค่าเก่า (Clear old value)
-        clear_text = "           "  # spaces to clear
-        clear_x = 160 - int(font.measure_text("99 / 99 s", spacing=1) / 2)
-        display.draw_text(clear_x, 160, clear_text, font, COLOR_BLACK,
-                          background=COLOR_BLACK, landscape=False, spacing=1)
+        # ลบค่าเก่าด้วยสี่เหลี่ยมทึบ (Clear old value with a solid rectangle)
+        clear_w = font.measure_text("99 / 99 s", spacing=1)
+        clear_x = CENTER_X - int(clear_w / 2)
+        display.fill_rectangle(clear_x, Y_TIME_VALUE, clear_w, FONT_H, COLOR_BLACK)
 
         # แสดงค่าใหม่ (Draw new value)
         time_text = f"{elapsed} / {total} s"
-        time_x = 160 - int(font.measure_text(time_text, spacing=1) / 2)
-        display.draw_text(time_x, 160, time_text, font, COLOR_WHITE,
+        time_x = CENTER_X - int(font.measure_text(time_text, spacing=1) / 2)
+        display.draw_text(time_x, Y_TIME_VALUE, time_text, font, COLOR_WHITE,
                           background=COLOR_BLACK, landscape=False, spacing=1)
 
 
@@ -617,25 +641,24 @@ def show_status(status_text, color, hint_text=""):
     if status_key != current_status_display:
         current_status_display = status_key
 
-        # ลบสถานะเก่า (Clear old status)
-        clear_text = "              "  # spaces to clear
-        clear_x = 10
-        display.draw_text(clear_x, 220, clear_text, font, COLOR_BLACK,
-                          background=COLOR_BLACK, landscape=False, spacing=1)
+        # ลบแถบสถานะ + คำแนะนำเก่าด้วยสี่เหลี่ยมทึบเต็มความกว้าง
+        # Clear the whole status + hint band with a solid full-width rectangle.
+        # ใช้ fill_rectangle แทนสตริงช่องว่าง (ดูหมายเหตุใน show_voltage)
+        # Use fill_rectangle instead of spaces-strings (see note in show_voltage).
+        # แถบครอบทั้งแถว Status value (y=182) ถึงท้าย Hint (y=233) -> สูง 52 px
+        # Band covers status value row (y=182) down through hint row (y=233).
+        band_h = (Y_HINT + FONT_H) - Y_STATUS_VALUE
+        display.fill_rectangle(0, Y_STATUS_VALUE, SCREEN_W, band_h, COLOR_BLACK)
 
         # แสดงสถานะใหม่ (Draw new status)
-        status_x = 160 - int(font.measure_text(status_text, spacing=1) / 2)
-        display.draw_text(status_x, 220, status_text, font, color,
-                          background=COLOR_BLACK, landscape=False, spacing=1)
-
-        # ลบคำแนะนำเก่า (Clear old hint)
-        display.draw_text(10, 260, "                    ", font, COLOR_BLACK,
+        status_x = CENTER_X - int(font.measure_text(status_text, spacing=1) / 2)
+        display.draw_text(status_x, Y_STATUS_VALUE, status_text, font, color,
                           background=COLOR_BLACK, landscape=False, spacing=1)
 
         # แสดงคำแนะนำใหม่ (Draw new hint)
         if hint_text:
-            hint_x = 160 - int(font.measure_text(hint_text, spacing=1) / 2)
-            display.draw_text(hint_x, 260, hint_text, font, COLOR_WHITE,
+            hint_x = CENTER_X - int(font.measure_text(hint_text, spacing=1) / 2)
+            display.draw_text(hint_x, Y_HINT, hint_text, font, COLOR_WHITE,
                               background=COLOR_BLACK, landscape=False, spacing=1)
 
 # ==============================================================================
