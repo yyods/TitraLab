@@ -18,6 +18,18 @@
 # Supplementary to: core/02_composition_basics.py
 #
 # ==============================================================================
+# ⚠ ความปลอดภัยของแอคชูเอเตอร์ — โปรดอ่าน (ACTUATOR SAFETY — READ FIRST)
+# ==============================================================================
+# โปรแกรมนี้ขับบัซเซอร์ (GPIO26) ด้วย machine.PWM โดยตรง (raw PWM). บัซเซอร์เสี่ยงต่ำ
+# This program drives the buzzer (GPIO26) with raw machine.PWM (low-energy).
+#
+# *** RAW PWM ไม่ผ่านตัวจับเวลานิรภัยของเฟิร์มแวร์ (F-40 actuator guard) ***
+# Raw PWM BYPASSES the firmware F-40 actuator-guard GPTimer (no force-cut); on
+# 0.3.x the run-scoped watchdog is also DISABLED (decision 0026/F-156). Low
+# energy risk vs. the pump, but the same discipline applies: every buzzer use
+# is wrapped in try/finally: buzzer.deinit() and KeyboardInterrupt -> OFF.
+# (safety-hw ruling R, decision 0027)
+# ==============================================================================
 
 from machine import Pin, PWM
 from time import sleep_ms
@@ -413,6 +425,10 @@ try:
 
     print("buzzer.tone(1000, 200):")
     buzzer.tone(1000, 200)
+except KeyboardInterrupt:
+    # Ctrl+C ระหว่างเล่นเสียง -> finally จะปิดบัซเซอร์ทันที
+    # Ctrl+C while playing -> finally silences the buzzer immediately.
+    print("\nหยุดโดยผู้ใช้ (Stopped by user)")
 finally:
     buzzer.deinit()
 

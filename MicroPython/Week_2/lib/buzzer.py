@@ -29,6 +29,20 @@
 #   - GPIO 26: Buzzer (PWM output)
 #
 # ==============================================================================
+# ⚠ ความปลอดภัยของแอคชูเอเตอร์ — โปรดอ่าน (ACTUATOR SAFETY — READ FIRST)
+# ==============================================================================
+# คลาส Buzzer นี้ขับด้วย machine.PWM โดยตรง (raw PWM). บัซเซอร์ความเสี่ยงต่ำ
+# This Buzzer class drives the buzzer with raw machine.PWM (low-energy actuator).
+#
+# *** RAW PWM ไม่ผ่านตัวจับเวลานิรภัยของเฟิร์มแวร์ (F-40 actuator guard) ***
+# Raw PWM BYPASSES the firmware F-40 actuator-guard GPTimer: NO hardware
+# max-on-time force-cut. On firmware 0.3.x the run-scoped watchdog is also
+# DISABLED (decision 0026/F-156). Low energy risk vs. the pump, but the same
+# discipline applies: guarantee the buzzer is silenced on every exit path —
+# use the with-statement (context manager) or try/finally: buzzer.deinit().
+# All class methods (beep/success/error/alarm/...) already wrap try/finally.
+# (safety-hw ruling R, decision 0027)
+# ==============================================================================
 
 from machine import Pin, PWM
 from time import sleep_ms

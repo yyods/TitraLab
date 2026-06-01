@@ -23,6 +23,20 @@
 #       extras/class_static_methods.py
 #
 # ==============================================================================
+# ⚠ ความปลอดภัยของแอคชูเอเตอร์ — โปรดอ่าน (ACTUATOR SAFETY — READ FIRST)
+# ==============================================================================
+# โปรแกรมนี้ขับปั๊ม (GPIO21) ด้วย machine.PWM โดยตรง (raw PWM) เพื่อสอน Composition
+# This program drives the pump (GPIO21) with raw machine.PWM (composition teaching).
+#
+# *** RAW PWM ไม่ผ่านตัวจับเวลานิรภัยของเฟิร์มแวร์ (F-40 actuator guard) ***
+# Raw PWM BYPASSES the firmware F-40 actuator-guard GPTimer: NO hardware
+# max-on-time force-cut. On firmware 0.3.x the run-scoped watchdog is also
+# DISABLED (decision 0026/F-156). Supervised / physical-access use ONLY.
+# Every pump use is wrapped in try/finally: pump.deinit() (duty 0 + deinit),
+# and KeyboardInterrupt (Ctrl+C) routes to the same OFF path.
+# Last-line stops if wedged: physical BUTTON_3 hold, Ctrl+C, reset/power-cut.
+# (safety-hw ruling R, decision 0027)
+# ==============================================================================
 
 from machine import Pin, PWM
 from time import sleep_ms, ticks_us, ticks_diff
@@ -347,6 +361,11 @@ try:
     print("\n--- ทดสอบ run_for_time ---")
     result = pump.run_for_time(500, 100)
     print(f"ผลลัพธ์: {result}")
+
+except KeyboardInterrupt:
+    # Ctrl+C ระหว่างปั๊มทำงาน -> finally จะปิดปั๊มทันที
+    # Ctrl+C while pumping -> finally cuts the pump immediately.
+    print("\nหยุดโดยผู้ใช้ (Stopped by user)")
 
 finally:
     pump.deinit()

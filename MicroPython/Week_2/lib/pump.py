@@ -38,6 +38,26 @@
 #   - GPIO 21: Pump (PWM output)
 #
 # ==============================================================================
+# ⚠ ความปลอดภัยของแอคชูเอเตอร์ — โปรดอ่าน (ACTUATOR SAFETY — READ FIRST)
+# ==============================================================================
+# คลาส Pump นี้ขับปั๊มด้วย machine.PWM โดยตรง (raw PWM) — เพื่อสอน Composition
+# This Pump class drives the pump with raw machine.PWM (composition teaching).
+#
+# *** RAW PWM ไม่ผ่านตัวจับเวลานิรภัยของเฟิร์มแวร์ (F-40 actuator guard) ***
+# Raw PWM BYPASSES the firmware F-40 actuator-guard GPTimer: NO hardware
+# max-on-time force-cut. On firmware 0.3.x the run-scoped watchdog is also
+# DISABLED (decision 0026/F-156), so a wedged caller has NO firmware backstop.
+#
+# ดังนั้น: ใช้งานแบบมีผู้ควบคุม / เข้าถึงเครื่องโดยตรงเท่านั้น (supervised use only)
+# Callers MUST guarantee the pump is turned OFF on every exit path:
+#   try:
+#       pump.start(50); ...
+#   finally:
+#       pump.deinit()          # duty(0) + PWM deinit — always runs
+# และจัดการ KeyboardInterrupt (Ctrl+C) ให้ปั๊มหยุดเสมอ.
+# Last-line stops if a caller wedges: physical BUTTON_3 hold, Ctrl+C, reset.
+# (safety-hw ruling R, decision 0027)
+# ==============================================================================
 
 from machine import Pin, PWM
 from time import ticks_us, ticks_diff, sleep_ms

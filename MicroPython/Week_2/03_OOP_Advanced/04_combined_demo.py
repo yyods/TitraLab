@@ -19,9 +19,30 @@
 #   - รวมกันเพื่อหาจุดสมมูล (Equivalence Point)
 #
 # ==============================================================================
+# ⚠ ความปลอดภัยของแอคชูเอเตอร์ — โปรดอ่าน (ACTUATOR SAFETY — READ FIRST)
+# ==============================================================================
+# โปรแกรมนี้ขับปั๊ม (GPIO21) ด้วย machine.PWM โดยตรง (raw PWM) ผ่านคลาส Pump.
+# This program drives the pump (GPIO21) with raw machine.PWM via the Pump class.
+#
+# *** RAW PWM ไม่ผ่านตัวจับเวลานิรภัยของเฟิร์มแวร์ (F-40 actuator guard) ***
+# Raw PWM BYPASSES the firmware F-40 actuator-guard GPTimer: NO hardware
+# max-on-time force-cut. On firmware 0.3.x the run-scoped watchdog is also
+# DISABLED (decision 0026/F-156). Supervised / physical-access use ONLY.
+# The titration loop polls stop_requested() (app STOP), the run is wrapped in
+# try/finally: titrator.cleanup() -> pump.deinit(), and KeyboardInterrupt
+# routes to the same OFF path. Last-line stops: BUTTON_3 hold, Ctrl+C, reset.
+# (safety-hw ruling R, decision 0027)
+# ==============================================================================
 
 from machine import Pin, ADC, PWM
 from time import sleep_ms, ticks_us, ticks_diff
+
+# ให้แอป Student/Instructor สั่งหยุดสคริปต์ได้แบบ cooperative (F-149 STOP ladder)
+# Let the Student/Instructor app stop this script cooperatively (F-149 STOP).
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
 
 
 # ==============================================================================
@@ -430,6 +451,14 @@ class SimpleTitrator:
         self._total_volume = 0.0
 
         while self._total_volume < max_volume:
+            # นิรภัย: ถ้าแอปสั่ง STOP ระหว่างไทเทรต ให้หยุดก่อนเติมสารรอบถัดไป
+            # Safety: if the app requests STOP, halt before the next titrant burst.
+            # cleanup() ใน finally จะปิดปั๊ม (pump.deinit) เสมอ
+            if stop_requested is not None and stop_requested():
+                self._pump.deinit()
+                print("\nได้รับคำสั่งหยุดจากแอป — หยุดไทเทรตและปิดปั๊ม (Stop requested)")
+                break
+
             # อ่านค่า pH
             ph = self.read_ph()
             if ph is None:

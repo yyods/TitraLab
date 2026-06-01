@@ -46,10 +46,37 @@
 # - GPIO 2:  Red LED (ปั๊มทำงาน / Pump running)
 # - GPIO 4:  Green LED (เสร็จสิ้น / Complete)
 # - GPIO 34: Button 1 (Start pump) - input-only
+#
+# ==============================================================================
+# ⚠ ความปลอดภัยของแอคชูเอเตอร์ — โปรดอ่าน (ACTUATOR SAFETY — READ FIRST)
+# ==============================================================================
+# สคริปต์นี้ขับปั๊มด้วย machine.PWM โดยตรง (raw PWM) เพื่อสอน duty-cycle/flow-rate
+# This script drives the pump with raw machine.PWM (for duty-cycle teaching).
+#
+# *** RAW PWM ไม่ผ่านตัวจับเวลานิรภัยของเฟิร์มแวร์ (F-40 actuator guard) ***
+# Raw PWM BYPASSES the firmware F-40 actuator-guard GPTimer. There is NO
+# hardware max-on-time force-cut on this path. On firmware 0.3.x the run-scoped
+# watchdog is also DISABLED (decision 0026/F-156), so a wedged script has NO
+# firmware backstop keeping the pump on indefinitely.
+#
+# ดังนั้นสคริปต์นี้สำหรับใช้งานแบบมีผู้ควบคุม / เข้าถึงเครื่องโดยตรงเท่านั้น
+# THEREFORE: supervised / physical-access (Thonny over USB) use ONLY.
+# Do NOT run unattended. Last-line stops if the script wedges:
+#   • กดปุ่ม 3 ค้าง (hold physical BUTTON_3) • Ctrl+C • รีเซ็ต/ถอดไฟ (reset/power-cut)
+# This script enforces R-safeguards: stop_requested() poll in the loop,
+# try/finally that forces the pump OFF, and KeyboardInterrupt -> pump OFF.
+# (safety-hw ruling R, decision 0027)
 # ==============================================================================
 
 from machine import Pin, PWM
 from time import ticks_us, ticks_diff, sleep_ms
+
+# ให้แอป Student/Instructor สั่งหยุดสคริปต์ได้แบบ cooperative (F-149 STOP ladder)
+# Let the Student/Instructor app stop this script cooperatively (F-149 STOP).
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
 
 # ==============================================================================
 # การตั้งค่าขา GPIO (GPIO Pin Configuration)
@@ -195,6 +222,13 @@ def pump_continuous(target_volume_ml):
     # แสดง progress ทุก 1 วินาที (Show progress every 1 second)
     elapsed = 0
     while elapsed < pumping_time:
+        # นิรภัย: ถ้าแอปสั่ง STOP ระหว่างปั๊มกำลังทำงาน ให้ตัดปั๊มทันที
+        # Safety: if the app requests STOP while the pump is RUNNING, cut it now.
+        if stop_requested is not None and stop_requested():
+            pump_pwm.duty(0)
+            print("\nได้รับคำสั่งหยุดจากแอป — ตัดปั๊มทันที (Stop requested -> pump cut)")
+            break
+
         # รอ 1 วินาทีหรือเวลาที่เหลือ (Wait 1 second or remaining time)
         wait_time = min(1.0, pumping_time - elapsed)
         precise_sleep(wait_time)
@@ -293,6 +327,12 @@ try:
     led_green.off()
 
     while True:
+        # หยุดแบบ cooperative เมื่อแอปสั่ง STOP (F-149) — ออกไปที่ finally เพื่อปิดปั๊ม
+        # Cooperative stop on app STOP request -> falls through to finally (pump OFF)
+        if stop_requested is not None and stop_requested():
+            print("\nได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+            break
+
         current_time = ticks_us() // 1000  # แปลงเป็น ms
 
         # ตรวจสอบปุ่มพร้อม debounce (Check button with debounce)
