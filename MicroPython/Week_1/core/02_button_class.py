@@ -24,6 +24,12 @@
 from machine import Pin
 import time
 
+# ปล่อยให้แอป MicroPad สั่งหยุดได้ (allow the MicroPad app to stop this script)
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
+
 
 class Button:
     """
@@ -220,6 +226,11 @@ if __name__ == "__main__":
 
     try:
         while True:
+            # ตรวจคำสั่งหยุดจากแอป (check for an app stop request)
+            if stop_requested is not None and stop_requested():
+                print("\nได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+                break
+
             # ตรวจสอบปุ่ม SELECT (Check SELECT button)
             if btn_select.is_pressed():
                 selected = menu_items[current_index]

@@ -12,6 +12,19 @@ import ds18x20
 from ili9341 import Display, color565
 from xglcd_font import XglcdFont
 
+# MicroPad firmware interop (no-op on standard MicroPython):
+#   release_tft()     - yield the TFT SPI bus the firmware owns at boot
+#   stop_requested()  - let the Student/Instructor app stop this script
+# การทำงานร่วมกับเฟิร์มแวร์ MicroPad (ข้ามอย่างปลอดภัยบน MicroPython มาตรฐาน)
+try:
+    from scilabpro import release_tft
+except ImportError:
+    release_tft = None
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
+
 # Simplified inline classes (คลาสแบบย่อ)
 class LED:
     def __init__(self, pin):
@@ -71,10 +84,16 @@ class TitrationMonitor:
             print("Warning: No temp sensor")
             self.sensor_ok = False
 
+        # ปลดจอ TFT จากเฟิร์มแวร์ MicroPad ก่อนสร้าง SPI ของเราเอง
+        # Yield the TFT from MicroPad firmware before creating our own SPI bus.
+        if release_tft is not None:
+            release_tft()
         spi = SPI(1, baudrate=40000000, sck=Pin(14), mosi=Pin(13))
         self.display = Display(spi, dc=Pin(27), cs=Pin(15), rst=Pin(0),
                                width=320, height=240, rotation=90)
-        self.font = XglcdFont('EspressoDolce18x24.c', 18, 24)
+        # ฟอนต์อยู่ใน /workspace/fonts/ (CWD = /workspace บนเฟิร์มแวร์ MicroPad)
+        # Font lives in /workspace/fonts/ (CWD is /workspace on MicroPad firmware)
+        self.font = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
         self.running = False
         print("Ready! Button 1 to toggle, Ctrl+C to exit")
 
@@ -112,6 +131,9 @@ class TitrationMonitor:
 
         try:
             while True:
+                if stop_requested is not None and stop_requested():
+                    print("Stop requested by app")
+                    break
                 if self.btn.is_pressed():
                     self.toggle()
 

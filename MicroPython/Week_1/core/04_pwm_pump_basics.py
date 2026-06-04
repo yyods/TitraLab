@@ -20,6 +20,30 @@
 from machine import Pin, PWM
 import time
 
+# ==============================================================================
+# ⚠ ความปลอดภัยบนเฟิร์มแวร์ MicroPad (MicroPad firmware safety note) ⚠
+# ==============================================================================
+# การควบคุมปั๊มด้วย machine.PWM โดยตรง (raw PWM) จะ "ข้าม" Actuator Guard
+# ของเฟิร์มแวร์ MicroPad:
+#   - ตัวจับเวลานิรภัย max_on_ms จะไม่ถูกเปิดใช้งาน (ไม่มีการตัดไฟอัตโนมัติ)
+#   - Task Watchdog ไม่ตัดการทำงานเมื่อสคริปต์ค้าง (เช่น while True)
+#   - ตัวสำรองทางซอฟต์แวร์มีเพียง finally -> pump.deinit() และการตัด BLE
+# Driving the pump with raw machine.PWM BYPASSES the MicroPad Actuator Guard:
+#   - the max_on_ms safety timer is NOT armed (no automatic cut-off),
+#   - the Task Watchdog will NOT cut a hung (e.g. while True) script,
+#   - the only software backstops are finally -> pump.deinit() and BLE-disconnect.
+#
+# กฎความปลอดภัยเมื่อใช้ raw PWM กับปั๊ม (Safety rules for raw-PWM pump control):
+#   1) จำกัดเวลาทำงานเสมอ — อย่าค้างปั๊มไว้ใน while True (always bound run time)
+#   2) ใส่ try/finally ให้ pump.deinit() ทำงานเสมอ (guarantee deinit)
+#   3) ตรวจ stop_requested() ในลูปยาว (poll stop_requested in long loops)
+#
+# สำหรับเปิด/ปิดปั๊มแบบมีตัวจับเวลานิรภัย (guarded on/off) ใช้:
+#   scilabpro.set_actuator("CONTROL_1", True, max_on_ms=...)
+# หมายเหตุ: set_actuator รองรับเปิด/ปิดเท่านั้น ยังไม่รองรับปรับความเร็วแบบ PWM
+# Note: set_actuator is on/off only and does not (yet) support PWM speed control.
+# ==============================================================================
+
 # นำเข้าขา GPIO (Import GPIO pins)
 try:
     from pins import PUMP_PIN, LED_GREEN, LED_RED
@@ -27,6 +51,12 @@ except ImportError:
     PUMP_PIN = 21     # ปั๊ม (Pump)
     LED_GREEN = 4     # สถานะปั๊มทำงาน
     LED_RED = 2       # สถานะปั๊มหยุด
+
+# ปล่อยให้แอป MicroPad สั่งหยุดได้ (allow the MicroPad app to stop this script)
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
 
 # ==============================================================================
 # ค่าคงที่ (Constants)
@@ -135,6 +165,12 @@ if __name__ == "__main__":
         ]
 
         for speed, desc, duration in phases:
+            # ตรวจคำสั่งหยุดจากแอป — ออกจากลูปแล้วให้ finally ปิดปั๊ม
+            # check for an app stop request — break out and let finally cut the pump
+            if stop_requested is not None and stop_requested():
+                print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+                break
+
             print(f"\n{desc}")
             if speed > 0:
                 pump.start(speed)

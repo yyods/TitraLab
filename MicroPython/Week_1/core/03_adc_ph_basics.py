@@ -10,12 +10,16 @@
 #   3. เตรียมพร้อมสำหรับการอ่านค่า pH ใน Week 3
 #
 # การเชื่อมโยงกับ Week 3 (Connection to Week 3):
-#   - GPIO25 = pH Sensor ADC input (from LMC6482 op-amp circuit)
+#   - GPIO32 = pH Sensor ADC input บน ADC1 (from LMC6482 op-amp circuit)
 #   - Week 3 ใช้ ADC อ่านค่า pH สำหรับไทเทรชันอัตโนมัติ
 #
 # ฮาร์ดแวร์ (Hardware):
-#   - ใช้ Potentiometer (GPIO32) จำลองสัญญาณ pH
-#   - Week 3 ใช้ pH sensor จริง (GPIO25)
+#   - ใช้ Potentiometer (GPIO32, ADC1) จำลองสัญญาณ pH
+#   - Week 3 ใช้ pH sensor จริงบนสาย ADC1 เดียวกัน (GPIO32)
+#   - หมายเหตุ: เฟิร์มแวร์ MicroPad ใช้ GPIO32 (ADC1) ไม่ใช่ GPIO25 (ADC2)
+#     เพราะ ADC2 ขัดแย้งกับ Wi-Fi และ GPIO27(ADC2) เป็นขา TFT DC
+#     (MicroPad firmware uses GPIO32/ADC1, not GPIO25/ADC2: ADC2 clashes
+#      with Wi-Fi and GPIO27/ADC2 is the TFT DC line)
 # ==============================================================================
 
 from machine import Pin, ADC
@@ -26,7 +30,13 @@ try:
     from pins import POT1_PIN, PH_PIN
 except ImportError:
     POT1_PIN = 32   # Potentiometer สำหรับฝึก (for practice)
-    PH_PIN = 25     # pH Sensor ใน Week 3
+    PH_PIN = 32     # pH Sensor ใน Week 3 บน ADC1 (Week 3 pH on ADC1; shares POT1 line)
+
+# ปล่อยให้แอป MicroPad สั่งหยุดได้ (allow the MicroPad app to stop this script)
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
 
 # ==============================================================================
 # ค่าคงที่ (Constants)
@@ -123,6 +133,11 @@ if __name__ == "__main__":
     try:
         count = 0
         while True:
+            # ตรวจคำสั่งหยุดจากแอป (check for an app stop request)
+            if stop_requested is not None and stop_requested():
+                print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+                break
+
             count += 1
             raw, voltage = adc.read()
             mv = voltage * 1000  # แปลงเป็น mV
@@ -136,5 +151,5 @@ if __name__ == "__main__":
         print("-" * 50)
         print("  1. ADC แปลง 0-3.3V -> 0-4095")
         print("  2. สมการ Nernst: -59.16 mV/pH")
-        print("  3. Week 3: ใช้ GPIO25 อ่าน pH จริง")
+        print("  3. Week 3: ใช้ GPIO32 (ADC1) อ่าน pH จริง")
         print("=" * 50)

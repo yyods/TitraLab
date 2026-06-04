@@ -29,6 +29,12 @@ except ImportError:
     POT1_PIN = 32    # Potentiometer
     LED_RED = 2      # LED สีแดง
 
+# ปล่อยให้แอป MicroPad สั่งหยุดได้ (allow the MicroPad app to stop this script)
+try:
+    from scilabpro import stop_requested
+except ImportError:
+    stop_requested = None
+
 # ==============================================================================
 # ค่าคงที่ (Constants)
 # ==============================================================================
@@ -143,6 +149,11 @@ if __name__ == "__main__":
     try:
         count = 0
         while True:
+            # ตรวจคำสั่งหยุดจากแอป (check for an app stop request)
+            if stop_requested is not None and stop_requested():
+                print("\nได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+                break
+
             count += 1
             adc, duty, percent = controller.update()
 

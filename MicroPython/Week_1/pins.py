@@ -98,7 +98,20 @@ DS18B20_PIN = 16  # GPIO16 - เซ็นเซอร์อุณหภูมิ
 # - คำนวณ: pH = slope_m * mV + intercept_b
 # - Calculation: pH = slope_m * mV + intercept_b
 
-PH_PIN = 25       # GPIO25 - เซ็นเซอร์ pH (pH sensor ADC input)
+PH_PIN = 32       # GPIO32 - เซ็นเซอร์ pH บน ADC1 (pH sensor on ADC1, wireless-safe)
+                  #
+                  # หมายเหตุสำคัญ (Important): เฟิร์มแวร์ SciLabPro MicroPad กำหนด pH
+                  # ไว้ที่ GPIO32 (ADC1) ไม่ใช่ GPIO25 (ADC2) ด้วยเหตุผล 2 ข้อ:
+                  #   1) ADC2 (GPIO25/26/27) ขัดแย้งกับ Wi-Fi — ใช้ไม่ได้เมื่อเปิด Wi-Fi
+                  #   2) GPIO27 (ADC2) ถูกใช้เป็นขา TFT DC อยู่แล้ว
+                  # MicroPad firmware routes pH to GPIO32 (ADC1), NOT GPIO25 (ADC2):
+                  #   1) ADC2 (GPIO25/26/27) conflicts with Wi-Fi.
+                  #   2) GPIO27 (ADC2) is already used as the TFT DC line.
+                  #
+                  # pH ใช้สาย ADC1 ร่วมกับ POT1_PIN (GPIO32) — เลือกใช้ได้ทีละอย่าง
+                  # (Week 1 ใช้ POT1 จำลอง pH; Week 3 ต่อ pH probe จริงบนสายเดียวกัน)
+                  # pH shares the ADC1 line with POT1_PIN (GPIO32) — use one at a time.
+                  # (Week 1 uses POT1 to simulate pH; Week 3 wires the real probe here.)
 
 
 # ==============================================================================

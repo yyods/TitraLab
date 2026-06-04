@@ -40,12 +40,40 @@ from ili9341 import Display, color565
 from xglcd_font import XglcdFont
 import time
 
+# ==============================================================================
+# การทำงานร่วมกับเฟิร์มแวร์ SciLabPro MicroPad (Interop with MicroPad firmware)
+# ==============================================================================
+# บนบอร์ด TitraLab ที่ใช้เฟิร์มแวร์ SciLabPro MicroPad เฟิร์มแวร์จะ "ครอบครอง"
+# บัส SPI ของจอ TFT ไว้ (ใช้วาดหน้า boot splash) จนกว่าสคริปต์ของนักศึกษา
+# จะเรียก release_tft() เพื่อขอสิทธิ์ควบคุมจอเอง  ถ้าไม่เรียก จะเกิดข้อผิดพลาด
+# OSError: SPI host already in use ตอนสร้าง SPI(1, ...) ใน init_display()
+#
+# On a TitraLab board running SciLabPro MicroPad firmware, the firmware OWNS
+# the TFT SPI bus (it draws the boot splash) until a student script calls
+# release_tft() to take ownership.  Without that call, SPI(1, ...) inside
+# init_display() raises  OSError: SPI host already in use.
+#
+# บน MicroPython มาตรฐาน (ไม่มีโมดูล scilabpro) เราตั้งค่าเป็น None แล้วข้าม
+# ขั้นตอนนี้ไป โค้ดจึงทำงานได้ทั้งสองแพลตฟอร์ม
+# On standard MicroPython (no scilabpro module) we fall back to None and skip
+# the call, so this script runs unchanged on both platforms.
+try:
+    from scilabpro import release_tft     # ปลดจอ TFT จากเฟิร์มแวร์ (yield TFT)
+except ImportError:
+    release_tft = None
+
+try:
+    from scilabpro import stop_requested  # ให้แอปสั่งหยุดได้ (cooperative stop)
+except ImportError:
+    stop_requested = None
+
 # === ค่าคงที่ขา GPIO สำหรับ TFT (TFT GPIO Pin Constants) ===
 TFT_SCK = 14     # SPI Clock
 TFT_MOSI = 13    # SPI Data (Master Out Slave In)
 TFT_DC = 27      # Data/Command select
 TFT_CS = 15      # Chip Select
-TFT_RST = 0      # Reset pin
+TFT_RST = 0      # Reset pin (GPIO0 = boot-strap pin; ใช้เป็น reset หลังบูตเท่านั้น
+                 # / GPIO0 is the boot strap pin — only driven as reset after boot)
 
 # === สี RGB565 สำหรับการแสดงผล (RGB565 Colors for Display) ===
 # RGB565 format: 5 bits red, 6 bits green, 5 bits blue
@@ -78,7 +106,18 @@ def init_display(rotation=90):
     Returns:
         Display: ออบเจกต์จอแสดงผล (display object)
     """
+    # ปลดการครอบครองจอ TFT จากเฟิร์มแวร์ก่อนสร้างบัส SPI ของเราเอง
+    # Yield the TFT from the firmware BEFORE we create our own SPI bus.
+    # release_tft() ปลอดภัยและเรียกซ้ำได้ (idempotent) — เรียกได้เสมอ ไม่มีผลข้างเคียง
+    # release_tft() is safe and idempotent — always OK to call, even twice.
+    if release_tft is not None:
+        release_tft()
+
     # สร้าง SPI bus สำหรับ TFT (Create SPI bus for TFT)
+    # หมายเหตุ: ถ้าจอแสดงผลเพี้ยน/มีสัญญาณรบกวน ลองลด baudrate เป็น 20_000_000
+    # หรือ 10_000_000 เพราะสายจัมเปอร์ยาวบนบอร์ด patch-panel อาจรับ 40 MHz ไม่ไหว
+    # Note: if the display is garbled/noisy, lower baudrate to 20_000_000 or
+    # 10_000_000 — long jumper wires on a patch-panel board may not handle 40 MHz.
     spi = SPI(1, baudrate=40000000, sck=Pin(TFT_SCK), mosi=Pin(TFT_MOSI))
 
     # สร้างออบเจกต์จอแสดงผล (Create display object)
@@ -320,7 +359,20 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # เริ่มต้นจอแสดงผล (Initialize display)
-    display = init_display(rotation=90)
+    try:
+        display = init_display(rotation=90)
+    except OSError as e:
+        # ข้อผิดพลาดที่พบบ่อยที่สุดคือ "SPI host already in use" เมื่อเฟิร์มแวร์
+        # MicroPad ยังครอบครองบัส SPI อยู่ (ดูหมายเหตุด้านบนไฟล์)
+        # The most common failure is "SPI host already in use" when the
+        # MicroPad firmware still owns the SPI bus (see note at top of file).
+        print("เริ่มต้นจอ TFT ไม่สำเร็จ (TFT init failed):", e)
+        print("  • ตรวจสอบว่าโมดูล scilabpro มี release_tft() "
+              "(check scilabpro.release_tft() is available)")
+        print("  • ตรวจสอบการต่อสาย SPI: SCK=14 MOSI=13 DC=27 CS=15 RST=0 "
+              "(verify SPI wiring)")
+        raise
+
     font = load_font()
 
     if font is None:
@@ -356,6 +408,11 @@ if __name__ == "__main__":
             temp = 25.5
 
             for volume, ph in titration_data:
+                # ตรวจคำสั่งหยุดจากแอป (check for an app stop request)
+                if stop_requested is not None and stop_requested():
+                    print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+                    break
+
                 # แสดงหน้าจอไทเทรชัน (Display titration screen)
                 draw_titration_screen(display, font, ph, temp, volume, "Titrating...")
 
@@ -379,8 +436,11 @@ if __name__ == "__main__":
             print("In Week 3: This display will show real-time pH vs Volume graph")
             print("=" * 50)
 
-            # รอจนกว่าจะกด Ctrl+C (Wait until Ctrl+C)
+            # รอจนกว่าจะกด Ctrl+C หรือแอปสั่งหยุด (Wait for Ctrl+C or app stop)
             while True:
+                if stop_requested is not None and stop_requested():
+                    print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
+                    break
                 time.sleep(1)
 
         except KeyboardInterrupt:
@@ -388,5 +448,10 @@ if __name__ == "__main__":
 
         finally:
             # ล้างจอก่อนจบ (Clear screen before exit)
-            clear_screen(display)
-            print("ล้างจอแล้ว (Screen cleared)")
+            # ครอบด้วย try เพื่อไม่ให้ข้อผิดพลาดตอนล้างจอบดบังข้อผิดพลาดจริง
+            # guard cleanup so a clear() failure can't mask the real error
+            try:
+                clear_screen(display)
+                print("ล้างจอแล้ว (Screen cleared)")
+            except Exception as e:
+                print("ล้างจอไม่สำเร็จ (Screen clear failed):", e)
