@@ -409,10 +409,16 @@ def linear_regression(x_values, y_values):
 # ==============================================================================
 def save_calibration_data(slope, intercept, r_squared, avg_temp):
     """
-    บันทึกค่าสอบเทียบลงไฟล์ data_calibrate.txt
-    Save calibration data to data_calibrate.txt
+    บันทึกค่าสอบเทียบลงไฟล์ /workspace/data/ph_calibration.txt
+    Save calibration data to /workspace/data/ph_calibration.txt
 
-    รูปแบบไฟล์ (File format):
+    เส้นทางถาวร (Persistent path): บันทึกใน /workspace/data ซึ่งเป็นโฟลเดอร์
+    คงอยู่ของ workspace (ไม่หายเมื่อรีบูต) เพื่อให้บทเรียน Week_3 (การไทเทรต
+    อัตโนมัติ) อ่านสมการสอบเทียบของบอร์ดตัวนี้ไปใช้ได้โดยตรง
+    Saved under /workspace/data (the persistent workspace folder, not CWD) so the
+    Week_3 auto-titration lesson can read THIS board's calibration directly.
+
+    รูปแบบไฟล์ (File format — เหมือนเดิมทุกประการ / unchanged columns):
     slope_m,intercept_b,r_squared,cal_temp
     -0.016911,34.9800,0.9985,25.2
 
@@ -432,15 +438,27 @@ def save_calibration_data(slope, intercept, r_squared, avg_temp):
     Returns:
         bool: True ถ้าบันทึกสำเร็จ (True if saved successfully)
     """
+    # เส้นทางถาวรที่ Week_2 (ผู้สร้าง) และ Week_3 (ผู้ใช้) ตกลงร่วมกัน
+    # Persistent path that Week_2 (producer) and Week_3 (consumer) agree on.
+    cal_dir = '/workspace/data'
+    cal_path = cal_dir + '/ph_calibration.txt'
     try:
-        with open('data_calibrate.txt', 'w') as f:
+        # สร้างโฟลเดอร์ /workspace/data ถ้ายังไม่มี (create dir if missing)
+        # ใช้ os.mkdir แบบ best-effort: ถ้ามีอยู่แล้วจะ raise OSError -> ข้ามไป
+        import os
+        try:
+            os.mkdir(cal_dir)
+        except OSError:
+            pass  # โฟลเดอร์มีอยู่แล้ว หรือ /workspace มีพร้อมใช้ (already exists)
+
+        with open(cal_path, 'w') as f:
             # เขียนหัวข้อ (Write header)
             f.write('slope_m,intercept_b,r_squared,cal_temp\n')
             # เขียนค่าสอบเทียบ (Write calibration values)
             f.write(f'{slope:.6f},{intercept:.4f},{r_squared:.6f},{avg_temp:.2f}\n')
 
         print("\nบันทึกค่าสอบเทียบสำเร็จ (Calibration saved successfully)")
-        print(f"ไฟล์: data_calibrate.txt")
+        print(f"ไฟล์: {cal_path}")
         return True
 
     except Exception as e:

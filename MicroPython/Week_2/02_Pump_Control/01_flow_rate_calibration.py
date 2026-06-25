@@ -247,11 +247,17 @@ def record_measurement():
 
 def save_calibration():
     """
-    บันทึกค่า flow rate ลงไฟล์ data_flowrate.txt
-    Save flow rate to data_flowrate.txt file
+    บันทึกค่า flow rate ลงไฟล์ /workspace/data/flow_calibration.txt
+    Save flow rate to /workspace/data/flow_calibration.txt file
 
-    ไฟล์นี้จะถูกใช้ในโปรแกรมไทเทรตอัตโนมัติ
-    This file will be used in automatic titration programs
+    เส้นทางถาวร (Persistent path): บันทึกใน /workspace/data ซึ่งเป็นโฟลเดอร์
+    คงอยู่ของ workspace (ไม่หายเมื่อรีบูต) เพื่อให้บทเรียน Week_3 (การไทเทรต
+    อัตโนมัติ) อ่านอัตราการไหลที่สอบเทียบของบอร์ดตัวนี้ไปคำนวณเวลาเปิดปั๊มได้
+    Saved under /workspace/data (the persistent workspace folder, not CWD) so the
+    Week_3 auto-titration lesson can read THIS board's flow rate to time each dose.
+
+    รูปแบบไฟล์ (File format — เหมือนเดิมทุกประการ / unchanged):
+    บรรทัดสุดท้ายคือ flow_rate=<mL/s> (the final line is flow_rate=<mL/s>)
     """
     if len(calibration_data) == 0:
         print("\nข้อผิดพลาด: ไม่มีข้อมูลให้บันทึก")
@@ -261,9 +267,22 @@ def save_calibration():
     # คำนวณค่าเฉลี่ย (Calculate average)
     avg_flow_rate = sum(d[2] for d in calibration_data) / len(calibration_data)
 
+    # เส้นทางถาวรที่ Week_2 (ผู้สร้าง) และ Week_3 (ผู้ใช้) ตกลงร่วมกัน
+    # Persistent path that Week_2 (producer) and Week_3 (consumer) agree on.
+    cal_dir = '/workspace/data'
+    cal_path = cal_dir + '/flow_calibration.txt'
+
     try:
+        # สร้างโฟลเดอร์ /workspace/data ถ้ายังไม่มี (create dir if missing)
+        # best-effort: ถ้ามีอยู่แล้ว os.mkdir จะ raise OSError -> ข้ามไป
+        import os
+        try:
+            os.mkdir(cal_dir)
+        except OSError:
+            pass  # โฟลเดอร์มีอยู่แล้ว หรือ /workspace มีพร้อมใช้ (already exists)
+
         # บันทึกลงไฟล์ (Save to file)
-        with open('data_flowrate.txt', 'w') as f:
+        with open(cal_path, 'w') as f:
             f.write("# TitraLab Pump Flow Rate Calibration Data\n")
             f.write("# ข้อมูลการสอบเทียบอัตราการไหลของปั๊ม\n")
             f.write(f"# จำนวนข้อมูล (Data points): {len(calibration_data)}\n")
@@ -283,7 +302,7 @@ def save_calibration():
         print("\n" + "=" * 50)
         print("บันทึกสำเร็จ! (SAVE SUCCESSFUL!)")
         print("=" * 50)
-        print(f"ไฟล์: data_flowrate.txt")
+        print(f"ไฟล์: {cal_path}")
         print(f"Flow Rate เฉลี่ย: {avg_flow_rate:.4f} mL/s")
         print("-" * 50)
         print("ค่านี้จะถูกใช้ในโปรแกรมไทเทรตอัตโนมัติ")
@@ -343,7 +362,7 @@ print()
 print("การควบคุม (Controls):")
 print(f"  [ปุ่ม 1] เริ่ม/หยุดปั๊ม | Duty Cycle: {duty_cycle_percent}%")
 print("  [ปุ่ม 2] บันทึกผลการวัด")
-print("  [ปุ่ม 3] บันทึกลงไฟล์ data_flowrate.txt")
+print("  [ปุ่ม 3] บันทึกลงไฟล์ /workspace/data/flow_calibration.txt")
 print("  [Ctrl+C] หยุดโปรแกรม")
 print("=" * 60)
 

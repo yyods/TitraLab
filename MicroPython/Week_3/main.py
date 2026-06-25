@@ -1,368 +1,350 @@
 # ==============================================================================
-# main.py - โปรแกรมหลักระบบไทเทรชันอัตโนมัติ (Main Titration System)
+# main.py - บทเรียนไทเทรชันกรด-เบสอัตโนมัติ (Acid-Base Titration Lesson)
 # ==============================================================================
-# ไฟล์นี้เป็นจุดเริ่มต้นของระบบไทเทรชัน TitraLab
-# This is the entry point for the TitraLab titration system
+# ไฟล์นี้คือ "จุดเริ่มต้น" ของบทเรียน รันผ่าน runner ของเฟิร์มแวร์ที่
+# /workspace/main.py แอป MicroPad (แท็บเล็ต) เป็นจอแสดงผลหลัก — บอร์ดไม่มีเมนู TFT
+# This is the lesson ENTRY POINT, run by the firmware runner at
+# /workspace/main.py. The MicroPad TABLET is the display (no on-board TFT menu).
 #
-# วัตถุประสงค์การเรียนรู้ (Learning Objectives):
-# 1. เรียนรู้การออกแบบโปรแกรมแบบ modular (Modular program design)
-# 2. เข้าใจ dependency injection (การส่งผ่าน dependencies)
-# 3. จัดการ hardware lifecycle ด้วย try/finally (Hardware lifecycle management)
+# โครงสร้างบทเรียน (Lesson structure — all hardware via scilabpro helpers):
+#   1. โหลดผลสอบเทียบที่นิสิตทำเองใน Week_2 (pH slope/intercept + flow rate)
+#      ถ้าไฟล์หาย -> แจ้ง event แล้วหยุด (บอกให้นิสิตไปสอบเทียบ Week_2 ก่อน)
+#   2. เริ่มแบบ local (ถ้าต้องการ): รอกดปุ่ม BUTTON_1 บนบอร์ด หรือเริ่มทันที
+#   3. อ่าน pH (ADC ดิบ + สมการสอบเทียบของนิสิต) และอุณหภูมิ (slp.ds18b20)
+#   4. วนหยดไทแทรนต์ทีละ step ด้วย slp.set_actuator('CONTROL_1', ...) + ปิดทุกครั้ง
+#      เวลาเปิดปั๊มต่อ step = DOSE_VOLUME_ML / flow_rate (closed-loop บนปริมาตร)
+#   5. สตรีมทุกค่าไปแอปด้วย slp.data(...) และตรวจ slp.stop_requested() ทุกลูป
+#   6. หาจุดสมมูล + คำนวณความเข้มข้น แล้วส่งผลด้วย slp.event('titration_complete')
 #
-# ระบบเมนู (Menu System):
-# 1. Calibrate pH Sensor   - สอบเทียบเซ็นเซอร์ pH
-# 2. pH Sensor Test        - ทดสอบเซ็นเซอร์ pH
-# 3. Calibrate Flow Rate   - สอบเทียบอัตราการไหล
-# 4. Flow Rate Test        - ทดสอบอัตราการไหล
-# 5. Purge                 - ล้างท่อ
-# 6. Full Auto Titration   - ไทเทรชันอัตโนมัติ
+# สำคัญด้านความปลอดภัย (Safety):
+#   ปั๊มถูกเปิดด้วย max_on_ms เสมอ — ฮาร์ดแวร์ไทเมอร์ของเฟิร์มแวร์จะตัดปั๊มเอง
+#   แม้สคริปต์จะค้าง และเราปิดปั๊มอย่างชัดเจน (explicit OFF) ในทุกเส้นทางออก
+#   The pump is always armed with max_on_ms; the firmware hardware timer cuts it
+#   even if the script hangs. We ALSO turn it OFF explicitly on every exit path.
 # ==============================================================================
 
-from time import sleep_ms, ticks_ms, ticks_diff
-import gc  # สำหรับ garbage collection (for garbage collection)
+import time
 
-# นำเข้า Hardware Modules (Import Hardware Modules)
-from hardware.display import DisplayManager
-from hardware.buttons import ButtonManager
-from hardware.pump import Pump
-from hardware.ph_sensor import PHSensor
-from hardware.temp_sensor import TemperatureSensor
-from hardware.buzzer import Buzzer
-from hardware.leds import LEDManager
-# หมายเหตุ: ไม่ใช้ SD Card เนื่องจากบอร์ดเชื่อมต่อกับ laptop ตลอดเวลา
-# Note: SD Card not used - board is always connected to laptop via USB
-# ไฟล์ CSV จะบันทึกใน ESP32 flash storage และดาวน์โหลดผ่าน Thonny IDE
-# CSV files are saved to ESP32 flash storage and downloaded via Thonny IDE
+import scilabpro as slp
 
-# หมายเหตุ: Core และ UI Modules จะนำเข้าภายใน main() เพื่อประหยัดหน่วยความจำ
-# Note: Core and UI Modules are imported inside main() to save memory
-# เนื่องจาก display ต้องการหน่วยความจำต่อเนื่อง 5120 bytes สำหรับ buffer
-# Because display needs 5120 bytes contiguous memory for its buffer
-
+import experiment as exp
+from titration import (
+    TitrationAnalysis,
+    read_ph_median,
+    load_ph_calibration,
+    load_flow_rate,
+    pump_time_ms_for_volume,
+)
 
 # ==============================================================================
-# Hardware Hub - ศูนย์รวม Hardware ทั้งหมด
+# ขา GPIO สำหรับอุปกรณ์ที่ slp helper ต้องระบุเลขขา (titralab_v1_default)
+# GPIO numbers for helpers that take a pin (firmware owns the routing profile)
 # ==============================================================================
-class HardwareHub:
-    """ศูนย์รวม Hardware (Central hardware hub)"""
+GREEN_LED_PIN = 4    # GREEN LED (output) — แสดงสถานะ "กำลังทำงาน"
+BUTTON_1_PIN = 34    # BUTTON_1 (input-only) — ปุ่มเริ่มแบบ local
+BUZZER_PIN = 26      # BUZZER (PWM output) — เสียงแจ้งเตือน/เสร็จสิ้น
 
-    def __init__(self):
-        """สร้าง Hardware Hub (Create Hardware Hub)"""
-        # เก็บกวาดหน่วยความจำก่อนสร้าง hardware (GC before creating hardware)
-        gc.collect()
-
-        # สร้าง hardware objects ที่ใช้หน่วยความจำน้อยก่อน
-        # Create low-memory objects first
-        self.buttons = ButtonManager()
-        self.pump = Pump()
-        self.buzzer = Buzzer()
-        self.leds = LEDManager()
-        self.ph_sensor = PHSensor()
-        self.temp_sensor = TemperatureSensor()
-
-        # เก็บกวาดหน่วยความจำก่อนสร้าง display (GC before display - needs most RAM)
-        gc.collect()
-        self.display = DisplayManager()
-
-    def init_all(self):
-        """
-        เริ่มต้น Hardware ทั้งหมด
-        Initialize all hardware
-        """
-        print("=" * 50)
-        print("กำลังเริ่มต้น Hardware (Initializing Hardware)")
-        print("=" * 50)
-
-        # เริ่มต้นจอแสดงผล (Initialize display)
-        print("[1/7] จอแสดงผล (Display)...", end=" ")
-        self.display.init()
-        print("OK")
-
-        # เริ่มต้นปุ่มกด (Initialize buttons)
-        print("[2/7] ปุ่มกด (Buttons)...", end=" ")
-        self.buttons.init()
-        print("OK")
-
-        # เริ่มต้น LED (Initialize LEDs)
-        print("[3/7] LED...", end=" ")
-        self.leds.init()
-        print("OK")
-
-        # เริ่มต้น Buzzer (Initialize buzzer)
-        print("[4/7] Buzzer...", end=" ")
-        self.buzzer.init()
-        print("OK")
-
-        # เริ่มต้นเซ็นเซอร์ pH (Initialize pH sensor)
-        print("[5/7] เซ็นเซอร์ pH (pH Sensor)...", end=" ")
-        self.ph_sensor.init()
-        print("OK")
-
-        # เริ่มต้นเซ็นเซอร์อุณหภูมิ (Initialize temperature sensor)
-        print("[6/7] เซ็นเซอร์อุณหภูมิ (Temperature Sensor)...", end=" ")
-        self.temp_sensor.init()
-        print("OK")
-
-        # เริ่มต้นปั๊ม (Initialize pump)
-        print("[7/7] ปั๊ม (Pump)...", end=" ")
-        self.pump.init()
-        print("OK")
-
-        print("=" * 50)
-        print("Hardware พร้อมใช้งาน (Hardware Ready)")
-        print("ไฟล์ข้อมูลบันทึกใน ESP32 (Data files saved on ESP32)")
-        print("=" * 50)
-
-        # ส่งเสียง Buzzer (Beep buzzer)
-        self.buzzer.play_tone(1000, 100)
-
-    def deinit_all(self):
-        """
-        ปิด Hardware ทั้งหมด
-        Cleanup all hardware
-        """
-        print("\nกำลังปิด Hardware (Shutting down hardware)...")
-
-        # ปิดปั๊ม (Stop pump)
-        if self.pump:
-            self.pump.stop()
-            self.pump.deinit()
-
-        # ปิด Buzzer (Stop buzzer)
-        if self.buzzer:
-            self.buzzer.deinit()
-
-        # ปิด LED (Turn off LEDs)
-        if self.leds:
-            self.leds.all_off()
-            self.leds.deinit()
-
-        # ปิดจอแสดงผล (Clear display)
-        if self.display:
-            try:
-                gc.collect()  # เก็บกวาดก่อน clear เพื่อให้มี buffer เพียงพอ
-                self.display.clear()
-            except MemoryError:
-                pass  # ข้ามถ้าหน่วยความจำไม่พอ (Skip if out of memory)
-            self.display.deinit()
-
-        print("ปิด Hardware เสร็จสิ้น (Hardware shutdown complete)")
+# ตั้ง True เพื่อให้รอกดปุ่ม BUTTON_1 บนบอร์ดก่อนเริ่ม (local start)
+# ตั้ง False เพื่อเริ่มทันทีเมื่อแอปสั่งรัน (app-driven start)
+WAIT_FOR_LOCAL_START = True
 
 
-# ==============================================================================
-# Main Application
-# ==============================================================================
-def main():
-    """Main function"""
-    # เก็บกวาดหน่วยความจำก่อนเริ่ม (GC before starting)
-    gc.collect()
-    print(f"Free memory: {gc.mem_free()} bytes")
+def wait_for_button(button, timeout_ms=30000):
+    """
+    รอกดปุ่มเริ่ม BUTTON_1 (Wait for BUTTON_1 press, polling cooperative-stop)
 
-    # สร้าง Hardware Hub (Create Hardware Hub)
-    hardware = HardwareHub()
+    Args:
+        button: ออบเจ็กต์ slp.pin(BUTTON_1_PIN, input=True)
+        timeout_ms: เวลารอสูงสุด (ms) ก่อนเริ่มอัตโนมัติ
+
+    Returns:
+        bool: True ถ้ากดปุ่ม, False ถ้าหมดเวลา หรือมีคำสั่งหยุดจากแอป
+    """
+    start = time.ticks_ms()
+    while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
+        # ตรวจคำสั่งหยุดจากแอปทุกลูป (poll cooperative stop every loop)
+        if slp.stop_requested():
+            return False
+        # ปุ่ม input-only ทำงานแบบ active-high (มี pull-down บนบอร์ด)
+        if button.value():
+            return True
+        time.sleep_ms(50)
+    # หมดเวลา: เริ่มอัตโนมัติ (timeout → start anyway)
+    return True
+
+
+def dose_one_step(led, pump_time_ms):
+    """
+    หยดไทแทรนต์ 1 step อย่างปลอดภัย (Dose one titrant step, guarded)
+
+    เวลาเปิดปั๊ม (pump_time_ms) คำนวณจากอัตราการไหลที่นิสิตสอบเทียบเอง (closed-loop
+    บนปริมาตร) — ไม่ใช่ค่าคงที่ตายตัว ดังนั้นปริมาตรที่จ่ายจึงตรงกับ DOSE_VOLUME_ML จริง
+    The on-time is derived from the student's calibrated flow rate (closed-loop on
+    volume), NOT a hard-coded constant, so the delivered volume matches DOSE_VOLUME_ML.
+
+    เปิดปั๊มด้วย max_on_ms เพื่อให้ฮาร์ดแวร์ไทเมอร์ตัดเองหากสคริปต์ค้าง จากนั้นรอ
+    ตามเวลาที่คำนวณ แล้ว "ปิดปั๊มอย่างชัดเจน" เสมอใน finally
+    Arms the pump with max_on_ms (hardware-timer safety) and ALWAYS turns it
+    off explicitly afterwards, even if an error occurs.
+
+    Args:
+        led: ออบเจ็กต์ LED สถานะ หรือ None (status LED object or None)
+        pump_time_ms: เวลาเปิดปั๊มที่คำนวณจาก flow_rate แล้ว clamp (computed on-time, ms)
+    """
+    if led is not None:
+        led.value(1)  # ไฟเขียวติด = กำลังหยด (green on = dosing)
+    try:
+        # เปิดปั๊ม — max_on_ms คือเพดานความปลอดภัยจากเฟิร์มแวร์ (hardware guard)
+        slp.set_actuator(exp.PUMP_ENDPOINT, True, max_on_ms=exp.DOSE_MAX_ON_MS)
+        time.sleep_ms(pump_time_ms)
+    finally:
+        # ปิดปั๊มอย่างชัดเจนทุกเส้นทาง (explicit OFF on every path)
+        slp.set_actuator(exp.PUMP_ENDPOINT, False)
+        if led is not None:
+            led.value(0)
+
+
+def run_titration():
+    """
+    ดำเนินการไทเทรชันอัตโนมัติแบบครบขั้นตอน (Run the full titration procedure)
+
+    Returns:
+        dict: สรุปผล (จำนวน step, ปริมาตรรวม, จุดสมมูล, ความเข้มข้นที่คำนวณได้)
+    """
+    # อ้างสิทธิ์ควบคุม (กรณีรันผ่าน USB ขณะแอปเชื่อมต่ออยู่)
+    # Claim the controller lease (needed if launched from USB while a tablet is on).
+    slp.claim_controller()
+
+    # =========================================================================
+    # โหลดผลสอบเทียบที่นิสิตทำเองใน Week_2 (Load student-performed Week_2 calibration)
+    # =========================================================================
+    # *** หัวใจของบทเรียน: ใช้ค่าสอบเทียบของบอร์ดตัวเอง ไม่ใช่ค่าคงที่ตายตัว ***
+    # ถ้าไฟล์หาย/อ่านไม่ได้ -> แจ้ง event แล้วหยุดอย่างสะอาด ก่อนแตะ actuator ใด ๆ
+    # If a calibration file is missing -> emit an event and abort BEFORE any dosing.
+    try:
+        # สมการ pH ของนิสิต: pH = slope_m * mV + intercept_b (จาก Week_2)
+        ph_slope_m, ph_intercept_b = load_ph_calibration()
+    except RuntimeError as e:
+        # ยังไม่ได้สอบเทียบ pH — บอกให้นิสิตไปรัน Week_2 pH calibration ก่อน
+        slp.event('ph_calibration_missing', {
+            'path': exp.PH_CAL_PATH,
+            'error': str(e),
+            'hint': 'Run Week_2 01_pH_Sensor/02_calibration_3point.py first',
+        })
+        return {'aborted': True, 'reason': 'ph_calibration_missing'}
 
     try:
-        # เริ่มต้น Hardware ทั้งหมด (Initialize all hardware)
-        hardware.init_all()
+        # อัตราการไหลของนิสิต (mL/s) จาก Week_2 flow calibration
+        flow_rate_ml_s = load_flow_rate()
+    except RuntimeError as e:
+        # ยังไม่ได้สอบเทียบ flow — บอกให้นิสิตไปรัน Week_2 flow calibration ก่อน
+        slp.event('flow_calibration_missing', {
+            'path': exp.FLOW_CAL_PATH,
+            'error': str(e),
+            'hint': 'Run Week_2 02_Pump_Control/01_flow_rate_calibration.py first',
+        })
+        return {'aborted': True, 'reason': 'flow_calibration_missing'}
 
-        # นำเข้า Core/UI Modules หลังจาก hardware พร้อมแล้ว (เพื่อประหยัด RAM)
-        # Import Core/UI Modules AFTER hardware init (to save RAM for display buffer)
-        # นำเข้าทีละกลุ่มพร้อม gc.collect() เพื่อลด memory fragmentation
-        # Import in stages with gc.collect() to reduce memory fragmentation
-        gc.collect()
-        print(f"Free memory before imports: {gc.mem_free()} bytes")
-        from core.data_manager import DataManager
-        gc.collect()
-        from core.calibrator import Calibrator
-        gc.collect()
-        from ui.menu import MenuSystem
-        gc.collect()
-        print(f"Free memory after imports: {gc.mem_free()} bytes")
-        # หมายเหตุ: TitrationController จะนำเข้าเมื่อเลือก Menu 6 เท่านั้น
-        # Note: TitrationController imported only when Menu 6 is selected (saves ~15KB RAM)
+    # เวลาเปิดปั๊มต่อ 1 step คำนวณจากอัตราการไหลที่สอบเทียบ (closed-loop on volume)
+    # clamp ด้วย DOSE_MAX_ON_MS เพื่อความปลอดภัย (computed + clamped pump-on time)
+    pump_time_ms = pump_time_ms_for_volume(
+        exp.DOSE_VOLUME_ML, flow_rate_ml_s, exp.DOSE_MAX_ON_MS)
 
-        # สร้าง Data Manager (Create Data Manager)
-        # บันทึกข้อมูลใน ESP32 flash storage (Save data to ESP32 flash storage)
-        data_manager = DataManager()
+    # แจ้งให้แอปทราบว่ากำลังใช้ค่าสอบเทียบของบอร์ดตัวนี้ (calibration in use — visible)
+    slp.event('calibration_loaded', {
+        'ph_slope_m': ph_slope_m,
+        'ph_intercept_b': ph_intercept_b,
+        'flow_rate_ml_s': flow_rate_ml_s,
+        'pump_time_ms': pump_time_ms,
+        'dose_volume_ml': exp.DOSE_VOLUME_ML,
+    })
 
-        # โหลดค่าสอบเทียบ pH จากไฟล์ (ถ้ามี) (Load pH calibration from file if exists)
-        # FIX: ก่อนหน้านี้ค่าสอบเทียบไม่ถูกโหลดเมื่อเริ่มโปรแกรมใหม่
-        # FIX: Previously calibration was not loaded when program restarted
-        slope_m, intercept_b, r_squared, cal_temp = data_manager.load_ph_calibration()
-        if slope_m is not None and intercept_b is not None:
-            hardware.ph_sensor.set_calibration(slope_m, intercept_b)
-            print(f"นำค่าสอบเทียบ pH มาใช้แล้ว (pH calibration applied)")
-        else:
-            print("ใช้ค่าสอบเทียบ pH เริ่มต้น (Using default pH calibration)")
+    # สร้างออบเจ็กต์ helper จากเฟิร์มแวร์ (Create firmware helper objects)
+    # หมายเหตุ: ไม่ใช้ slp.ph_probe() — อ่าน ADC ดิบแล้วใช้สมการสอบเทียบของนิสิตเอง
+    # Note: NO slp.ph_probe(); we read RAW ADC and apply the student's fit ourselves.
+    led = slp.pin(GREEN_LED_PIN)                # ไฟแสดงสถานะ (output)
+    led.value(0)
+    buzzer = slp.buzzer(BUZZER_PIN)             # เสียงแจ้งเตือน
+    button = slp.pin(BUTTON_1_PIN, input=True)  # ปุ่มเริ่ม local (input-only)
 
-        # โหลดค่าอัตราการไหลจากไฟล์ (ถ้ามี) (Load flow rate from file if exists)
-        flow_rate, _ = data_manager.load_flow_rate()
-        if flow_rate is not None:
-            hardware.pump.flow_rate = flow_rate
-            print(f"นำค่าอัตราการไหลมาใช้แล้ว (Flow rate applied): {flow_rate:.4f} mL/s")
-        else:
-            print("ใช้ค่าอัตราการไหลเริ่มต้น (Using default flow rate)")
+    analysis = TitrationAnalysis()
 
-        # สร้าง Calibrator (Create Calibrator)
-        calibrator = Calibrator(
-            ph_sensor=hardware.ph_sensor,
-            pump=hardware.pump,
-            display=hardware.display,
-            buttons=hardware.buttons,
-            buzzer=hardware.buzzer,
-            data_manager=data_manager
-        )
+    # จำนวน step ทั้งหมด คำนวณจากปริมาตรสูงสุด / ปริมาตรต่อ step
+    # ใช้ +0.5 ก่อน int() (ปัดเศษ) เพราะการหาร float อาจได้ 49.999.. หรือ
+    # 23.999.. ทำให้ int() ตัดเป็นค่าต่ำผิด 1 step (เตือน/หยุดเร็วไป 0.2 mL)
+    # Round (not truncate): float division can yield 49.999.. / 23.999.., and
+    # bare int() would drop a whole step (alerting / stopping 0.2 mL early).
+    total_steps = int(exp.MAX_VOLUME_ML / exp.DOSE_VOLUME_ML + 0.5)
+    alert_step = int(exp.ALERT_VOLUME_ML / exp.DOSE_VOLUME_ML + 0.5)
 
-        # ซิงค์ค่าอัตราการไหลที่โหลดจากไฟล์ไปยัง Calibrator ด้วย
-        # Sync loaded flow rate to Calibrator (it has its own _flow_rate copy)
-        if flow_rate is not None:
-            calibrator._flow_rate = flow_rate
-            calibrator._flow_calibrated = True
+    slp.event('titration_started', {
+        'sample_volume_ml': exp.SAMPLE_VOLUME_ML,
+        'titrant_conc_m': exp.TITRANT_CONCENTRATION_M,
+        'dose_volume_ml': exp.DOSE_VOLUME_ML,
+        'total_steps': total_steps,
+    })
 
-        # สร้าง Titration Controller แบบ lazy (สร้างเมื่อเลือก Menu 6 เท่านั้น)
-        # Create TitrationController lazily (only when Menu 6 is selected)
-        # เพื่อประหยัด RAM ~15KB สำหรับเมนูอื่นที่ไม่ต้องใช้
-        # Saves ~15KB RAM for other menus that don't need it
-        _titration = [None]  # ใช้ list เพื่อให้ lambda เข้าถึงได้ (use list for lambda access)
+    # --- เริ่มแบบ local: รอกดปุ่ม BUTTON_1 (optional local start) ---
+    if WAIT_FOR_LOCAL_START:
+        slp.event('waiting_for_start', {'button': 'BUTTON_1'})
+        if not wait_for_button(button):
+            slp.event('titration_aborted', {'reason': 'stop_requested'})
+            return {'aborted': True}
 
-        def _run_titration():
-            """สร้าง TitrationController ครั้งแรกที่ใช้ แล้วรัน (Create on first use, then run)"""
-            gc.collect()
-            if _titration[0] is None:
-                from core.titration import TitrationController
-                gc.collect()
-                _titration[0] = TitrationController(
-                    pump=hardware.pump,
-                    ph_sensor=hardware.ph_sensor,
-                    temp_sensor=hardware.temp_sensor,
-                    display=hardware.display,
-                    buzzer=hardware.buzzer,
-                    led_indicator=hardware.leds.green,
-                    buttons=hardware.buttons
-                )
-                _titration[0].configure(
-                    stabilize_time=10.0,
-                    alert_volume=4.80
-                )
-            return _titration[0].run_titration()
+    # ไฟเขียวติดค้าง = การทดลองกำลังดำเนิน (green steady = experiment running)
+    led.value(1)
 
-        # เก็บกวาดหน่วยความจำก่อนสร้าง Menu (GC before Menu creation)
-        gc.collect()
+    def read_temp_c():
+        """อ่านอุณหภูมิอย่างปลอดภัย (Read temperature; default 25 C on error)."""
+        try:
+            return slp.ds18b20(exp.TEMP_PROBE_PIN).read_c()
+        except OSError as e:
+            # ไม่พบเซ็นเซอร์อุณหภูมิ — แจ้งเตือนแล้วใช้ค่าเริ่มต้น
+            slp.event('temp_sensor_warning', {'error': str(e), 'default_c': 25.0})
+            return 25.0
 
-        # สร้าง Menu System (Create Menu System)
-        menu = MenuSystem(
-            display=hardware.display,
-            buttons=hardware.buttons,
-            buzzer=hardware.buzzer
-        )
+    aborted = False
 
-        # กำหนด Menu Actions (Define Menu Actions)
-        # ทุกเมนูรองรับ BTN3 เพื่อยกเลิก (All menus support BTN3 to cancel)
-        menu_actions = {
-            1: lambda: calibrator.calibrate_ph(),                    # สอบเทียบ pH
-            2: lambda: calibrator.test_ph_sensor(),                  # ทดสอบ pH
-            3: lambda: calibrator.calibrate_flow_rate_interactive(), # สอบเทียบ Flow Rate
-            4: lambda: calibrator.test_flow_rate(),                  # ทดสอบ Flow Rate
-            5: lambda: calibrator.purge_tubing(),                    # ล้างท่อ (with BTN3)
-            6: lambda: _run_titration()                              # ไทเทรชันอัตโนมัติ (lazy load)
-        }
+    def read_ph_safe():
+        """
+        อ่าน pH แบบมัธยฐาน โดยใช้สมการสอบเทียบของนิสิตที่โหลดไว้แล้ว
+        Median pH read, APPLYING the student's pre-loaded Week_2 calibration fit.
 
-        # เก็บกวาดหน่วยความจำก่อนแสดงผล (GC before display operations)
-        gc.collect()
+        การสอบเทียบถูกโหลด (และตรวจว่ามีอยู่) ตั้งแต่ต้นฟังก์ชัน run_titration()
+        แล้ว ดังนั้นการอ่านตรงนี้จึงเพียงอ่าน ADC ดิบ -> mV -> ใช้สมการของนิสิต
+        Calibration was already loaded (and verified present) at the top of
+        run_titration(), so this just reads RAW ADC -> mV -> applies the fit.
 
-        # แสดงหน้าจอต้อนรับ (Show welcome screen)
-        hardware.display.show_logo("TitraLab", "Chemistry Automation")
-        sleep_ms(2000)
+        Returns:
+            float: ค่า pH มัธยฐาน ในช่วง 0..14 (median student-calibrated pH)
+        """
+        return read_ph_median(ph_slope_m, ph_intercept_b,
+                              exp.PH_SAMPLES_PER_POINT, exp.PH_SAMPLE_GAP_MS)
 
-        # ลูปหลักของโปรแกรม (Main program loop)
-        print("\nเข้าสู่โหมดเมนูหลัก (Entering main menu mode)")
-        print("กดปุ่ม 3 ค้าง 3 วินาทีเพื่อออก (Hold Button 3 for 3s to exit)")
+    try:
+        # --- จุดเริ่มต้น (Step 0): อ่านค่าที่ปริมาตร 0 mL ---
+        volume = 0.0
+        ph0 = read_ph_safe()
+        temp0 = read_temp_c()
+        analysis.add_point(volume, ph0)
+        slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
+        slp.data('pH', ph0, unit=exp.UNIT_PH)
+        slp.data('temp_c', temp0, unit=exp.UNIT_TEMP_C)
 
-        running = True
-        while running:
-            # เก็บกวาดหน่วยความจำก่อนแสดงเมนู (Garbage collect before showing menu)
-            gc.collect()
+        # รอให้ pH เริ่มต้นคงที่ก่อนหยดแรก (settle before first dose)
+        if not _settle(exp.SETTLE_MS):
+            aborted = True
 
-            # แสดงเมนู (Show menu)
-            menu.show()
+        alerted = False
+        step = 0
+        # --- ลูปไทเทรชันหลัก (Main titration loop) ---
+        # ตรวจ slp.stop_requested() ทุกลูป + มีขอบเขต step ชัดเจน (ไม่ใช่ while True)
+        while not aborted and step < total_steps:
+            step += 1
 
-            # รอการกดปุ่ม (Wait for button press)
-            button_pressed = None
-            button_hold_start = 0
+            # หยดไทแทรนต์ 1 step (guarded; pump OFF guaranteed inside)
+            # pump_time_ms มาจากอัตราการไหลที่สอบเทียบ -> ปริมาตรที่จ่ายตรงจริง
+            dose_one_step(led, pump_time_ms)
 
-            while button_pressed is None:
-                # ตรวจสอบปุ่ม SELECT (Check SELECT button - Button 1)
-                if hardware.buttons.is_pressed(1):
-                    hardware.buzzer.beep(duration_ms=50)
-                    selected = menu.get_selected()
-                    if selected in menu_actions:
-                        # ดำเนินการตามเมนูที่เลือก (Execute selected action)
-                        hardware.leds.green.on()
-                        try:
-                            menu_actions[selected]()
-                        except Exception as e:
-                            print(f"ข้อผิดพลาด (Error): {e}")
-                            hardware.leds.red.on()
-                            hardware.buzzer.play_tone(500, 500)
-                            sleep_ms(1000)
-                            hardware.leds.red.off()
-                        finally:
-                            hardware.leds.green.off()
-                            # เก็บกวาดหน่วยความจำหลังทำงานเสร็จ (Garbage collect after action)
-                            gc.collect()
-                            # ร้องขอให้วาดเมนูใหม่ (Request menu redraw)
-                            menu.request_redraw()
-                    # รอปล่อยปุ่ม (Wait for button release)
-                    while hardware.buttons.is_pressed(1):
-                        sleep_ms(10)
-                    button_pressed = 1
+            # คำนวณปริมาตรจากจำนวน step เพื่อเลี่ยง floating-point drift
+            # ปริมาตรนี้ "ส่งจริง" เพราะ pump_time_ms คำนวณจาก flow_rate ของบอร์ดนี้
+            volume = step * exp.DOSE_VOLUME_ML
 
-                # ตรวจสอบปุ่ม UP (Check UP button - Button 2)
-                elif hardware.buttons.is_pressed(2):
-                    hardware.buzzer.beep(duration_ms=30)
-                    menu.move_up()
-                    while hardware.buttons.is_pressed(2):
-                        sleep_ms(10)
-                    button_pressed = 2
+            # รอให้ pH คงที่ พร้อมตรวจคำสั่งหยุด (settle with stop check)
+            if not _settle(exp.SETTLE_MS):
+                aborted = True
+                break
 
-                # ตรวจสอบปุ่ม DOWN (Check DOWN button - Button 3)
-                elif hardware.buttons.is_pressed(3):
-                    # ตรวจสอบการกดค้าง (Check for long press)
-                    if button_hold_start == 0:
-                        button_hold_start = ticks_ms()
+            # อ่านเซ็นเซอร์ (median pH + temperature) — ใช้สมการสอบเทียบของนิสิต
+            ph = read_ph_safe()
+            temp = read_temp_c()
+            analysis.add_point(volume, ph)
 
-                    # ถ้ากดค้าง 3 วินาที ให้ออก (Exit if held for 3 seconds)
-                    if ticks_diff(ticks_ms(), button_hold_start) > 3000:
-                        print("\nออกจากโปรแกรม (Exiting program)")
-                        running = False
-                        button_pressed = 3
-                    sleep_ms(10)
+            # สตรีมทุกค่าไปยังแอป MicroPad (stream every reading to the app)
+            slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
+            slp.data('pH', ph, unit=exp.UNIT_PH)
+            slp.data('temp_c', temp, unit=exp.UNIT_TEMP_C)
 
-                else:
-                    # รีเซ็ตตัวนับการกดค้าง (Reset hold counter)
-                    if button_hold_start > 0:
-                        # ถ้าปล่อยก่อน 3 วินาที ให้เลื่อนเมนู (Move down if released before 3s)
-                        hardware.buzzer.beep(duration_ms=30)
-                        menu.move_down()
-                        button_pressed = 3
-                    button_hold_start = 0
-
-                sleep_ms(50)
-
-    except KeyboardInterrupt:
-        print("\nหยุดโปรแกรมด้วย Ctrl+C (Program stopped by Ctrl+C)")
-
-    except Exception as e:
-        print(f"\nข้อผิดพลาดร้ายแรง (Fatal error): {e}")
+            # เตือนใกล้จุดสมมูล (alert when approaching equivalence)
+            if not alerted and step >= alert_step:
+                alerted = True
+                slp.event('approaching_equivalence', {'volume_ml': volume})
+                buzzer.tone(2000)       # บี๊บเสียงสูงเตือน
+                time.sleep_ms(200)
+                buzzer.off()
 
     finally:
-        # ทำความสะอาด Hardware (Cleanup hardware)
-        hardware.deinit_all()
-        print("\nโปรแกรมสิ้นสุด (Program ended)")
+        # --- ความปลอดภัย: ปิดปั๊ม/บัซเซอร์/ไฟ เสมอ (cleanup on every path) ---
+        slp.set_actuator(exp.PUMP_ENDPOINT, False)
+        buzzer.off()
+        led.value(0)
+
+    if aborted:
+        # การยกเลิกกลางคันที่นี่มาจากผู้ใช้สั่งหยุดเท่านั้น (กรณีสอบเทียบหายถูกจับ
+        # และ return ไปแล้วตั้งแต่ต้นฟังก์ชัน ก่อนหยดไทแทรนต์ใด ๆ)
+        # Any abort reaching here is a user stop; missing-calibration aborts
+        # were caught and returned at the top, before any dosing.
+        slp.event('titration_aborted', {
+            'reason': 'stop_requested',
+            'points_collected': len(analysis.points),
+        })
+        return {'aborted': True, 'reason': 'stop_requested',
+                'points': len(analysis.points)}
+
+    # --- วิเคราะห์ผล (Analyze): จุดสมมูล + ความเข้มข้นที่ไม่ทราบค่า ---
+    eq = analysis.detect_equivalence_point()
+    unknown_c = analysis.calculate_unknown_concentration(
+        titrant_conc_m=exp.TITRANT_CONCENTRATION_M,
+        sample_volume_ml=exp.SAMPLE_VOLUME_ML,
+        ratio=exp.STOICHIOMETRIC_RATIO,
+    )
+
+    result = {
+        'total_steps': step,
+        'total_volume_ml': volume,
+        'equivalence_volume_ml': eq[0] if eq else None,
+        # ค่า pH จุดสมมูลเป็นค่าประมาณ (pH เปลี่ยนหลายหน่วยภายใน 1 step)
+        # equivalence pH is an ESTIMATE — pH changes several units per step
+        'equivalence_ph_estimate': eq[1] if eq else None,
+        'max_dph_dv': analysis.max_derivative if eq else None,
+        'unknown_concentration_m': unknown_c,
+        'titrant_concentration_m': exp.TITRANT_CONCENTRATION_M,
+        'sample_volume_ml': exp.SAMPLE_VOLUME_ML,
+        # อัตราส่วนสโตอิชิโอเมตรีที่ใช้คำนวณ (stoichiometry assumed in C calc)
+        'stoichiometric_ratio': exp.STOICHIOMETRIC_RATIO,
+    }
+
+    # เสียงเสร็จสิ้น 2 โน้ต (two-note completion chime)
+    buzzer.tone(1000)
+    time.sleep_ms(250)
+    buzzer.tone(1500)
+    time.sleep_ms(250)
+    buzzer.off()
+
+    # ส่งผลลัพธ์ไปยังแอป (emit the final result event)
+    slp.event('titration_complete', result)
+    return result
+
+
+def _settle(duration_ms):
+    """
+    รอให้ pH คงที่ พร้อมตรวจคำสั่งหยุดเป็นช่วง ๆ
+    Wait `duration_ms`, polling cooperative-stop in small slices.
+
+    Returns:
+        bool: True ถ้ารอครบ, False ถ้าแอปสั่งหยุด (stop_requested)
+    """
+    elapsed = 0
+    slice_ms = 100
+    while elapsed < duration_ms:
+        if slp.stop_requested():
+            return False
+        time.sleep_ms(slice_ms)
+        elapsed += slice_ms
+    return True
 
 
 # ==============================================================================
-# จุดเริ่มต้นโปรแกรม (Program Entry Point)
+# จุดเริ่มต้น (Entry point) — runner เรียก /workspace/main.py
 # ==============================================================================
-if __name__ == '__main__':
-    main()
+run_titration()
