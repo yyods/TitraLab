@@ -39,7 +39,29 @@ class XglcdFont(object):
         self.letter_count = letter_count
         self.bytes_per_letter = (floor(
             (self.height - 1) / 8) + 1) * self.width + 1
-        self.__load_xglcd_font(path)
+        # SciLabPro-local (F-186, decision 0080): serve the glyph table from
+        # frozen flash bytes when available, so no ~5,280 B contiguous bytearray
+        # is allocated on a fragmented GC arena.  On stock MicroPython the
+        # frozen module is absent -> ImportError -> the filesystem loader below
+        # (this same file works on both the frozen MicroPad and this course
+        # board).  Mirrors firmware/frozen/vendor/xglcd_font.py.
+        if not self.__load_frozen_font(path):
+            self.__load_xglcd_font(path)
+
+    def __load_frozen_font(self, path):
+        """Serve glyphs from the frozen xglcd_fonts_data bytes if path's
+        basename matches a baked-in font; False on a miss / absent module
+        (caller falls back to the filesystem open(path)+bytearray loader)."""
+        try:
+            import xglcd_fonts_data
+        except ImportError:
+            return False
+        name = path.rsplit('/', 1)[-1]
+        data = xglcd_fonts_data.FONTS.get(name)
+        if data is None:
+            return False
+        self.letters = memoryview(data)
+        return True
 
     def __load_xglcd_font(self, path):
         """Load X-GLCD font data from text file.
