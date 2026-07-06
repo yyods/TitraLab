@@ -17,6 +17,14 @@ def color565(r, g, b):
     return (r & 0xf8) << 8 | (g & 0xfc) << 3 | b >> 3
 
 
+# SciLabPro-local (F-187b, decision 0087): the ONE governing constant that caps
+# EVERY clear/fill/chunked-blit chunk buffer at <= max(512 B, one display line),
+# replacing the rdagger `1024 // dim` formula that built ~1920-2001 B contiguous
+# chunks (MemoryError deep in a lesson on a fragmented arena).  Mirrors
+# firmware/frozen/vendor/ili9341.py.
+_MAX_FILL_CHUNK_BYTES = 512
+
+
 class Display(object):
     """Serial interface for 16-bit color (5-6-5 RGB) IL9341 display.
 
@@ -90,7 +98,7 @@ class Display(object):
     }
 
     def __init__(self, spi, cs, dc, rst,
-                 width=240, height=320, rotation=0):
+                 width=240, height=320, rotation=0, hlines=2):
         """Initialize OLED.
 
         Args:
@@ -101,6 +109,14 @@ class Display(object):
             width (Optional int): Screen width (default 240)
             height (Optional int): Screen height (default 320)
             rotation (Optional int): Rotation must be 0 default, 90. 180 or 270
+            hlines (Optional int): lines per chunk for the init/cleanup screen
+                clears (default 2). The default clear(hlines=8) needs a single
+                5120-byte contiguous buffer (320x8x2), which fails with
+                MemoryError on a fragmented MicroPython heap - e.g. right after
+                compiling a large course script on TitraLab, or with the
+                MicroPad BLE session resident. hlines=2 needs only 1280 bytes.
+                ค่าเริ่มต้น 2 เพื่อลดขนาดบัฟเฟอร์ตอน clear ในบอร์ดที่ heap แน่น
+                (กัน MemoryError: allocating 5120 bytes ตอนสร้าง Display)
         """
         self.spi = spi
         self.cs = cs
@@ -108,6 +124,9 @@ class Display(object):
         self.rst = rst
         self.width = width
         self.height = height
+        # เก็บไว้ใช้กับ clear ตอน init/cleanup (chunk เล็ก กัน heap แตกเป็นชิ้น)
+        # Kept for the init/cleanup clears (small chunks survive a fragmented heap).
+        self.init_hlines = hlines
         if rotation not in self.ROTATE.keys():
             raise RuntimeError('Rotation must be 0, 90, 180 or 270.')
         else:
@@ -157,7 +176,7 @@ class Display(object):
         sleep(.1)
         self.write_cmd(self.DISPLAY_ON)  # Display on
         sleep(.1)
-        self.clear()
+        self.clear(hlines=self.init_hlines)
 
     def block(self, x0, y0, x1, y1, data):
         """Write a block of data to display.
@@ -177,7 +196,7 @@ class Display(object):
 
     def cleanup(self):
         """Clean up resources."""
-        self.clear()
+        self.clear(hlines=self.init_hlines)
         self.display_off()
         self.spi.deinit()
         print('display off')
@@ -198,15 +217,26 @@ class Display(object):
         """
         w = self.width
         h = self.height
-        assert hlines > 0 and h % hlines == 0, (
-            "hlines must be a non-zero factor of height.")
+        # SciLabPro-local (F-187b, decision 0087): cap the chunk at
+        # _MAX_FILL_CHUNK_BYTES (<= 512 B or one line).  Supersedes the hlines
+        # arg (kept for API compat); divmod covers a partial last chunk.
+        lines = max(1, _MAX_FILL_CHUNK_BYTES // (w * 2))
+        chunk_count, remainder = divmod(h, lines)
         # Clear display
         if color:
-            line = color.to_bytes(2, 'big') * (w * hlines)
+            line = color.to_bytes(2, 'big') * (w * lines)
         else:
-            line = bytearray(w * 2 * hlines)
-        for y in range(0, h, hlines):
-            self.block(0, y, w - 1, y + hlines - 1, line)
+            line = bytearray(w * 2 * lines)
+        chunk_y = 0
+        for _c in range(chunk_count):
+            self.block(0, chunk_y, w - 1, chunk_y + lines - 1, line)
+            chunk_y += lines
+        if remainder:
+            if color:
+                line = color.to_bytes(2, 'big') * (w * remainder)
+            else:
+                line = bytearray(w * 2 * remainder)
+            self.block(0, chunk_y, w - 1, chunk_y + remainder - 1, line)
 
     def display_off(self):
         """Turn display off."""
@@ -339,7 +369,8 @@ class Display(object):
         if self.is_off_grid(x, y, x2, y2):
             return
         with open(path, "rb") as f:
-            chunk_height = 1024 // w
+            # F-187b (decision 0087): cap the blit chunk (see _MAX_FILL_CHUNK_BYTES).
+            chunk_height = max(1, _MAX_FILL_CHUNK_BYTES // (w * 2))
             chunk_count, remainder = divmod(h, chunk_height)
             chunk_size = chunk_height * w * 2
             chunk_y = y
@@ -733,7 +764,8 @@ class Display(object):
         """
         if self.is_off_grid(x, y, x + w - 1, y + h - 1):
             return
-        chunk_height = 1024 // w
+        # F-187b (decision 0087): cap the fill chunk (see _MAX_FILL_CHUNK_BYTES).
+        chunk_height = max(1, _MAX_FILL_CHUNK_BYTES // (w * 2))
         chunk_count, remainder = divmod(h, chunk_height)
         chunk_size = chunk_height * w
         chunk_y = y
@@ -862,7 +894,8 @@ class Display(object):
         """
         if self.is_off_grid(x, y, x + w - 1, y + h - 1):
             return
-        chunk_width = 1024 // h
+        # F-187b (decision 0087): cap the fill chunk (see _MAX_FILL_CHUNK_BYTES).
+        chunk_width = max(1, _MAX_FILL_CHUNK_BYTES // (h * 2))
         chunk_count, remainder = divmod(w, chunk_width)
         chunk_size = chunk_width * h
         chunk_x = x
