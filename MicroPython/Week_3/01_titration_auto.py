@@ -183,6 +183,9 @@ def run_titration():
     led = slp.pin(GREEN_LED_PIN)                # ไฟแสดงสถานะ (output)
     led.value(0)
     buzzer = slp.buzzer(BUZZER_PIN)             # เสียงแจ้งเตือน
+    # ESP32 PWM เริ่มทำงานทันทีที่สร้าง (duty ~50%) -> ปิดเสียงทันที ไม่งั้นบี๊บยาว
+    # ESP32 PWM starts AUDIBLE on construction (~50% duty) -> silence immediately
+    buzzer.off()
     button = slp.pin(BUTTON_1_PIN, input=True)  # ปุ่มเริ่ม local (input-only)
 
     analysis = TitrationAnalysis()
