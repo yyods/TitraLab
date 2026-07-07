@@ -260,6 +260,47 @@ def dose_one_step(led, pump_time_ms):
             led.value(0)
 
 
+def save_titration_csv(rows, eq, unknown_c, completed):
+    """บันทึกข้อมูลไทเทรชันเป็น .csv ใน /workspace/data (เลขรันอัตโนมัติ R1, R2, ...)
+
+    Save the titration data as a CSV under /workspace/data with an
+    auto-incrementing run number. Returns the path (or None on failure).
+    นิสิตดาวน์โหลดไฟล์นี้จากแอปไปทำรายงาน/พล็อตต่อได้ (open/plot in the app).
+    """
+    import os
+    data_dir = '/workspace/data'
+    try:
+        try:
+            os.mkdir(data_dir)
+        except OSError:
+            pass  # มีอยู่แล้ว (already exists)
+        # หาเลขรันถัดไป (find the next free run number)
+        n = 1
+        existing = os.listdir(data_dir)
+        while ('titration_data_R%d.csv' % n) in existing:
+            n += 1
+        path = data_dir + '/titration_data_R%d.csv' % n
+        with open(path, 'w') as f:
+            f.write('# TitraLab Automatic Titration Data (Week_3)\n')
+            f.write('# sample_volume_ml=%s\n' % exp.SAMPLE_VOLUME_ML)
+            f.write('# titrant_concentration_m=%s\n' % exp.TITRANT_CONCENTRATION_M)
+            f.write('# dose_volume_ml=%s\n' % exp.DOSE_VOLUME_ML)
+            f.write('# completed=%s\n' % ('yes' if completed else 'stopped_early'))
+            if eq:
+                f.write('# equivalence_volume_ml=%.3f\n' % eq[0])
+                f.write('# equivalence_ph_estimate=%.3f\n' % eq[1])
+            if unknown_c is not None:
+                f.write('# unknown_concentration_m=%.5f\n' % unknown_c)
+            f.write('volume_ml,pH,temp_c\n')
+            for v, ph, t in rows:
+                f.write('%.3f,%.3f,%.2f\n' % (v, ph, t))
+        return path
+    except Exception as e:
+        # การบันทึกล้มเหลวต้องไม่ทำให้บทเรียนพัง (saving must never break the lesson)
+        print('บันทึก CSV ไม่สำเร็จ (CSV save failed):', e)
+        return None
+
+
 def run_titration():
     """
     ดำเนินการไทเทรชันอัตโนมัติแบบครบขั้นตอน (Run the full titration procedure)
@@ -420,9 +461,11 @@ def run_titration():
     try:
         # --- จุดเริ่มต้น (Step 0): อ่านค่าที่ปริมาตร 0 mL ---
         volume = 0.0
+        csv_rows = []                    # (volume, pH, temp) ทุกจุดสำหรับไฟล์ .csv
         ph0 = read_ph_safe()
         temp0 = read_temp_c()
         analysis.add_point(volume, ph0)
+        csv_rows.append((volume, ph0, temp0))
         slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
         slp.data('pH', ph0, unit=exp.UNIT_PH)
         slp.data('temp_c', temp0, unit=exp.UNIT_TEMP_C)
@@ -455,6 +498,7 @@ def run_titration():
             ph = read_ph_safe()
             temp = read_temp_c()
             analysis.add_point(volume, ph)
+            csv_rows.append((volume, ph, temp))
 
             # สตรีมทุกค่าไปยังแอป MicroPad (stream every reading to the app)
             slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
@@ -493,6 +537,10 @@ def run_titration():
         # Any abort reaching here is a user stop; missing-calibration aborts
         # were caught and returned at the top, before any dosing.
         print("หยุดโดยผู้ใช้ (Stopped by user) — ปั๊มปิดแล้ว (pump OFF)")
+        if csv_rows:
+            partial_path = save_titration_csv(csv_rows, None, None, completed=False)
+            if partial_path:
+                print(f"บันทึกข้อมูลที่เก็บได้แล้วที่ (partial data saved): {partial_path}")
         ui.aborted("User stop")
         slp.event('titration_aborted', {
             'reason': 'stop_requested',
@@ -535,6 +583,11 @@ def run_titration():
     if unknown_c is not None:
         print(f"ความเข้มข้นสารตัวอย่าง (Unknown conc.): {unknown_c:.4f} M")
     print(f"ปริมาตรรวม (Total volume): {volume:.2f} mL ใน {step} steps")
+    csv_path = save_titration_csv(csv_rows, eq, unknown_c, completed=True)
+    if csv_path:
+        print(f"บันทึกข้อมูลแล้วที่ (data saved): {csv_path}")
+        print("เปิด/ดาวน์โหลดได้จากแอปในโฟลเดอร์ data (open it from the app's data folder)")
+        result['csv_path'] = csv_path
     print("ดูกราฟบนแอป MicroPad (Full curve on the MicroPad app)")
     print("=" * 56)
     ui.results(eq[0] if eq else None, unknown_c)
