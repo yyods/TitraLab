@@ -1,10 +1,16 @@
 # ==============================================================================
-# main.py - บทเรียนไทเทรชันกรด-เบสอัตโนมัติ (Acid-Base Titration Lesson)
+# 01_titration_auto.py - บทเรียนไทเทรชันกรด-เบสอัตโนมัติ (Acid-Base Titration)
 # ==============================================================================
-# ไฟล์นี้คือ "จุดเริ่มต้น" ของบทเรียน รันผ่าน runner ของเฟิร์มแวร์ที่
-# /workspace/main.py แอป MicroPad (แท็บเล็ต) เป็นจอแสดงผลหลัก — บอร์ดไม่มีเมนู TFT
-# This is the lesson ENTRY POINT, run by the firmware runner at
-# /workspace/main.py. The MicroPad TABLET is the display (no on-board TFT menu).
+# รันไฟล์นี้จากแอป MicroPad (ปุ่ม Run) หรือ Thonny — แท็บเล็ตเป็นจอแสดงผลหลัก
+# Run this file from the MicroPad app (Run button) or Thonny; the tablet is
+# the display (no on-board TFT menu).
+#
+# *** ห้ามตั้งชื่อ/คัดลอกไฟล์นี้เป็น /workspace/main.py ***
+# *** เฟิร์มแวร์รัน main.py อัตโนมัติทุกครั้งที่บูต — บทเรียนที่บล็อกยาว
+#     จะทำให้บอร์ดค้าง/เหมือนรีบูตวนไม่หยุด และปั๊มอาจทำงานโดยไม่มีคนดูแล ***
+# *** NEVER name/copy this file to /workspace/main.py: the firmware auto-runs
+#     main.py at EVERY boot — a long-blocking lesson makes the board appear to
+#     reboot forever, and the pump could start unattended. ***
 #
 # โครงสร้างบทเรียน (Lesson structure — all hardware via scilabpro helpers):
 #   1. โหลดผลสอบเทียบที่นิสิตทำเองใน Week_2 (pH slope/intercept + flow rate)
@@ -58,7 +64,8 @@ def wait_for_button(button, timeout_ms=30000):
         timeout_ms: เวลารอสูงสุด (ms) ก่อนเริ่มอัตโนมัติ
 
     Returns:
-        bool: True ถ้ากดปุ่ม, False ถ้าหมดเวลา หรือมีคำสั่งหยุดจากแอป
+        bool: True ถ้ากดปุ่ม, False ถ้าหมดเวลา (ไม่เริ่มเองเพื่อความปลอดภัย)
+              หรือมีคำสั่งหยุดจากแอป (no unattended auto-start)
     """
     start = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
@@ -69,8 +76,9 @@ def wait_for_button(button, timeout_ms=30000):
         if button.value():
             return True
         time.sleep_ms(50)
-    # หมดเวลา: เริ่มอัตโนมัติ (timeout → start anyway)
-    return True
+    # หมดเวลา: ยกเลิก — บทเรียนที่ควบคุมปั๊มต้องมีคนยืนยันก่อนเริ่มเสมอ
+    # Timeout → ABORT: an actuator lesson must never start unattended.
+    return False
 
 
 def dose_one_step(led, pump_time_ms):
@@ -113,7 +121,17 @@ def run_titration():
     """
     # อ้างสิทธิ์ควบคุม (กรณีรันผ่าน USB ขณะแอปเชื่อมต่ออยู่)
     # Claim the controller lease (needed if launched from USB while a tablet is on).
-    slp.claim_controller()
+    # ถ้าแท็บเล็ตถืออำนาจควบคุมอยู่ จะได้ OSError (-269 = อีกฝั่งถือ lease อยู่)
+    # -> อธิบายและจบอย่างสะอาด แทนที่จะล้มด้วย traceback
+    try:
+        slp.claim_controller()
+    except OSError:
+        print("ควบคุมบอร์ดไม่ได้: แอป MicroPad กำลังถืออำนาจควบคุมอยู่")
+        print("ปิดแอป (หรือกด Disconnect) แล้วรันใหม่ หรือสั่งรันจากแอปแทน")
+        print("Cannot take control: the MicroPad app currently holds the")
+        print("controller lease. Close/disconnect the app and re-run, or")
+        print("launch this lesson from the app instead.")
+        return {'aborted': True, 'reason': 'controller_lease_busy'}
 
     # =========================================================================
     # โหลดผลสอบเทียบที่นิสิตทำเองใน Week_2 (Load student-performed Week_2 calibration)
@@ -188,8 +206,10 @@ def run_titration():
     if WAIT_FOR_LOCAL_START:
         slp.event('waiting_for_start', {'button': 'BUTTON_1'})
         if not wait_for_button(button):
-            slp.event('titration_aborted', {'reason': 'stop_requested'})
-            return {'aborted': True}
+            # หยุดจากแอป หรือหมดเวลารอโดยไม่มีการยืนยัน (ไม่เริ่มเอง)
+            slp.event('titration_aborted',
+                      {'reason': 'no_start_confirmation_or_stop'})
+            return {'aborted': True, 'reason': 'no_start_confirmation_or_stop'}
 
     # ไฟเขียวติดค้าง = การทดลองกำลังดำเนิน (green steady = experiment running)
     led.value(1)
@@ -345,6 +365,6 @@ def _settle(duration_ms):
 
 
 # ==============================================================================
-# จุดเริ่มต้น (Entry point) — runner เรียก /workspace/main.py
+# จุดเริ่มต้น (Entry point) — รันไฟล์นี้จากแอป MicroPad หรือ Thonny
 # ==============================================================================
 run_titration()

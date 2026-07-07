@@ -30,7 +30,7 @@
 
 | ไฟล์ | บทบาท |
 |------|-------|
-| `main.py` | จุดเริ่ม — โหลดผลสอบเทียบ → ลำดับการไทเทรต (runner เรียก `/workspace/main.py`) |
+| `01_titration_auto.py` | จุดเริ่ม — โหลดผลสอบเทียบ → ลำดับการไทเทรต (runner เรียก `/workspace/01_titration_auto.py`) |
 | `titration.py` | เคมี + นำผลสอบเทียบมาใช้ (pH = slope·mV+b) — หาจุดสมมูล + คำนวณความเข้มข้น |
 | `experiment.py` | ค่าคงที่การทดลอง + เส้นทางไฟล์สอบเทียบ (ปรับ dose, ความเข้มข้น, เวลาหน่วง) |
 
@@ -55,7 +55,7 @@
 ```
 แอป MicroPad → GitHub repo browser
    → TitraLab/MicroPython/Week_3/
-   → import:  main.py , titration.py , experiment.py  (ไฟล์ .py แบน)
+   → import:  01_titration_auto.py , titration.py , experiment.py  (ไฟล์ .py แบน)
    → ปลายทาง:  /workspace/  บนบอร์ด
 ```
 
@@ -63,7 +63,7 @@
 
 ```
 1. เปิดแอป MicroPad บนแท็บเล็ต → สแกน BLE → จับคู่บอร์ด
-2. เปิด /workspace/main.py → กด Run
+2. เปิด /workspace/01_titration_auto.py → กด Run
 3. (ถ้า WAIT_FOR_LOCAL_START=True) กด BUTTON_1 บนบอร์ดเพื่อเริ่ม หรือรอ timeout
 ```
 
@@ -142,7 +142,7 @@ TitraLab Ver. 1.0 เป็นบอร์ด ESP32 แบบ **patch-panel/จ�
 | `POT_1` | 32 | โพเทนชิออมิเตอร์ 1 / pot 1 | **ใช้สาย ADC1 ร่วมกับ `PH_PROBE`** — ใช้ไม่ได้เมื่อ pH อยู่ที่ GPIO32 |
 | `POT_2` | 33 | โพเทนชิออมิเตอร์ 2 / pot 2 | ADC1 |
 
-> บทเรียนรุ่นลีนนี้ (`main.py` / `titration.py` / `experiment.py`) ใช้เพียง **6 endpoint**: `PH_PROBE`, `DS18B20`, `CONTROL_1`, `GREEN`, `BUTTON_1`, `BUZZER` (This lean lesson uses only these 6 endpoints.)
+> บทเรียนรุ่นลีนนี้ (`01_titration_auto.py` / `titration.py` / `experiment.py`) ใช้เพียง **6 endpoint**: `PH_PROBE`, `DS18B20`, `CONTROL_1`, `GREEN`, `BUTTON_1`, `BUZZER` (This lean lesson uses only these 6 endpoints.)
 >
 > **เพดานความปลอดภัยของ actuator (hardware-guard max-on):** เฟิร์มแวร์ตัดเอาต์พุตเมื่อถึงเวลานี้ ไม่ว่าสคริปต์จะสั่งอะไร — `RELAY` = 5000 ms, `CONTROL_1` = 5000 ms, `BUZZER` = 1500 ms (Firmware cuts the output at this time regardless of the script.)
 
@@ -172,7 +172,7 @@ TitraLab Ver. 1.0 เป็นบอร์ด ESP32 แบบ **patch-panel/จ�
 2. สำหรับ `DS18B20` (GPIO16) ต้องมีตัวต้านทาน **pull-up 4.7 kΩ** บนสายข้อมูล 1-Wire (ปกติบอร์ดเตรียมไว้แล้ว — ตรวจให้แน่ใจ).
 3. **อย่าแตะ** ตารางที่ 2 (TFT / MicroSD) — เป็นวงจรตายตัว.
 4. บทเรียน **อ้างถึงอุปกรณ์ด้วยชื่อ endpoint** (เช่น `slp.set_actuator('CONTROL_1', ...)`) แล้ว **เฟิร์มแวร์แปลงชื่อ → หมายเลขขา GPIO** ให้เอง ดังนั้นถ้าวันใดมีการเปลี่ยนการต่อสาย เพียงอัปเดต routing profile ในเฟิร์มแวร์ก็พอ ไม่ต้องแก้โค้ดบทเรียน (The lesson refers to devices by endpoint NAME; the firmware maps name → GPIO. Re-wiring means updating the profile, not the lesson code.)
-5. ส่วนเลขขาที่โผล่ใน `experiment.py` / `main.py` (32, 16, 4, 34, 26) มีไว้เพราะ helper บางตัว (`slp.ds18b20(num)`, `slp.pin(num)`, `slp.buzzer(num)`) รับ **เลขขาตรง ๆ** — เลขเหล่านี้ตรงกับ `titralab_v1_default` ส่วน pH อ่านด้วยชื่อ endpoint `slp.read_analog('PH')` (มี `slp.pin(32, input=True)` เป็น fallback) (These pin numbers in the lesson match `titralab_v1_default`.)
+5. ส่วนเลขขาที่โผล่ใน `experiment.py` / `01_titration_auto.py` (32, 16, 4, 34, 26) มีไว้เพราะ helper บางตัว (`slp.ds18b20(num)`, `slp.pin(num)`, `slp.buzzer(num)`) รับ **เลขขาตรง ๆ** — เลขเหล่านี้ตรงกับ `titralab_v1_default` ส่วน pH อ่านด้วยชื่อ endpoint `slp.read_analog('PH')` (มี `slp.pin(32, input=True)` เป็น fallback) (These pin numbers in the lesson match `titralab_v1_default`.)
 
 ---
 
@@ -213,7 +213,7 @@ TitraLab Ver. 1.0 เป็นบอร์ด ESP32 แบบ **patch-panel/จ�
 | `ph_calibration_missing` (หยุดทันที) | ยังไม่ได้สอบเทียบ pH ใน Week_2 / ไฟล์หาย | รัน `Week_2/01_pH_Sensor/02_calibration_3point.py` → รัน Week_3 ใหม่ |
 | `flow_calibration_missing` (หยุดทันที) | ยังไม่ได้สอบเทียบอัตราการไหลใน Week_2 / ไฟล์หาย | รัน `Week_2/02_Pump_Control/01_flow_rate_calibration.py` → รัน Week_3 ใหม่ |
 | pH เพี้ยน / ปริมาตรเพี้ยน | ใช้ไฟล์สอบเทียบของบอร์ดอื่น / สอบเทียบ Week_2 คุณภาพต่ำ | สอบเทียบใหม่ "บนบอร์ดตัวนี้" (R² ≥ 0.99, RSD ต่ำ) |
-| ไม่เห็นค่าในแอป | ยังไม่จับคู่ BLE / ไม่ได้ Run | จับคู่ใหม่ → เปิด `main.py` → Run |
+| ไม่เห็นค่าในแอป | ยังไม่จับคู่ BLE / ไม่ได้ Run | จับคู่ใหม่ → เปิด `01_titration_auto.py` → Run |
 | ค้างที่ `waiting_for_start` | รอกดปุ่มเริ่ม | กด BUTTON_1 บนบอร์ด หรือรอ timeout |
 | ขึ้น `temp_sensor_warning` | สาย DS18B20 หลุด/ไม่มี pull-up 4.7K | ตรวจสายขา 16; ระบบใช้ 25 °C ต่อได้ |
 | ไม่พบจุดสมมูล | ข้อมูล < 3 จุด / ปริมาตรไม่ถึง | เพิ่ม `MAX_VOLUME_ML` / ตรวจความเข้มข้น |

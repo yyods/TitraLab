@@ -65,7 +65,7 @@
 ใน Week 2 พอดี ถ้าตัวประกอบนี้ไม่ตรงกัน สมการ slope/intercept จะให้พีเอชผิด
 
 **บอร์ดจะปฏิเสธการรันถ้าขาดการสอบเทียบ (refuse-to-run guard):** เมื่อนิสิตเริ่มบทเรียน
-`main.py` จะ **โหลดไฟล์สอบเทียบทั้งสองก่อนแตะแอกชูเอเตอร์ใด ๆ** หากไฟล์ใดหายหรือรูปแบบผิด:
+`01_titration_auto.py` จะ **โหลดไฟล์สอบเทียบทั้งสองก่อนแตะแอกชูเอเตอร์ใด ๆ** หากไฟล์ใดหายหรือรูปแบบผิด:
 
 - ขาดพีเอช → ส่งเหตุการณ์ `ph_calibration_missing` (พร้อมคำแนะนำให้รัน
   Week 2 `01_pH_Sensor/02_calibration_3point.py` ก่อน) แล้ว **หยุดทันที — ปั๊มไม่ขยับ**
@@ -407,7 +407,7 @@ HCl + NaOH (1 : 1) และเปลี่ยนเป็น 2 สำหรั�
 ### ขั้นตอนที่ 3: เริ่มไทเทรตอัตโนมัติ (Run the Automated Titration)
 
 ```
-1. กดเริ่มบทเรียนในแอป MicroPad → แอปสั่งให้บอร์ดรัน main.py
+1. กดเริ่มบทเรียนในแอป MicroPad → แอปสั่งให้บอร์ดรัน 01_titration_auto.py
 2. การเริ่มแบบ local (ถ้าตั้งค่า WAIT_FOR_LOCAL_START):
    - บอร์ดส่งเหตุการณ์ "waiting_for_start" → ไฟเขียว (LED) กะพริบรอ
    - กดปุ่ม BUTTON_1 บนบอร์ดเพื่อเริ่ม (หรือรอจนหมดเวลาแล้วเริ่มอัตโนมัติ)
@@ -716,7 +716,7 @@ C_HCl = 1.0 × 0.1000 × 4.85 / 5.00 = 0.0970 M
 
 1. Harris, D.C. (2016). *Quantitative Chemical Analysis* (9th ed.). W.H. Freeman.
 2. Skoog, D.A., West, D.M., Holler, F.J., & Crouch, S.R. (2014). *Fundamentals of Analytical Chemistry* (9th ed.). Cengage Learning.
-3. SciLabPro MicroPad — TitraLab Lesson: Week 3 (`main.py`, `titration.py`, `experiment.py`).
+3. SciLabPro MicroPad — TitraLab Lesson: Week 3 (`01_titration_auto.py`, `titration.py`, `experiment.py`).
 4. SciLabPro MicroPad — TitraLab Lesson: Week 2 calibration (ผู้สร้างไฟล์สอบเทียบ):
    `01_pH_Sensor/02_calibration_3point.py` (→ `/workspace/data/ph_calibration.txt`),
    `02_Pump_Control/01_flow_rate_calibration.py` (→ `/workspace/data/flow_calibration.txt`).

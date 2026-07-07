@@ -42,7 +42,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │  บทเรียน /workspace (LESSON — เคมี + การนำผลสอบเทียบมาใช้)        │
 │                                                                   │
-│   main.py        ← โหลดไฟล์สอบเทียบ → หยด → อ่าน → วิเคราะห์      │
+│   01_titration_auto.py        ← โหลดไฟล์สอบเทียบ → หยด → อ่าน → วิเคราะห์      │
 │   titration.py   ← เคมี + APPLY fit:  pH = slope·mV + intercept   │
 │   experiment.py  ← ค่าคงที่ + เส้นทางไฟล์สอบเทียบ (PH/FLOW_CAL)   │
 └───────────────────────────────┬───────────────────────────────────┘
@@ -141,7 +141,7 @@ constant and never a firmware black box.)
 
 ```
 Week_3/
-├── main.py          # [ENTRY] โหลดสอบเทียบ → ไทเทรต — runner เรียก /workspace/main.py
+├── 01_titration_auto.py          # [ENTRY] โหลดสอบเทียบ → ไทเทรต — runner เรียก /workspace/01_titration_auto.py
 ├── titration.py     # [CHEMISTRY] โหลด/นำผลสอบเทียบมาใช้ + หาจุดสมมูล + คำนวณความเข้มข้น
 ├── experiment.py    # [CONFIG] ค่าคงที่การทดลอง + เส้นทางไฟล์สอบเทียบ + ชื่อ endpoint
 │
@@ -156,7 +156,7 @@ Week_3/
 
 | ไฟล์ | บทบาท | นิสิตแก้ไขไหม |
 |------|-------|:------------:|
-| `main.py` | โหลดสอบเทียบ → เริ่ม → หยดทีละ step → อ่าน pH/temp → สตรีม → วิเคราะห์ → ส่งผล | บางส่วน (ลำดับ/เงื่อนไข) |
+| `01_titration_auto.py` | โหลดสอบเทียบ → เริ่ม → หยดทีละ step → อ่าน pH/temp → สตรีม → วิเคราะห์ → ส่งผล | บางส่วน (ลำดับ/เงื่อนไข) |
 | `titration.py` | โหลด+นำผลสอบเทียบมาใช้ (apply fit) + เคมีล้วน ทดสอบบนคอมพิวเตอร์ได้ | **ใช่ (โฟกัสที่นี่)** |
 | `experiment.py` | ค่าคงที่: dose, ปริมาตร, ความเข้มข้น, อัตราส่วน, เวลาหน่วง, **เส้นทางไฟล์สอบเทียบ + RAW_TO_MV** | **ใช่ (ปรับการทดลอง)** |
 
@@ -169,7 +169,7 @@ Week_3/
 
 ## โค้ดตัวอย่าง (Example Code) — รูปแบบการใช้ helper
 
-`main.py` สั้นและตรงไปตรงมา หัวใจคือ "**โหลดผลสอบเทียบของนิสิต → หยด → รอเสถียร → อ่าน(แปลงด้วย fit)
+`01_titration_auto.py` สั้นและตรงไปตรงมา หัวใจคือ "**โหลดผลสอบเทียบของนิสิต → หยด → รอเสถียร → อ่าน(แปลงด้วย fit)
 → สตรีม → ทำซ้ำ**" โดยตรวจ `slp.stop_requested()` ทุกลูป และปั๊มถูก guard ด้วย `max_on_ms` เสมอ:
 
 ```python
@@ -233,7 +233,7 @@ slp.event('titration_complete', {             # ส่งผลลัพธ์�
 })
 ```
 
-> หมายเหตุ: `main.py` ตัวจริงมีรายละเอียดเพิ่ม (event `calibration_loaded` แจ้งค่าที่ใช้, เริ่ม local
+> หมายเหตุ: `01_titration_auto.py` ตัวจริงมีรายละเอียดเพิ่ม (event `calibration_loaded` แจ้งค่าที่ใช้, เริ่ม local
 > ด้วย BUTTON_1, ไฟ LED, อุณหภูมิ, เสียงเตือนใกล้จุดสมมูล, `try/finally` ปิดปั๊มทุกเส้นทาง) แต่โครงสร้าง
 > หลัก — **โหลดสอบเทียบ → หยุดถ้าหาย → นำ fit มาใช้ → จับเวลาปั๊มจาก flow rate** — เป็นไปตามด้านบน
 
@@ -254,7 +254,7 @@ slp.event('titration_complete', {             # ส่งผลลัพธ์�
 ```
 GitHub repo browser ในแอป MicroPad
    └─ TitraLab/MicroPython/Week_3/
-        ├─ main.py        ──┐
+        ├─ 01_titration_auto.py        ──┐
         ├─ titration.py    ─┼─►  import เข้า  /workspace/  บนบอร์ด
         └─ experiment.py  ──┘
 ```
@@ -265,7 +265,7 @@ GitHub repo browser ในแอป MicroPad
 
 ```
 1. เปิดแอป MicroPad บนแท็บเล็ต → สแกนและจับคู่บอร์ดผ่าน BLE
-2. เปิด /workspace/main.py → กด Run
+2. เปิด /workspace/01_titration_auto.py → กด Run
 3. (ถ้า WAIT_FOR_LOCAL_START=True) กด BUTTON_1 บนบอร์ดเพื่อเริ่ม หรือรอ timeout
 ```
 
@@ -337,7 +337,7 @@ GitHub repo browser ในแอป MicroPad
 | event `flow_calibration_missing` (หยุดทันที) | ยังไม่ได้สอบเทียบอัตราการไหลใน Week_2 / ไฟล์หาย | รัน `Week_2/02_Pump_Control/01_flow_rate_calibration.py` ให้ได้ `flow_calibration.txt` ก่อน แล้วรันใหม่ |
 | pH อ่านได้แต่ผิดเพี้ยน | ไฟล์ `ph_calibration.txt` มาจากบอร์ดอื่น / R² ต่ำใน Week_2 | สอบเทียบ pH ใหม่ "บนบอร์ดตัวนี้" ให้ R² ≥ 0.99 |
 | ปริมาตร/ความเข้มข้นเพี้ยน | flow rate สอบเทียบไม่แม่น (RSD สูงใน Week_2) | สอบเทียบอัตราการไหลใหม่ให้ RSD ต่ำ แล้วรันใหม่ |
-| ไม่เห็นค่าในแอป | บอร์ดยังไม่จับคู่ BLE / ไม่ได้ Run | จับคู่ใหม่, เปิด `/workspace/main.py` แล้วกด Run |
+| ไม่เห็นค่าในแอป | บอร์ดยังไม่จับคู่ BLE / ไม่ได้ Run | จับคู่ใหม่, เปิด `/workspace/01_titration_auto.py` แล้วกด Run |
 | ค้างที่ "waiting_for_start" | `WAIT_FOR_LOCAL_START=True` รอกดปุ่ม | กด BUTTON_1 บนบอร์ด หรือรอ timeout (30 วิ) |
 | `temp_sensor_warning` | สาย DS18B20 หลุด/ไม่มี pull-up | ตรวจสายที่ขา 16; ระบบจะใช้ 25 °C ต่อได้ |
 | ไม่พบจุดสมมูล (eq เป็น None) | ข้อมูลน้อยกว่า 3 จุด / ปริมาตรไม่ถึงจุดสมมูล | เพิ่ม `MAX_VOLUME_ML` หรือตรวจความเข้มข้นสาร |
