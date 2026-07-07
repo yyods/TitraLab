@@ -192,6 +192,16 @@ BUZZER_PIN = 26      # BUZZER (PWM output) — เสียงแจ้งเต
 # ตั้ง False เพื่อเริ่มทันทีเมื่อแอปสั่งรัน (app-driven start)
 WAIT_FOR_LOCAL_START = True
 
+# ==============================================================================
+# ปิดเสียงบัซเซอร์ทันทีที่ไฟล์เริ่มรัน (import-time silence)
+# ==============================================================================
+# PWM ของ ESP32 "ทำงานต่อ" ข้ามการจบสคริปต์/soft-reset ได้ — ถ้ารอบก่อนถูกสั่งหยุด
+# กลางเสียงบี๊บ เสียงจะดังค้างมาจนถึงรอบนี้ บรรทัดนี้ดับเสียงเป็นสิ่งแรกสุด
+# ESP32 PWM keeps running across script end / soft reset: a previous run
+# stopped mid-beep leaves the buzzer screaming into this run. Kill it FIRST,
+# before anything slow (claim, calibration load, display init).
+slp.buzzer(BUZZER_PIN).off()
+
 
 def wait_for_button(button, timeout_ms=30000):
     """
