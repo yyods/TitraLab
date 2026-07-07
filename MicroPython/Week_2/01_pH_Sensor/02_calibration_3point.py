@@ -227,23 +227,7 @@ button1 = Pin(34, Pin.IN)
 # Calculate Theoretical Nernst Slope
 # ==============================================================================
 def calculate_theoretical_nernst_slope(temp_celsius):
-    """
-    คำนวณความชัน Nernst ทฤษฎีที่อุณหภูมิที่กำหนด
-    Calculate theoretical Nernst slope at given temperature
-
-    สูตร (Formula): slope = -2.303 * R * T / (n * F)
-
-    Args:
-        temp_celsius: อุณหภูมิเป็นองศาเซลเซียส (Temperature in Celsius)
-
-    Returns:
-        float: ความชันทฤษฎีเป็น mV/pH (Theoretical slope in mV/pH)
-
-    ตัวอย่าง (Examples):
-        20C -> -58.17 mV/pH
-        25C -> -59.16 mV/pH
-        30C -> -60.15 mV/pH
-    """
+    """คำนวณความชัน Nernst ทฤษฎีที่อุณหภูมิที่กำหนด"""
     temp_kelvin = temp_celsius + KELVIN_OFFSET
     # คำนวณความชัน (Calculate slope)
     slope = -2.303 * R_CONSTANT * temp_kelvin / (N_ELECTRONS * F_CONSTANT)
@@ -255,28 +239,7 @@ def calculate_theoretical_nernst_slope(temp_celsius):
 # Read Voltage Function (mV)
 # ==============================================================================
 def read_voltage_mv():
-    """
-    อ่านค่า ADC และแปลงเป็นมิลลิโวลต์ (mV)
-    Read ADC value and convert to millivolts (mV)
-
-    หมายเหตุสำคัญ (Important Note):
-    ค่าที่อ่านได้รวม offset จากวงจร LMC6482 แล้ว (+1650 mV)
-    The reading includes the offset from the LMC6482 circuit (+1650 mV)
-
-    ตัวอย่างค่าที่คาดหวัง (Expected values):
-    - pH 4 (กรด):  ~1827 mV (1650 + 177)
-    - pH 7 (กลาง): ~1650 mV (1650 + 0)
-    - pH 10 (เบส): ~1473 mV (1650 - 177)
-
-    การคำนวณ (Calculation):
-    - ADC 12-bit: 0-4095
-    - แรงดันอ้างอิง: 3300 mV (3.3V)
-    - voltage_mv = (ADC_value / 4095) x 3300
-
-    Returns:
-        float: แรงดันไฟฟ้าเป็น mV (รวม offset แล้ว)
-               Voltage in mV (includes LMC6482 offset)
-    """
+    """อ่านค่า ADC และแปลงเป็นมิลลิโวลต์ (mV)"""
     adc_value = pH_adc.read()
     voltage_mv = adc_value * 3300 / 4095
     return voltage_mv
@@ -286,21 +249,7 @@ def read_voltage_mv():
 # Read Average Voltage Function (Multiple Readings)
 # ==============================================================================
 def read_average_voltage(num_readings=10, delay_ms=100):
-    """
-    อ่านค่าแรงดันหลายครั้งและคำนวณค่าเฉลี่ย
-    Read voltage multiple times and calculate average
-
-    เหตุผล: การอ่านหลายครั้งช่วยลด noise และให้ค่าที่เสถียรกว่า
-    Reason: Multiple readings reduce noise and give more stable values
-
-    Args:
-        num_readings: จำนวนครั้งที่อ่าน (Number of readings)
-        delay_ms: ระยะเวลารอระหว่างการอ่าน (Delay between readings in ms)
-
-    Returns:
-        tuple: (ค่าเฉลี่ย, ค่าเบี่ยงเบนมาตรฐาน)
-               (average, standard deviation)
-    """
+    """อ่านค่าแรงดันหลายครั้งและคำนวณค่าเฉลี่ย"""
     readings = []
     for _ in range(num_readings):
         readings.append(read_voltage_mv())
@@ -320,17 +269,7 @@ def read_average_voltage(num_readings=10, delay_ms=100):
 # Read Temperature Function
 # ==============================================================================
 def read_temperature():
-    """
-    อ่านค่าอุณหภูมิจากเซ็นเซอร์ DS18B20
-    Read temperature from DS18B20 sensor
-
-    หมายเหตุ: อุณหภูมิมีผลต่อค่า pH ตามสมการ Nernst
-    - ความชัน Nernst เปลี่ยนประมาณ 0.2 mV/pH ต่อ 1C
-    Note: Temperature affects pH according to Nernst equation
-
-    Returns:
-        float: อุณหภูมิเป็น C หรือ None ถ้าไม่พบเซ็นเซอร์
-    """
+    """อ่านค่าอุณหภูมิจากเซ็นเซอร์ DS18B20"""
     if roms:
         ds_sensor.convert_temp()
         sleep_ms(750)  # รอการแปลงค่า (Wait for conversion)
@@ -342,32 +281,7 @@ def read_temperature():
 # Linear Regression Calculation Function
 # ==============================================================================
 def linear_regression(x_values, y_values):
-    """
-    คำนวณการถดถอยเชิงเส้น y = mx + b พร้อมค่า R-squared
-    Calculate linear regression y = mx + b with R-squared
-
-    หลักการ (Principle):
-    สำหรับเซ็นเซอร์ pH: pH = slope_m * mV + intercept_b
-    - x = mV (แรงดันไฟฟ้าที่วัดได้จาก ADC)
-    - y = pH (ค่า pH ของสารละลายกันชน)
-    - slope_m = ความชัน (pH/mV) - ใช้คำนวณ pH จาก mV โดยตรง
-    - intercept_b = จุดตัดแกน y (pH)
-
-    สูตรการถดถอยเชิงเส้น (Linear regression formulas):
-    m = (n*sum(xy) - sum(x)*sum(y)) / (n*sum(x^2) - (sum(x))^2)
-    b = (sum(y) - m*sum(x)) / n
-
-    R^2 = 1 - SS_res / SS_tot
-    โดย SS_res = sum((y_i - y_pred_i)^2) และ SS_tot = sum((y_i - y_mean)^2)
-
-    Args:
-        x_values: ค่าแรงดันที่วัดได้ (Measured voltages in mV)
-        y_values: ค่า pH ของสารละลายกันชน (Buffer pH values)
-
-    Returns:
-        tuple: (slope_m, intercept_b, r_squared)
-               (ความชัน pH/mV, จุดตัดแกน y pH, ค่า R-squared)
-    """
+    """คำนวณการถดถอยเชิงเส้น y = mx + b พร้อมค่า R-squared"""
     n = len(x_values)
 
     # ตรวจสอบจำนวนข้อมูล (Check number of data points)
@@ -408,36 +322,7 @@ def linear_regression(x_values, y_values):
 # Save Calibration Data to File Function
 # ==============================================================================
 def save_calibration_data(slope, intercept, r_squared, avg_temp):
-    """
-    บันทึกค่าสอบเทียบลงไฟล์ /workspace/data/ph_calibration.txt
-    Save calibration data to /workspace/data/ph_calibration.txt
-
-    เส้นทางถาวร (Persistent path): บันทึกใน /workspace/data ซึ่งเป็นโฟลเดอร์
-    คงอยู่ของ workspace (ไม่หายเมื่อรีบูต) เพื่อให้บทเรียน Week_3 (การไทเทรต
-    อัตโนมัติ) อ่านสมการสอบเทียบของบอร์ดตัวนี้ไปใช้ได้โดยตรง
-    Saved under /workspace/data (the persistent workspace folder, not CWD) so the
-    Week_3 auto-titration lesson can read THIS board's calibration directly.
-
-    รูปแบบไฟล์ (File format — เหมือนเดิมทุกประการ / unchanged columns):
-    slope_m,intercept_b,r_squared,cal_temp
-    -0.016911,34.9800,0.9985,25.2
-
-    การใช้งาน (Usage): pH = slope_m * mV + intercept_b
-    - slope_m: ความชัน (pH/mV) - ค่าลบประมาณ -0.0169 pH/mV
-    - intercept_b: จุดตัดแกน y (pH) - ค่าประมาณ 34-36 pH
-
-    ตัวอย่างการใช้ (Example usage):
-    pH = -0.016911 * 1650 + 34.98 = 7.08 (ใกล้ pH 7 ที่ 1650 mV)
-
-    Args:
-        slope: ความชันที่คำนวณได้ (pH/mV) - ค่าลบประมาณ -0.0169
-        intercept: จุดตัดแกน y (pH) - ค่าประมาณ 34-36
-        r_squared: ค่า R-squared
-        avg_temp: อุณหภูมิเฉลี่ยขณะสอบเทียบ (C)
-
-    Returns:
-        bool: True ถ้าบันทึกสำเร็จ (True if saved successfully)
-    """
+    """บันทึกค่าสอบเทียบลงไฟล์ /workspace/data/ph_calibration.txt"""
     # เส้นทางถาวรที่ Week_2 (ผู้สร้าง) และ Week_3 (ผู้ใช้) ตกลงร่วมกัน
     # Persistent path that Week_2 (producer) and Week_3 (consumer) agree on.
     cal_dir = '/workspace/data'
@@ -470,24 +355,7 @@ def save_calibration_data(slope, intercept, r_squared, avg_temp):
 # Save Detailed Calibration Log Function
 # ==============================================================================
 def save_calibration_log(slope, intercept, r_squared, efficiency):
-    """
-    บันทึกรายละเอียดการสอบเทียบลงไฟล์ log
-    Save detailed calibration log to file
-
-    สูตร: pH = slope_m x mV + intercept_b
-    - slope_m: ประมาณ -0.0169 pH/mV (ค่าลบ เพราะ mV เพิ่ม -> pH ลด)
-    - intercept_b: ประมาณ 34-36 pH
-
-    ตัวอย่าง:
-    ที่ 1650 mV (pH 7): pH = -0.0169 x 1650 + 34.98 ≈ 7.09
-    ที่ 1827 mV (pH 4): pH = -0.0169 x 1827 + 34.98 ≈ 4.09
-
-    Args:
-        slope: ความชันที่คำนวณได้ (pH/mV) - ค่าลบประมาณ -0.0169
-        intercept: จุดตัดแกน y (pH) - ค่าประมาณ 34-36
-        r_squared: ค่า R-squared
-        efficiency: Nernst slope efficiency (%)
-    """
+    """บันทึกรายละเอียดการสอบเทียบลงไฟล์ log"""
     try:
         with open('calibration_log.txt', 'w') as f:
             f.write("=" * 60 + "\n")
@@ -544,20 +412,7 @@ def save_calibration_log(slope, intercept, r_squared, efficiency):
 # Display Raw Calibration Data Before Calculation
 # ==============================================================================
 def display_raw_calibration_data():
-    """
-    แสดงข้อมูลดิบที่เก็บได้จากการสอบเทียบก่อนแสดงผลลัพธ์
-    Display raw calibration data before showing calculated results
-
-    วัตถุประสงค์การเรียนรู้ (Learning Objectives):
-    - นิสิตเห็นข้อมูลดิบที่ใช้ในการคำนวณ
-    - นิสิตสามารถลองคำนวณสมการถดถอยเชิงเส้นด้วยตัวเอง
-    - เข้าใจความสัมพันธ์ระหว่าง pH และแรงดันไฟฟ้า
-
-    ข้อมูลที่แสดง (Data displayed):
-    - ค่าแรงดันที่วัดได้ (mV) - ตัวแปรอิสระ x
-    - ค่า pH ของสารละลายกันชน: 4.00, 7.00, 10.00 - ตัวแปรตาม y
-    - ค่าอุณหภูมิขณะวัดแต่ละจุด
-    """
+    """แสดงข้อมูลดิบที่เก็บได้จากการสอบเทียบก่อนแสดงผลลัพธ์"""
     # ==============================================================================
     # แสดงบน Serial Console (Print to Serial Console)
     # ==============================================================================
@@ -678,15 +533,7 @@ def display_raw_calibration_data():
 # Wait for Student Manual Calculation Function
 # ==============================================================================
 def wait_for_manual_calculation():
-    """
-    รอให้นิสิตคำนวณสมการถดถอยเชิงเส้นด้วยตัวเองก่อนแสดงผลลัพธ์
-    Wait for students to manually calculate linear regression before showing results
-
-    วัตถุประสงค์ (Objectives):
-    - ให้เวลานิสิตลองคำนวณด้วยมือหรือเครื่องคิดเลข
-    - เปรียบเทียบคำตอบของนิสิตกับผลจากโปรแกรม
-    - เข้าใจกระบวนการคำนวณ Linear Regression
-    """
+    """รอให้นิสิตคำนวณสมการถดถอยเชิงเส้นด้วยตัวเองก่อนแสดงผลลัพธ์"""
     print("")
     print("=" * 70)
     print("แบบฝึกหัด: ลองคำนวณด้วยตัวเอง (Exercise: Calculate Manually)")
@@ -732,17 +579,7 @@ def wait_for_manual_calculation():
 # Display Calibration Results Function
 # ==============================================================================
 def display_results(slope, intercept, r_squared, efficiency, avg_temp):
-    """
-    แสดงผลการสอบเทียบบนจอ TFT และ serial console
-    Display calibration results on TFT and serial console
-
-    Args:
-        slope: ความชันที่คำนวณได้ (pH/mV)
-        intercept: จุดตัดแกน y (pH)
-        r_squared: ค่า R-squared
-        efficiency: Nernst slope efficiency (%)
-        avg_temp: อุณหภูมิเฉลี่ย (C)
-    """
+    """แสดงผลการสอบเทียบบนจอ TFT และ serial console"""
     # กำหนดสีตามคุณภาพ (Set color based on quality)
     if r_squared >= 0.99:
         r2_color = color565(0, 255, 0)    # เขียว = ดี (Green = Good)
@@ -829,24 +666,7 @@ def display_results(slope, intercept, r_squared, efficiency, avg_temp):
 # pH Calibration Function
 # ==============================================================================
 def calibrate_pH():
-    """
-    ดำเนินการสอบเทียบ pH 3 จุด
-    Perform 3-point pH calibration
-
-    ขั้นตอนการสอบเทียบ (Calibration Steps):
-    1. แช่หัววัดในสารละลายกันชน pH 4.00 -> กดปุ่มบันทึก
-    2. แช่หัววัดในสารละลายกันชน pH 7.00 -> กดปุ่มบันทึก
-    3. แช่หัววัดในสารละลายกันชน pH 10.00 -> กดปุ่มบันทึก
-
-    หมายเหตุสำหรับนิสิต:
-    - ล้างหัววัดด้วยน้ำกลั่นระหว่างเปลี่ยนสารละลายกันชน
-    - รอให้ค่าเสถียร (30-60 วินาที) ก่อนกดปุ่มบันทึก
-    - ค่า pH ของสารละลายกันชนอาจเปลี่ยนตามอุณหภูมิ
-
-    Returns:
-        tuple: (slope, intercept, r_squared, efficiency, avg_temp)
-               หรือ None ถ้าล้มเหลว
-    """
+    """ดำเนินการสอบเทียบ pH 3 จุด"""
     global calibrated_voltages, temperatures
 
     print("\n" + "=" * 60)
@@ -1107,16 +927,22 @@ try:
             print("Please check and recalibrate")
             print("!" * 60)
 
-    # รอจนกว่าจะกด Ctrl+C หรือแอปสั่งหยุด
+    # รอจนกว่าจะกดปุ่ม 1 หรือแอปสั่งหยุด (จบโปรแกรมแบบ graceful — exit code 0)
     print("\nการสอบเทียบเสร็จสิ้น (Calibration complete)")
-    print("กด Ctrl+C เพื่อออก (Press Ctrl+C to exit)")
+    print("กดปุ่ม 1 เพื่อออก (Press Button 1 to exit)")
 
     while True:
         # ตรวจคำสั่งหยุดจากแอป Student/Instructor (check for an app stop request)
         if stop_requested is not None and stop_requested():
             print("ได้รับคำสั่งหยุดจากแอป (Stop requested by app)")
             break
-        sleep_ms(100)
+        # ปุ่ม 1 = จบโปรแกรมอย่างเรียบร้อย (Button 1 = graceful exit)
+        if button1.value() == 0:
+            while button1.value() == 0:  # รอปล่อยปุ่ม (debounce/release)
+                sleep_ms(20)
+            print("จบโปรแกรมเรียบร้อย (Program finished)")
+            break
+        sleep_ms(50)
 
 except KeyboardInterrupt:
     print("\nหยุดโปรแกรม (Program stopped)")
