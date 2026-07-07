@@ -102,11 +102,12 @@ pump_pwm.duty(0)  # เริ่มต้นปิดปั๊ม (Start with pu
 
 def load_flow_rate():
     """
-    โหลดค่า flow rate จากไฟล์ data_flowrate.txt
-    Load flow rate from data_flowrate.txt file
+    โหลดค่า flow rate จากไฟล์ /workspace/data/flow_calibration.txt
+    Load flow rate from /workspace/data/flow_calibration.txt
 
-    ไฟล์นี้สร้างจากโปรแกรม 01_flowRate.py
-    This file is created by 01_flowRate.py
+    ไฟล์นี้สร้างจากโปรแกรม 01_flow_rate_calibration.py (เส้นทางถาวรที่
+    ผู้สร้างและผู้ใช้ตกลงร่วมกัน / the agreed producer-consumer path)
+    This file is created by 01_flow_rate_calibration.py
 
     Returns:
         float: flow rate ใน mL/s หรือค่า default ถ้าไม่พบไฟล์
@@ -117,7 +118,7 @@ def load_flow_rate():
     default_flow_rate = 0.2800  # ค่าเริ่มต้นถ้าไม่พบไฟล์ (Default if file not found)
 
     try:
-        with open('data_flowrate.txt', 'r') as f:
+        with open('/workspace/data/flow_calibration.txt', 'r') as f:
             for line in f:
                 line = line.strip()
                 if line.startswith('flow_rate='):
@@ -126,10 +127,10 @@ def load_flow_rate():
                     print("(Loaded flow_rate from file)")
                     return value
     except OSError:
-        print(f"ไม่พบไฟล์ data_flowrate.txt - ใช้ค่าเริ่มต้น {default_flow_rate:.4f} mL/s")
+        print(f"ไม่พบไฟล์ /workspace/data/flow_calibration.txt - ใช้ค่าเริ่มต้น {default_flow_rate:.4f} mL/s")
         print("(File not found - using default value)")
-        print("*** คำแนะนำ: รัน 01_flowRate.py เพื่อสอบเทียบปั๊มก่อน ***")
-        print("*** Tip: Run 01_flowRate.py to calibrate pump first ***")
+        print("*** คำแนะนำ: รัน 01_flow_rate_calibration.py เพื่อสอบเทียบปั๊มก่อน ***")
+        print("*** Tip: Run 01_flow_rate_calibration.py to calibrate pump first ***")
     except Exception as e:
         print(f"ข้อผิดพลาดในการอ่านไฟล์ (Error reading file): {e}")
 

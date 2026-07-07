@@ -116,8 +116,9 @@ pump_pwm.duty(0)  # เริ่มต้นปิดปั๊ม (Start with pu
 
 def load_flow_rate():
     """
-    โหลดค่า flow rate จากไฟล์ data_flowrate.txt
-    Load flow rate from data_flowrate.txt file
+    โหลดค่า flow rate จากไฟล์ /workspace/data/flow_calibration.txt
+    Load flow rate from /workspace/data/flow_calibration.txt
+    (สร้างโดย 01_flow_rate_calibration.py / created by 01_flow_rate_calibration.py)
     """
     # ทศนิยม 4 ตำแหน่ง - สำคัญมากต่อความแม่นยำของปริมาตรที่ปั๊ม
     # 4 decimal places - critical for precise transferred volume calculation
@@ -125,7 +126,7 @@ def load_flow_rate():
     default_flow_rate = 0.2800  # ค่าเริ่มต้น (Default value)
 
     try:
-        with open('data_flowrate.txt', 'r') as f:
+        with open('/workspace/data/flow_calibration.txt', 'r') as f:
             for line in f:
                 line = line.strip()
                 if line.startswith('flow_rate='):
@@ -133,8 +134,8 @@ def load_flow_rate():
                     print(f"โหลด flow_rate จากไฟล์: {value:.4f} mL/s")
                     return value
     except OSError:
-        print(f"ไม่พบไฟล์ - ใช้ค่าเริ่มต้น {default_flow_rate:.4f} mL/s")
-        print("*** รัน 01_flowRate.py เพื่อสอบเทียบปั๊มก่อน ***")
+        print(f"ไม่พบไฟล์ /workspace/data/flow_calibration.txt - ใช้ค่าเริ่มต้น {default_flow_rate:.4f} mL/s")
+        print("*** รัน 01_flow_rate_calibration.py เพื่อสอบเทียบปั๊มก่อน ***")
     except Exception as e:
         print(f"ข้อผิดพลาด (Error): {e}")
 
