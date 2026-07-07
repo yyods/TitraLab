@@ -357,6 +357,24 @@ def run_titration():
     pump_time_ms = pump_time_ms_for_volume(
         exp.DOSE_VOLUME_ML, flow_rate_ml_s, exp.DOSE_MAX_ON_MS)
 
+    # ปริมาตรที่ "ส่งจริง" ต่อ step จากเวลาปั๊มจริง (delivered volume per step).
+    # ปกติ = DOSE_VOLUME_ML แต่ถ้าเวลาปั๊มถูก clamp ที่เพดานความปลอดภัย
+    # (ปั๊มช้า/flow ต่ำ) ปริมาตรจริงจะน้อยกว่า — ต้องนับตามจริง ไม่งั้นแกนปริมาตร
+    # ของกราฟทั้งเส้นคลาดโดยไม่มีใครรู้ (silent under-dosing skews the volume axis)
+    dose_ml_actual = flow_rate_ml_s * (pump_time_ms / 1000.0)
+    if pump_time_ms >= exp.DOSE_MAX_ON_MS and dose_ml_actual < exp.DOSE_VOLUME_ML * 0.99:
+        print("!" * 56)
+        print(f"คำเตือน: ปั๊มช้า — เวลาเปิดถูกจำกัดที่ {exp.DOSE_MAX_ON_MS} ms")
+        print(f"แต่ละหยดจ่ายจริง ~{dose_ml_actual:.3f} mL (ไม่ใช่ {exp.DOSE_VOLUME_ML} mL)")
+        print("WARNING: slow pump — dose clamped at the safety ceiling;")
+        print(f"each step delivers ~{dose_ml_actual:.3f} mL. Volumes use the ACTUAL value.")
+        print("!" * 56)
+        slp.event('dose_clamped', {
+            'dose_ml_actual': dose_ml_actual,
+            'dose_ml_target': exp.DOSE_VOLUME_ML,
+            'pump_time_ms': pump_time_ms,
+        })
+
     # แจ้งให้แอปทราบว่ากำลังใช้ค่าสอบเทียบของบอร์ดตัวนี้ (calibration in use — visible)
     slp.event('calibration_loaded', {
         'ph_slope_m': ph_slope_m,
@@ -469,6 +487,7 @@ def run_titration():
         temp0 = read_temp_c()
         analysis.add_point(volume, ph0)
         csv_rows.append((volume, ph0, temp0))
+        ph, temp = ph0, temp0   # ค่าล่าสุดสำหรับจอ TFT ระหว่างรอผลอ่านใหม่
         slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
         slp.data('pH', ph0, unit=exp.UNIT_PH)
         slp.data('temp_c', temp0, unit=exp.UNIT_TEMP_C)
@@ -489,8 +508,17 @@ def run_titration():
             dose_one_step(led, pump_time_ms)
 
             # คำนวณปริมาตรจากจำนวน step เพื่อเลี่ยง floating-point drift
-            # ปริมาตรนี้ "ส่งจริง" เพราะ pump_time_ms คำนวณจาก flow_rate ของบอร์ดนี้
-            volume = step * exp.DOSE_VOLUME_ML
+            # ใช้ปริมาตร "ส่งจริง" ต่อ step (delivered per-step volume)
+            volume = step * dose_ml_actual
+
+            # --- รายงานปริมาตรทันทีที่หยดเสร็จ (report volume AT DOSE TIME) ---
+            # ปริมาตรรู้แน่นอนตั้งแต่หยดจบ ไม่ต้องรอ settle 10 วินาที — ไม่งั้น
+            # หยดแรกจะยังโชว์ 0.0 mL ค้างจนอ่าน pH เสร็จ (the first drop showed
+            # a stale 0.0 mL for ~11 s because volume streamed only post-read)
+            slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
+            print(f"หยดที่ {step:2d}: ปริมาตรรวม {volume:5.2f} mL "
+                  f"(รอค่า pH นิ่ง {exp.SETTLE_MS // 1000} วิ...)")
+            ui.live(ph, volume, temp, step, total_steps, "Settling")
 
             # รอให้ pH คงที่ พร้อมตรวจคำสั่งหยุด (settle with stop check)
             if not _settle(exp.SETTLE_MS):
@@ -503,15 +531,14 @@ def run_titration():
             analysis.add_point(volume, ph)
             csv_rows.append((volume, ph, temp))
 
-            # สตรีมทุกค่าไปยังแอป MicroPad (stream every reading to the app)
-            slp.data('volume_ml', volume, unit=exp.UNIT_VOLUME_ML)
+            # สตรีม pH/อุณหภูมิหลังค่านิ่ง (volume ถูกส่งไปแล้วตอนหยดเสร็จ)
             slp.data('pH', ph, unit=exp.UNIT_PH)
             slp.data('temp_c', temp, unit=exp.UNIT_TEMP_C)
 
             # คอนโซล + จอ TFT (console line + live TFT update)
             print(f"step {step:2d}/{total_steps}  V={volume:5.2f} mL  "
                   f"pH={ph:5.2f}  T={temp:.1f}C")
-            ui.live(ph, volume, temp, step, total_steps, "Settling")
+            ui.live(ph, volume, temp, step, total_steps, "Reading OK")
 
             # เตือนใกล้จุดสมมูล (alert when approaching equivalence)
             if not alerted and step >= alert_step:
