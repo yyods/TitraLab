@@ -244,11 +244,14 @@ def dose_one_step(led, pump_time_ms):
     off explicitly afterwards, even if an error occurs.
 
     Args:
-        led: ออบเจ็กต์ LED สถานะ หรือ None (status LED object or None)
+        led: ออบเจ็กต์ LED สถานะ หรือ None — ดับชั่วขณะระหว่างหยด แล้วกลับติดค้าง
+             (status LED; OFF-blink during the dose, back to steady after)
         pump_time_ms: เวลาเปิดปั๊มที่คำนวณจาก flow_rate แล้ว clamp (computed on-time, ms)
     """
+    # ไฟเขียว: ติดค้าง = การทดลองกำลังดำเนิน; "ดับชั่วขณะ" ระหว่างหยด =
+    # จังหวะการหยดมองเห็นได้ (LED steady = running; OFF-blink marks each dose)
     if led is not None:
-        led.value(1)  # ไฟเขียวติด = กำลังหยด (green on = dosing)
+        led.value(0)
     try:
         # เปิดปั๊ม — max_on_ms คือเพดานความปลอดภัยจากเฟิร์มแวร์ (hardware guard)
         slp.set_actuator(exp.PUMP_ENDPOINT, True, max_on_ms=exp.DOSE_MAX_ON_MS)
@@ -257,7 +260,7 @@ def dose_one_step(led, pump_time_ms):
         # ปิดปั๊มอย่างชัดเจนทุกเส้นทาง (explicit OFF on every path)
         slp.set_actuator(exp.PUMP_ENDPOINT, False)
         if led is not None:
-            led.value(0)
+            led.value(1)  # กลับสู่ติดค้าง = ยังทำงานอยู่ (back to steady running)
 
 
 def save_titration_csv(rows, eq, unknown_c, completed):
@@ -483,6 +486,11 @@ def run_titration():
         # --- จุดเริ่มต้น (Step 0): อ่านค่าที่ปริมาตร 0 mL ---
         volume = 0.0
         csv_rows = []                    # (volume, pH, temp) ทุกจุดสำหรับไฟล์ .csv
+        # --- จุดฐาน (baseline): อ่าน pH เริ่มต้นที่ 0.0 mL ก่อนหยดไทแทรนต์ใด ๆ ---
+        # กราฟไทเทรชันทุกเส้นต้องมีจุดเริ่มต้น — ช่วงนี้ "ยังไม่หยด" โดยตั้งใจ
+        print("กำลังอ่านค่าเริ่มต้นที่ 0.0 mL (ยังไม่หยดไทแทรนต์)...")
+        print("Reading the 0.0 mL baseline (no titrant yet)...")
+        ui.live(0.0, 0.0, 0.0, 0, total_steps, "Baseline")
         ph0 = read_ph_safe()
         temp0 = read_temp_c()
         analysis.add_point(volume, ph0)
