@@ -1,9 +1,10 @@
 # ==============================================================================
 # 01_titration_auto.py - บทเรียนไทเทรชันกรด-เบสอัตโนมัติ (Acid-Base Titration)
 # ==============================================================================
-# รันไฟล์นี้จากแอป MicroPad (ปุ่ม Run) หรือ Thonny — แท็บเล็ตเป็นจอแสดงผลหลัก
-# Run this file from the MicroPad app (Run button) or Thonny; the tablet is
-# the display (no on-board TFT menu).
+# รันไฟล์นี้จากแอป MicroPad (ปุ่ม Run) หรือ Thonny — แท็บเล็ตแสดงกราฟเต็ม
+# ส่วนจอ TFT บนบอร์ดแสดงสถานะสด (pH / ปริมาตร / แถบความคืบหน้า / ผลลัพธ์)
+# Run from the MicroPad app (Run button) or Thonny. The tablet shows the full
+# curve; the on-board TFT shows a live dashboard (pH, volume, progress, result).
 #
 # *** ห้ามตั้งชื่อ/คัดลอกไฟล์นี้เป็น /workspace/main.py ***
 # *** เฟิร์มแวร์รัน main.py อัตโนมัติทุกครั้งที่บูต — บทเรียนที่บล็อกยาว
@@ -41,6 +42,143 @@ from titration import (
     load_flow_rate,
     pump_time_ms_for_volume,
 )
+
+# ==============================================================================
+# จอ TFT (optional): ใช้แพตเทิร์นเดียวกับ Week_2 — release_tft() ก่อน SPI(1,...)
+# TFT display (optional): the proven Week_2 pattern — release_tft() before SPI.
+# ถ้าไม่มีจอ/ไดรเวอร์ บทเรียนยังทำงานได้ครบ (headless-safe)
+# ==============================================================================
+try:
+    from machine import Pin, SPI
+    from ili9341 import Display, color565
+    from xglcd_font import XglcdFont
+    _HAS_TFT = True
+except ImportError:
+    _HAS_TFT = False
+
+
+class TitrationUI:
+    """จอแสดงสถานะไทเทรชันบน TFT (320x240) — ทุกเมธอดกันพลาด (never raises).
+
+    On-board titration dashboard. Every method is defensive: a display
+    problem must never stop the chemistry. Thai goes to the Console (the
+    18x24 font is Latin-only); the TFT shows the live numbers big.
+    """
+
+    # สี (colors)
+    C_TITLE = None   # set in __init__ (needs color565)
+    
+    def __init__(self):
+        self.ok = False
+        if not _HAS_TFT:
+            return
+        try:
+            slp.release_tft()          # ปลดจอจากเฟิร์มแวร์ก่อน (yield the TFT)
+            spi = SPI(1, baudrate=40000000, sck=Pin(14), mosi=Pin(13))
+            self.d = Display(spi, dc=Pin(27), cs=Pin(15), rst=Pin(0),
+                             width=320, height=240, rotation=90)
+            import gc
+            gc.collect()               # ฟอนต์เสิร์ฟจากแฟลช (frozen fast-path)
+            self.f = XglcdFont('fonts/EspressoDolce18x24.c', 18, 24)
+            self.white = color565(255, 255, 255)
+            self.cyan = color565(0, 255, 255)
+            self.green = color565(80, 255, 80)
+            self.yellow = color565(255, 210, 40)
+            self.orange = color565(255, 140, 0)
+            self.red = color565(255, 70, 70)
+            self.grey = color565(90, 90, 90)
+            self._status = ""
+            self.ok = True
+        except Exception as e:
+            print("TFT off (headless):", e)
+
+    def _text(self, x, y, msg, color):
+        try:
+            self.d.draw_text(x, y, msg, self.f, color, background=0)
+        except Exception:
+            pass
+
+    def _frame(self, title, color):
+        """ล้างจอ + หัวเรื่อง (clear + title bar)."""
+        try:
+            self.d.clear(hlines=2)
+            self._text(10, 6, title, color)
+            self.d.draw_hline(10, 36, 300, self.grey)
+        except Exception:
+            pass
+
+    def splash(self, slope, intercept, flow):
+        """หน้าเปิด: โชว์ว่ากำลังใช้ค่าสอบเทียบของบอร์ดตัวนี้ (นิสิตทำเอง!)."""
+        if not self.ok:
+            return
+        self._frame("AUTO TITRATION", self.cyan)
+        self._text(10, 50, "Your calibration:", self.white)
+        self._text(10, 82, "pH m=%.5f" % slope, self.green)
+        self._text(10, 112, "   b=%.2f" % intercept, self.green)
+        self._text(10, 144, "flow=%.4f mL/s" % flow, self.green)
+        self._text(10, 200, "MicroPad connected", self.grey)
+
+    def prompt_start(self, timeout_s):
+        if not self.ok:
+            return
+        self._frame("READY", self.green)
+        self._text(10, 70, "PRESS BUTTON 1", self.yellow)
+        self._text(10, 102, "TO START", self.yellow)
+        self._text(10, 160, "(auto-cancel %ds)" % timeout_s, self.grey)
+
+    def live_init(self, total_steps):
+        if not self.ok:
+            return
+        self._frame("TITRATING...", self.cyan)
+        self._text(10, 46, "pH", self.grey)
+        self._text(10, 112, "Vol", self.grey)
+        self._text(170, 112, "T", self.grey)
+        try:  # กรอบแถบความคืบหน้า (progress bar frame)
+            self.d.draw_rectangle(10, 168, 300, 22, self.grey)
+        except Exception:
+            pass
+
+    def live(self, ph, volume, temp, step, total_steps, status):
+        """อัปเดตตัวเลขสด — เขียนทับที่เดิม (draw over, background=black)."""
+        if not self.ok:
+            return
+        self._text(70, 46, "%.2f  " % ph, self.white)
+        self._text(80, 112, "%.1fmL " % volume, self.white)
+        self._text(205, 112, "%.1fC " % temp, self.white)
+        try:  # แถบความคืบหน้า (เติมทีละส่วน — ผ่าน cap ของไดรเวอร์)
+            w = int(296 * step / total_steps)
+            if w > 0:
+                self.d.fill_rectangle(12, 170, w, 18, self.green)
+        except Exception:
+            pass
+        if status != self._status:
+            self._status = status
+            self._text(10, 205, "%-14s" % status, self.yellow)
+
+    def alert(self):
+        if not self.ok:
+            return
+        self._text(10, 205, "NEAR EQUIV.PT!", self.orange)
+
+    def results(self, eq_vol, conc):
+        if not self.ok:
+            return
+        self._frame("COMPLETE!", self.green)
+        if eq_vol is not None:
+            self._text(10, 60, "Eq.pt %.2f mL" % eq_vol, self.white)
+        else:
+            self._text(10, 60, "Eq.pt not found", self.yellow)
+        if conc is not None:
+            self._text(10, 100, "Conc.", self.grey)
+            self._text(10, 132, "%.4f M" % conc, self.cyan)
+        self._text(10, 200, "See app for graph", self.grey)
+
+    def aborted(self, why):
+        if not self.ok:
+            return
+        self._frame("STOPPED", self.red)
+        self._text(10, 70, why, self.white)
+        self._text(10, 200, "Safe: pump OFF", self.green)
 
 # ==============================================================================
 # ขา GPIO สำหรับอุปกรณ์ที่ slp helper ต้องระบุเลขขา (titralab_v1_default)
@@ -177,11 +315,23 @@ def run_titration():
         'dose_volume_ml': exp.DOSE_VOLUME_ML,
     })
 
+    # --- คอนโซล: สรุปค่าสอบเทียบของ "บอร์ดตัวนี้" ให้นิสิตเห็นชัด ๆ ---
+    print("=" * 56)
+    print("ไทเทรชันอัตโนมัติ (Automatic Acid-Base Titration)")
+    print("=" * 56)
+    print("ค่าสอบเทียบของบอร์ดนี้ (This board's calibration):")
+    print(f"  pH:   pH = {ph_slope_m:.6f} x mV + {ph_intercept_b:.4f}")
+    print(f"  Flow: {flow_rate_ml_s:.4f} mL/s  "
+          f"(pump {pump_time_ms} ms/step = {exp.DOSE_VOLUME_ML} mL)")
+    print("-" * 56)
+
     # สร้างออบเจ็กต์ helper จากเฟิร์มแวร์ (Create firmware helper objects)
     # หมายเหตุ: ไม่ใช้ slp.ph_probe() — อ่าน ADC ดิบแล้วใช้สมการสอบเทียบของนิสิตเอง
     # Note: NO slp.ph_probe(); we read RAW ADC and apply the student's fit ourselves.
     led = slp.pin(GREEN_LED_PIN)                # ไฟแสดงสถานะ (output)
     led.value(0)
+    ui = TitrationUI()                          # จอ TFT (headless-safe)
+    ui.splash(ph_slope_m, ph_intercept_b, flow_rate_ml_s)
     buzzer = slp.buzzer(BUZZER_PIN)             # เสียงแจ้งเตือน
     # ESP32 PWM เริ่มทำงานทันทีที่สร้าง (duty ~50%) -> ปิดเสียงทันที ไม่งั้นบี๊บยาว
     # ESP32 PWM starts AUDIBLE on construction (~50% duty) -> silence immediately
@@ -208,14 +358,27 @@ def run_titration():
     # --- เริ่มแบบ local: รอกดปุ่ม BUTTON_1 (optional local start) ---
     if WAIT_FOR_LOCAL_START:
         slp.event('waiting_for_start', {'button': 'BUTTON_1'})
+        print()
+        print(">>> กดปุ่ม 1 (BUTTON_1) บนบอร์ดเพื่อเริ่มไทเทรชัน <<<")
+        print(">>> Press BUTTON 1 on the board to START <<<")
+        print("(ยกเลิกอัตโนมัติใน 30 วินาทีถ้าไม่กด / auto-cancel in 30 s)")
+        ui.prompt_start(30)
         if not wait_for_button(button):
             # หยุดจากแอป หรือหมดเวลารอโดยไม่มีการยืนยัน (ไม่เริ่มเอง)
+            print("ยกเลิก: ไม่มีการยืนยันเริ่ม (No start confirmation — cancelled)")
+            ui.aborted("No start press")
             slp.event('titration_aborted',
                       {'reason': 'no_start_confirmation_or_stop'})
             return {'aborted': True, 'reason': 'no_start_confirmation_or_stop'}
 
     # ไฟเขียวติดค้าง = การทดลองกำลังดำเนิน (green steady = experiment running)
     led.value(1)
+    print()
+    print("เริ่มไทเทรชัน! (Titration started)")
+    print(f"หยดครั้งละ {exp.DOSE_VOLUME_ML} mL สูงสุด {exp.MAX_VOLUME_ML} mL "
+          f"(step ละ ~{(exp.SETTLE_MS // 1000) + 1} วินาที)")
+    print("-" * 56)
+    ui.live_init(total_steps)
 
     def read_temp_c():
         """อ่านอุณหภูมิอย่างปลอดภัย (Read temperature; default 25 C on error)."""
@@ -288,10 +451,18 @@ def run_titration():
             slp.data('pH', ph, unit=exp.UNIT_PH)
             slp.data('temp_c', temp, unit=exp.UNIT_TEMP_C)
 
+            # คอนโซล + จอ TFT (console line + live TFT update)
+            print(f"step {step:2d}/{total_steps}  V={volume:5.2f} mL  "
+                  f"pH={ph:5.2f}  T={temp:.1f}C")
+            ui.live(ph, volume, temp, step, total_steps, "Settling")
+
             # เตือนใกล้จุดสมมูล (alert when approaching equivalence)
             if not alerted and step >= alert_step:
                 alerted = True
                 slp.event('approaching_equivalence', {'volume_ml': volume})
+                print("*** ใกล้จุดสมมูล! สังเกตสีอินดิเคเตอร์ให้ดี ***")
+                print("*** NEAR EQUIVALENCE POINT - watch the indicator! ***")
+                ui.alert()
                 # บี๊บ 3 ครั้งให้ได้ยินชัดในห้องแล็บ (three clear beeps —
                 # a single short chirp is easy to miss over the pump noise)
                 for _ in range(3):
@@ -311,6 +482,8 @@ def run_titration():
         # และ return ไปแล้วตั้งแต่ต้นฟังก์ชัน ก่อนหยดไทแทรนต์ใด ๆ)
         # Any abort reaching here is a user stop; missing-calibration aborts
         # were caught and returned at the top, before any dosing.
+        print("หยุดโดยผู้ใช้ (Stopped by user) — ปั๊มปิดแล้ว (pump OFF)")
+        ui.aborted("User stop")
         slp.event('titration_aborted', {
             'reason': 'stop_requested',
             'points_collected': len(analysis.points),
@@ -340,6 +513,21 @@ def run_titration():
         # อัตราส่วนสโตอิชิโอเมตรีที่ใช้คำนวณ (stoichiometry assumed in C calc)
         'stoichiometric_ratio': exp.STOICHIOMETRIC_RATIO,
     }
+
+    # --- คอนโซล: สรุปผลให้ชั้นเรียน (console result summary) ---
+    print("=" * 56)
+    print("ไทเทรชันเสร็จสิ้น! (TITRATION COMPLETE)")
+    print("=" * 56)
+    if eq:
+        print(f"จุดสมมูล (Equivalence point): {eq[0]:.2f} mL  (pH ~{eq[1]:.2f})")
+    else:
+        print("ไม่พบจุดสมมูลชัดเจน (No clear equivalence point)")
+    if unknown_c is not None:
+        print(f"ความเข้มข้นสารตัวอย่าง (Unknown conc.): {unknown_c:.4f} M")
+    print(f"ปริมาตรรวม (Total volume): {volume:.2f} mL ใน {step} steps")
+    print("ดูกราฟบนแอป MicroPad (Full curve on the MicroPad app)")
+    print("=" * 56)
+    ui.results(eq[0] if eq else None, unknown_c)
 
     # เสียงเสร็จสิ้น 2 โน้ต (two-note completion chime)
     buzzer.tone(1000)
