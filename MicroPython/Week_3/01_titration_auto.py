@@ -410,6 +410,9 @@ def run_titration():
     if WAIT_FOR_LOCAL_START:
         slp.event('waiting_for_start', {'button': 'BUTTON_1'})
         print()
+        print("ตรวจสอบก่อนเริ่ม: ต่อแบตเตอรี่แล้วหรือยัง? (ปั๊มใช้ไฟจากแบตเตอรี่)")
+        print("PRE-FLIGHT: battery connected? The pump draws from the battery —")
+        print("on USB power alone the board browns out and reboots at the first dose.")
         print(">>> กดปุ่ม 1 (BUTTON_1) บนบอร์ดเพื่อเริ่มไทเทรชัน <<<")
         print(">>> Press BUTTON 1 on the board to START <<<")
         print("(ยกเลิกอัตโนมัติใน 30 วินาทีถ้าไม่กด / auto-cancel in 30 s)")
