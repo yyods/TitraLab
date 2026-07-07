@@ -292,9 +292,13 @@ def run_titration():
             if not alerted and step >= alert_step:
                 alerted = True
                 slp.event('approaching_equivalence', {'volume_ml': volume})
-                buzzer.tone(2000)       # บี๊บเสียงสูงเตือน
-                time.sleep_ms(200)
-                buzzer.off()
+                # บี๊บ 3 ครั้งให้ได้ยินชัดในห้องแล็บ (three clear beeps —
+                # a single short chirp is easy to miss over the pump noise)
+                for _ in range(3):
+                    buzzer.tone(2000)
+                    time.sleep_ms(300)
+                    buzzer.off()
+                    time.sleep_ms(150)
 
     finally:
         # --- ความปลอดภัย: ปิดปั๊ม/บัซเซอร์/ไฟ เสมอ (cleanup on every path) ---
