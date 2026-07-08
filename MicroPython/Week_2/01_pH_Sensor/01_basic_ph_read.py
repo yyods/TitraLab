@@ -306,8 +306,8 @@
 # ทางโปรแกรม (Programming):
 # 1. การใช้ ADC (Analog-to-Digital Converter) อ่านค่าจากเซ็นเซอร์ pH
 #    (Using ADC to read pH sensor values)
-# 2. ใช้ Timer และ Interrupt สำหรับการบันทึกข้อมูลอัตโนมัติทุกวินาที
-#    (Using Timer and Interrupt for automatic data recording every second)
+# 2. จัดตารางเวลาใน main loop ด้วย time.ticks_ms สำหรับการบันทึกทุกวินาที
+#    (Scheduling the 1 s automatic recording with time.ticks_ms in the main loop)
 # 3. การบันทึกข้อมูลการทดลองลงไฟล์ CSV สำหรับวิเคราะห์ภายหลัง
 #    (Saving experimental data to CSV file for later analysis)
 # 4. การออกแบบ User Interface ด้วยปุ่มกดและจอแสดงผล
@@ -339,7 +339,7 @@ import gc                                 # รวม heap ก่อนคอม
 gc.collect()                              # กัน MemoryError บน heap ที่แตกเป็นชิ้น
 from ili9341 import Display, color565     # ไดรเวอร์ใหญ่ (~37KB) คอมไพล์ก่อนเสมอ
 from xglcd_font import XglcdFont
-from machine import Pin, SPI, ADC, Timer
+from machine import Pin, SPI, ADC
 import time
 
 # ==============================================================================
@@ -485,17 +485,15 @@ def find_next_file_number():
 recording = False            # สถานะการบันทึก (Recording state)
 data_buffer = []             # บัฟเฟอร์เก็บข้อมูล [(time_s, voltage_mV), ...]
 recording_round = find_next_file_number()  # เริ่มจากหมายเลขที่มีอยู่แล้ว (Start from existing number)
-timer = None                 # Timer object
+next_sample_ms = 0           # เวลาครบกำหนดสุ่มตัวอย่างครั้งถัดไป (next 1 s sample deadline)
 start_time = 0               # เวลาเริ่มบันทึก (Recording start time)
 elapsed_seconds = 0          # เวลาที่ผ่านไป (Elapsed time)
 
-# === ธงสื่อสารระหว่าง callback/IRQ กับ main loop (callback->main-loop flags) ===
-# Timer callback และ button IRQ ทำงานใน soft-IRQ/scheduled context ซึ่ง "ห้าม"
-# ทำงานหนักหรือไม่ปลอดภัย เช่น timer.deinit() ตัวเอง หรือเขียนไฟล์ลง flash
-# จึงให้ callback แค่ "ตั้งธง" แล้วให้ main loop ทำงานจริงใน normal context
-# Timer callback and button IRQ run in soft-IRQ/scheduled context, where unsafe
-# work (self-deinit of the running timer, flash file I/O) can HANG the board.
-# So callbacks only SET flags; the main loop performs the real work safely.
+# === ธงสถานะระหว่างส่วนต่าง ๆ ของ main loop (main-loop state flags) ===
+# ทุกอย่างทำงานใน main loop ตามลำดับ (ปุ่ม -> สุ่มตัวอย่าง -> หยุด/บันทึกไฟล์)
+# ธงทำให้แต่ละส่วนสื่อสารกันชัดเจน และการเขียนไฟล์เกิดในจังหวะที่ปลอดภัยเสมอ
+# Everything runs in the main loop in order (button -> sampling -> stop/save);
+# the flags keep the steps explicit and file writes happen at a safe point.
 stop_pending = False         # ธงขอหยุด+บันทึกไฟล์ (request safe stop + CSV save)
 toggle_pending = False       # ธงขอสลับสถานะจากปุ่ม (button toggle request)
 
@@ -677,18 +675,23 @@ def show_status(status_text, color, hint_text=""):
 # ==============================================================================
 # ฟังก์ชันบันทึกข้อมูล (Recording Functions)
 # ==============================================================================
-def record_data_callback(t):
+def record_data_sample():
     """
-    Callback function สำหรับ Timer - บันทึกค่าทุกวินาที
-    Timer callback - records value every second
+    สุ่มตัวอย่าง 1 จุด — เรียกจาก main loop ทุก ๆ 1 วินาทีขณะบันทึก
+    Record one sample — called from the MAIN LOOP once per second.
 
-    Args:
-        t: Timer object (ไม่ได้ใช้แต่ต้องรับ parameter)
+    ทำไมไม่ใช้ machine.Timer: callback ของ Timer เป็นงาน scheduled ซึ่งบน
+    เส้นทางรันผ่านแอปจะ "เข้าคิวแต่ไม่ถูกประมวลผล" (คิวลึก 8 งานแล้วถูกทิ้ง)
+    ทำให้เวลาค้างที่ 0 วินาที — การจัดตารางใน main loop ด้วย time.ticks_ms
+    ทำงานเหมือนกันทุกเส้นทาง (Thonny / แอป) และไม่มีข้อจำกัด IRQ context
+    Why not machine.Timer: its soft callbacks queue-but-never-run on the app
+    run path (8-deep scheduler queue, then drops) — the clock froze at 0 s.
+    Deadline scheduling in the main loop behaves the same on every run path.
     """
-    global data_buffer, recording, elapsed_seconds, stop_pending
+    global data_buffer, elapsed_seconds, stop_pending
 
-    # ถ้าหยุดแล้ว หรือกำลังรอ main loop หยุดให้ ไม่ต้องสุ่มตัวอย่างเพิ่ม
-    # If not recording, or a stop is already pending the main loop, do nothing.
+    # ถ้าหยุดแล้ว หรือกำลังรอหยุด ไม่ต้องสุ่มตัวอย่างเพิ่ม
+    # If not recording, or a stop is already pending, do nothing.
     if not recording or stop_pending:
         return
 
@@ -714,13 +717,8 @@ def record_data_callback(t):
     # แสดงใน console (Print to console)
     print(f"Time: {elapsed_seconds:3d} s | Voltage: {voltage_mv:7.1f} mV")
 
-    # ตรวจสอบว่าครบเวลาหรือยัง (Check if duration reached)
-    # *** ห้าม*** เรียก stop_recording() ที่นี่ เพราะมันจะ deinit timer ตัวเอง
-    # และเขียนไฟล์ลง flash จาก callback context -> บอร์ดค้าง (HANG)
-    # แทนที่จะหยุดเอง ให้ตั้งธงแล้วปล่อยให้ main loop หยุดอย่างปลอดภัย
-    # Do NOT call stop_recording() here: it would deinit this very timer and
-    # write to flash from callback context -> the board HANGS. Instead, set a
-    # flag and let the main loop perform the safe stop in normal context.
+    # ครบเวลาหรือยัง: ตั้งธงให้บล็อกหยุดใน main loop จัดการ (จุดเขียนไฟล์ที่ปลอดภัย)
+    # Duration reached? Set the flag; the main loop's stop block saves the CSV.
     if elapsed_seconds >= RECORDING_DURATION_S:
         stop_pending = True
 
@@ -729,7 +727,7 @@ def start_recording():
     """
     เริ่มการบันทึกข้อมูล (Start data recording)
     """
-    global recording, data_buffer, start_time, recording_round, timer, elapsed_seconds
+    global recording, data_buffer, start_time, recording_round, next_sample_ms, elapsed_seconds
 
     if recording:
         return  # กำลังบันทึกอยู่แล้ว (Already recording)
@@ -752,33 +750,26 @@ def start_recording():
     print("=" * 50)
 
     # บันทึกข้อมูลแรกที่ t=0 ทันที (Record first data point at t=0 immediately)
-    # Timer callback จะเริ่มทำงานหลังจาก 1 วินาที ดังนั้นต้องบันทึก t=0 ก่อน
-    # Timer callback fires after 1 second, so we must record t=0 first
+    # บันทึกจุดแรกที่ t=0 ทันที แล้วตั้งกำหนดเวลาจุดถัดไปอีก 1 วินาที
+    # Record the t=0 point now, then set the next sample deadline 1 s ahead.
     voltage_mv = read_voltage_mv()
     data_buffer.append((0, voltage_mv))
     show_voltage(voltage_mv)
     print(f"Time:   0 s | Voltage: {voltage_mv:7.1f} mV")
 
-    # เริ่ม Timer (Start timer) - จะบันทึก t=1, t=2, ... ต่อไป
-    timer = Timer(0)
-    timer.init(period=1000, mode=Timer.PERIODIC, callback=record_data_callback)
+    next_sample_ms = time.ticks_add(time.ticks_ms(), 1000)
 
 
 def stop_recording():
     """
     หยุดการบันทึกและบันทึกข้อมูลลงไฟล์ (Stop recording and save to file)
     """
-    global recording, timer
+    global recording
 
     if not recording:
         return  # ไม่ได้กำลังบันทึก (Not recording)
 
     recording = False
-
-    # หยุด Timer (Stop timer)
-    if timer:
-        timer.deinit()
-        timer = None
 
     # บันทึกไฟล์ (Save file)
     save_data_to_csv()
@@ -972,7 +963,13 @@ try:
         if stop_pending:
             stop_pending = False
             if recording:
-                stop_recording()  # timer.deinit() + save CSV ใน normal context
+                stop_recording()  # save CSV (main context ปลอดภัยเสมอ)
+
+        # สุ่มตัวอย่างขณะบันทึก: ครบกำหนด 1 วินาทีหรือยัง (drift-free ด้วย ticks_add)
+        # While recording: take the 1 s sample when its deadline arrives.
+        if recording and time.ticks_diff(time.ticks_ms(), next_sample_ms) >= 0:
+            next_sample_ms = time.ticks_add(next_sample_ms, 1000)
+            record_data_sample()
 
         # อ่านและแสดงค่าแรงดันแบบ real-time ทุก ~200 ms (throttled display)
         display_tick += 1
@@ -991,9 +988,4 @@ except KeyboardInterrupt:
     print("หยุดโปรแกรม (Program stopped by user)")
 
 finally:
-    # ทำความสะอาด resources (Cleanup resources)
-    if timer:
-        timer.deinit()
-        print("Timer released")
-
     print("Cleanup complete")
