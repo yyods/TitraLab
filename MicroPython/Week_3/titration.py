@@ -138,7 +138,27 @@ def load_flow_rate(path=None):
     raise RuntimeError('flow_calibration_file_malformed')
 
 
-def pump_time_ms_for_volume(volume_ml, flow_rate_ml_s, max_on_ms):
+def load_burst_deficit(path=None):
+    """อ่านช่วงเสียเปล่าต่อหยด (burst_deficit_ml) จากไฟล์สอบเทียบ ถ้ามี
+
+    ค่านี้มาจาก Week_2 04_flow_stepwise_finetune.py (การปรับละเอียดแบบ
+    stop-flow) — ไม่มี/ไฟล์เก่า -> 0.0 (โมเดลไหลต่อเนื่องเดิม, เข้ากันได้ย้อนหลัง)
+    Optional stop-flow per-burst start-up deficit; absent -> 0.0 (legacy).
+    """
+    cal_path = path or '/workspace/data/flow_calibration.txt'
+    try:
+        with open(cal_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('burst_deficit_ml='):
+                    value = float(line.split('=')[1])
+                    return value if value > 0 else 0.0
+    except (OSError, ValueError):
+        pass
+    return 0.0
+
+
+def pump_time_ms_for_volume(volume_ml, flow_rate_ml_s, max_on_ms, burst_deficit_ml=0.0):
     """
     คำนวณเวลาเปิดปั๊ม (ms) จากปริมาตรเป้าหมายและอัตราการไหลที่สอบเทียบ
     Compute pump-on time (ms) from target volume and the calibrated flow rate.
@@ -160,6 +180,10 @@ def pump_time_ms_for_volume(volume_ml, flow_rate_ml_s, max_on_ms):
         int: เวลาเปิดปั๊ม (ms) ในช่วง 1..max_on_ms
     """
     # ป้องกันหารด้วยศูนย์ (guard divide-by-zero; loader already enforces > 0)
+    # ชดเชย stop-flow: ทุกการสตาร์ทปั๊มมีช่วงเสียเปล่า (มอเตอร์หมุนขึ้น +
+    # soft-start) — เติมปริมาตรชดเชยเข้าไปในเป้าของหยดนี้ (two-parameter model:
+    # V(t) = flow x t - deficit  ->  t = (V + deficit) / flow)
+    volume_ml = volume_ml + (burst_deficit_ml if burst_deficit_ml > 0 else 0.0)
     if flow_rate_ml_s <= 0:
         return max_on_ms
     pump_ms = int(round(volume_ml / flow_rate_ml_s * 1000))

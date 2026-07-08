@@ -128,7 +128,7 @@ SETTLE_MS = 10000             # รอให้ pH คงที่หลัง�
 # เกินค่านี้ เผื่อกรณีไฟล์สอบเทียบให้ flow_rate ต่ำผิดปกติ (เช่น ปั๊มเกือบตัน)
 # Always passed as max_on_ms AND used to clamp the computed time, in case a bad
 # calibration file yields an abnormally low flow rate (e.g. a nearly clogged pump).
-DOSE_MAX_ON_MS = 1500         # ปั๊มจะถูกตัด/clamp ไม่เกินค่านี้ (firmware guard ceiling)
+DOSE_MAX_ON_MS = 1800         # ปั๊มจะถูกตัด/clamp ไม่เกินค่านี้ (firmware guard ceiling)
 
 # ==============================================================================
 # การหาจุดสมมูล / การเตือน (Equivalence detection / alerts)

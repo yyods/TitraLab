@@ -145,6 +145,29 @@ def load_flow_rate():
 # โหลดค่า flow rate (Load flow rate)
 FLOW_RATE = load_flow_rate()  # mL/s
 
+
+def load_burst_deficit():
+    """โหลดช่วงเสียเปล่าต่อหยด (burst_deficit_ml) จากไฟล์สอบเทียบ ถ้ามี
+    Load the per-burst start-up deficit measured by 04_flow_stepwise_finetune.py.
+    ไม่มีค่า -> 0.0 (โมเดลไหลต่อเนื่องเดิม / legacy continuous model)
+    """
+    try:
+        with open('/workspace/data/flow_calibration.txt', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('burst_deficit_ml='):
+                    value = float(line.split('=')[1])
+                    if value > 0:
+                        print(f"โหลด burst_deficit จากไฟล์: {value * 1000:.1f} uL/หยด (stop-flow)")
+                        return value
+    except (OSError, ValueError):
+        pass
+    print("ไม่มีค่า stop-flow deficit - รัน 04_flow_stepwise_finetune.py เพื่อความแม่นยำ")
+    return 0.0
+
+
+BURST_DEFICIT = load_burst_deficit()  # mL ต่อการสตาร์ทปั๊ม 1 ครั้ง
+
 # ค่าเป้าหมายสำหรับการตรวจสอบ (Target values for validation)
 TARGET_VOLUME = 5.0           # ปริมาตรเป้าหมาย (mL)
 DUTY_CYCLE_PERCENT = 100      # Duty cycle (%)
@@ -219,7 +242,10 @@ def pump_intermittent(target_volume_ml, pump_time_s, pause_time_s):
     duty_value = int((DUTY_CYCLE_PERCENT / 100) * 1023)
 
     # คำนวณปริมาตรต่อรอบ (Calculate volume per cycle)
-    volume_per_cycle = FLOW_RATE * pump_time_s
+    # โมเดล stop-flow: V = flow x t - deficit (ช่วงเสียเปล่าตอนสตาร์ทปั๊ม)
+    volume_per_cycle = FLOW_RATE * pump_time_s - BURST_DEFICIT
+    if volume_per_cycle <= 0:
+        volume_per_cycle = FLOW_RATE * pump_time_s
 
     print("\n" + "=" * 60)
     print("  เริ่มปั๊มแบบเป็นช่วง (INTERMITTENT PUMPING STARTED)")
@@ -253,7 +279,7 @@ def pump_intermittent(target_volume_ml, pump_time_s, pause_time_s):
         # ตรวจสอบรอบสุดท้าย (Check if last cycle)
         if remaining < volume_per_cycle:
             # ปรับเวลาปั๊มสำหรับรอบสุดท้าย (Adjust pump time for last cycle)
-            adjusted_pump_time = remaining / FLOW_RATE
+            adjusted_pump_time = (remaining + BURST_DEFICIT) / FLOW_RATE
             print(f"  [รอบสุดท้าย] ปั๊ม {adjusted_pump_time:.2f} วินาที")
         else:
             adjusted_pump_time = pump_time_s
@@ -270,7 +296,10 @@ def pump_intermittent(target_volume_ml, pump_time_s, pause_time_s):
         led_red.off()
 
         # อัพเดตค่า (Update values)
-        volume_pumped = FLOW_RATE * adjusted_pump_time
+        # ปริมาตรที่ส่งจริงตามโมเดล stop-flow (delivered per burst)
+        volume_pumped = FLOW_RATE * adjusted_pump_time - BURST_DEFICIT
+        if volume_pumped < 0:
+            volume_pumped = 0.0
         total_volume += volume_pumped
         total_pump_time += adjusted_pump_time
 

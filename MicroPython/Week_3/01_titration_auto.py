@@ -39,6 +39,7 @@ from titration import (
     TitrationAnalysis,
     read_ph_median,
     load_ph_calibration,
+    load_burst_deficit,
     load_flow_rate,
     pump_time_ms_for_volume,
 )
@@ -355,16 +356,24 @@ def run_titration():
         })
         return {'aborted': True, 'reason': 'flow_calibration_missing'}
 
+    # ชดเชย stop-flow (ถ้าสอบเทียบขั้นที่ 2 แล้ว): ทุกการสตาร์ทปั๊มมีช่วงเสียเปล่า
+    # (มอเตอร์หมุนขึ้น + soft-start) — Week_2 04_flow_stepwise_finetune.py วัดค่านี้
+    # ไว้เป็น burst_deficit_ml; ไม่มี -> 0.0 (โมเดลเดิม)
+    burst_deficit_ml = load_burst_deficit()
+
     # เวลาเปิดปั๊มต่อ 1 step คำนวณจากอัตราการไหลที่สอบเทียบ (closed-loop on volume)
-    # clamp ด้วย DOSE_MAX_ON_MS เพื่อความปลอดภัย (computed + clamped pump-on time)
+    # + ชดเชยช่วงเสียเปล่าต่อหยด; clamp ด้วย DOSE_MAX_ON_MS เพื่อความปลอดภัย
     pump_time_ms = pump_time_ms_for_volume(
-        exp.DOSE_VOLUME_ML, flow_rate_ml_s, exp.DOSE_MAX_ON_MS)
+        exp.DOSE_VOLUME_ML, flow_rate_ml_s, exp.DOSE_MAX_ON_MS,
+        burst_deficit_ml=burst_deficit_ml)
 
     # ปริมาตรที่ "ส่งจริง" ต่อ step จากเวลาปั๊มจริง (delivered volume per step).
     # ปกติ = DOSE_VOLUME_ML แต่ถ้าเวลาปั๊มถูก clamp ที่เพดานความปลอดภัย
     # (ปั๊มช้า/flow ต่ำ) ปริมาตรจริงจะน้อยกว่า — ต้องนับตามจริง ไม่งั้นแกนปริมาตร
     # ของกราฟทั้งเส้นคลาดโดยไม่มีใครรู้ (silent under-dosing skews the volume axis)
-    dose_ml_actual = flow_rate_ml_s * (pump_time_ms / 1000.0)
+    dose_ml_actual = flow_rate_ml_s * (pump_time_ms / 1000.0) - burst_deficit_ml
+    if dose_ml_actual < 0:
+        dose_ml_actual = 0.0
     if pump_time_ms >= exp.DOSE_MAX_ON_MS and dose_ml_actual < exp.DOSE_VOLUME_ML * 0.99:
         print("!" * 56)
         print(f"คำเตือน: ปั๊มช้า — เวลาเปิดถูกจำกัดที่ {exp.DOSE_MAX_ON_MS} ms")
@@ -383,6 +392,7 @@ def run_titration():
         'ph_slope_m': ph_slope_m,
         'ph_intercept_b': ph_intercept_b,
         'flow_rate_ml_s': flow_rate_ml_s,
+        'burst_deficit_ml': burst_deficit_ml,
         'pump_time_ms': pump_time_ms,
         'dose_volume_ml': exp.DOSE_VOLUME_ML,
     })
@@ -395,6 +405,12 @@ def run_titration():
     print(f"  pH:   pH = {ph_slope_m:.6f} x mV + {ph_intercept_b:.4f}")
     print(f"  Flow: {flow_rate_ml_s:.4f} mL/s  "
           f"(pump {pump_time_ms} ms/step = {exp.DOSE_VOLUME_ML} mL)")
+    if burst_deficit_ml > 0:
+        print(f"  Stop-flow: ชดเชย {burst_deficit_ml * 1000:.1f} uL/หยด "
+              f"(จาก Week_2 04_flow_stepwise_finetune)")
+    else:
+        print("  Stop-flow: ยังไม่ปรับละเอียด — แนะนำรัน Week_2")
+        print("  04_flow_stepwise_finetune.py เพื่อความแม่นของปริมาตร")
     print("-" * 56)
 
     # สร้างออบเจ็กต์ helper จากเฟิร์มแวร์ (Create firmware helper objects)
