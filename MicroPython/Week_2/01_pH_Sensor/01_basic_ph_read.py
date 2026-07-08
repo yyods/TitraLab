@@ -403,7 +403,8 @@ adc.atten(ADC.ATTN_11DB)
 # ==============================================================================
 # หมายเหตุ: GPIO34 เป็น input-only pin ไม่รองรับ internal pull-up/pull-down
 # Note: GPIO34 is input-only, does NOT support internal pull-up/pull-down
-# บอร์ด TitraLab มี external pull-up ผ่าน Schmitt trigger (74HC14D) แล้ว
+# ระดับสัญญาณมาจากวงจรปุ่มภายนอก (74HC14D) — วัดจริงบนบอร์ด: พัก=0 กด=1
+# (active-high) แต่โปรแกรมอ่านระดับพักจริงตอนเริ่ม ไม่ล็อกขั้ว (ดู poll_button)
 button_1 = Pin(MY_BTN1_PIN, Pin.IN)
 
 # ==============================================================================
@@ -841,29 +842,46 @@ last_button_time = 0
 DEBOUNCE_MS = 300  # หน่วงเวลา 300 ms เพื่อป้องกันการกดซ้ำ
 
 
-# สถานะปุ่มรอบก่อนหน้า สำหรับตรวจ "ขอบขาลง" (previous state for edge detection)
-last_button_state = 1
+# ระดับ "ปล่อยปุ่ม" ของสายสัญญาณ อ่านจริงตอนเริ่มโปรแกรม (measured idle level)
+# GPIO34 ไม่มี pull-up/pull-down ภายใน — ระดับพักมาจากวงจรภายนอกล้วน ๆ และ
+# วัดจริงบนบอร์ดนี้: พัก = 0, กด = 1 (active-HIGH เหมือน Week_3) แต่โค้ดนี้
+# ไม่ล็อกขั้ว: อ่านระดับพักจริง แล้วถือ "การเปลี่ยนไปจากระดับพัก" เป็นการกด
+# GPIO34 has NO internal pulls — the idle level comes from the external
+# circuit alone (measured on this board: idle=0, pressed=1, matching the
+# Week_3 titration). This code does NOT hard-code polarity: it samples the
+# real idle level at startup and treats a DEPARTURE from idle as the press,
+# so it works on any unit of the fleet regardless of wiring/power path.
+button_idle_level = None
+last_button_pressed = False
 
 
 def poll_button():
     """
-    ตรวจปุ่มแบบ polling: ขอบขาลง 1 -> 0 = กด (active-low ผ่าน 74HC14D)
-    Poll BUTTON_1: a 1 -> 0 falling edge = press (active-low via 74HC14D).
-
-    ใช้ polling แทน Pin.irq เพราะเป็นแพทเทิร์นเดียวกับบทเรียนอื่นทุกไฟล์
-    (02/03/Week_3) ที่พิสูจน์แล้วว่าทำงานบนบอร์ดนี้ — ไม่พึ่งกลไก interrupt
-    Polling matches every other lesson (proven on this board); no IRQ needed.
-    ตั้งธง toggle_pending ให้ main loop ทำงานต่อ (debounce 300 ms รวมอยู่ด้วย)
+    ตรวจปุ่มแบบ polling (แพทเทิร์นเดียวกับ 02/03/Week_3 — ไม่ใช้ interrupt):
+    กด = ค่าที่อ่านต่างจากระดับพัก ยืนยันซ้ำ 2 ครั้งห่าง 15 ms กัน noise
+    Poll BUTTON_1 (same pattern as every working lesson; no IRQ):
+    press = value differs from the sampled idle level, confirmed by a
+    second read 15 ms later; 300 ms debounce; sets toggle_pending.
     """
-    global last_button_time, toggle_pending, last_button_state
+    global last_button_time, toggle_pending
+    global button_idle_level, last_button_pressed
 
-    now_value = button_1.value()
-    if last_button_state == 1 and now_value == 0:
-        current_time = time.ticks_ms()
-        if time.ticks_diff(current_time, last_button_time) >= DEBOUNCE_MS:
-            last_button_time = current_time
-            toggle_pending = True
-    last_button_state = now_value
+    if button_idle_level is None:
+        # อ่านระดับพักครั้งแรก (สมมุติว่ายังไม่มีใครกดตอนโปรแกรมเริ่ม)
+        button_idle_level = button_1.value()
+        return
+
+    pressed = button_1.value() != button_idle_level
+    if pressed and not last_button_pressed:
+        time.sleep_ms(15)                    # ยืนยันซ้ำ (confirm re-read)
+        if button_1.value() != button_idle_level:
+            current_time = time.ticks_ms()
+            if time.ticks_diff(current_time, last_button_time) >= DEBOUNCE_MS:
+                last_button_time = current_time
+                toggle_pending = True
+        else:
+            pressed = False                  # สัญญาณรบกวน (noise) — ไม่นับ
+    last_button_pressed = pressed
 
 # ==============================================================================
 # โปรแกรมหลัก (Main Program)
