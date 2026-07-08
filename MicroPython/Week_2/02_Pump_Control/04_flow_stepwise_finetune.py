@@ -40,7 +40,7 @@ import scilabpro as slp
 CAL_PATH = '/workspace/data/flow_calibration.txt'
 PUMP_ENDPOINT = 'CONTROL_1'
 DOSE_VOLUME_ML = 0.2      # ปริมาตรต่อหยดเหมือน Week_3 (same as the titration)
-N_BURSTS = 20             # จำนวนหยด -> คาดหวังรวม 4.0 mL (expected 4.0 mL)
+N_BURSTS = 25             # จำนวนหยด -> คาดหวังรวม 5.0 mL (expected 5.0 mL)
 PAUSE_MS = 1500           # หยุดระหว่างหยด (pause between bursts)
 MAX_ON_MS = 1800          # เพดานความปลอดภัยต่อหยด (per-burst safety ceiling)
 
