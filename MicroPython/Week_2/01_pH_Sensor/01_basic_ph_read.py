@@ -841,34 +841,29 @@ last_button_time = 0
 DEBOUNCE_MS = 300  # หน่วงเวลา 300 ms เพื่อป้องกันการกดซ้ำ
 
 
-def button_callback(pin):
+# สถานะปุ่มรอบก่อนหน้า สำหรับตรวจ "ขอบขาลง" (previous state for edge detection)
+last_button_state = 1
+
+
+def poll_button():
     """
-    Callback function เมื่อกดปุ่ม (Button press callback)
+    ตรวจปุ่มแบบ polling: ขอบขาลง 1 -> 0 = กด (active-low ผ่าน 74HC14D)
+    Poll BUTTON_1: a 1 -> 0 falling edge = press (active-low via 74HC14D).
 
-    จัดการ debounce แล้ว "ตั้งธง" ขอสลับสถานะ (ไม่ทำงานหนักใน IRQ context)
-    Handle debounce, then SET a flag to request a toggle (no heavy work in IRQ).
-
-    Args:
-        pin: Pin object ที่เรียก callback
+    ใช้ polling แทน Pin.irq เพราะเป็นแพทเทิร์นเดียวกับบทเรียนอื่นทุกไฟล์
+    (02/03/Week_3) ที่พิสูจน์แล้วว่าทำงานบนบอร์ดนี้ — ไม่พึ่งกลไก interrupt
+    Polling matches every other lesson (proven on this board); no IRQ needed.
+    ตั้งธง toggle_pending ให้ main loop ทำงานต่อ (debounce 300 ms รวมอยู่ด้วย)
     """
-    global last_button_time, toggle_pending
+    global last_button_time, toggle_pending, last_button_state
 
-    current_time = time.ticks_ms()
-
-    # ตรวจสอบ debounce (Check debounce)
-    if time.ticks_diff(current_time, last_button_time) < DEBOUNCE_MS:
-        return
-
-    last_button_time = current_time
-
-    # ตรวจสอบว่าปุ่มถูกกด (Check if button is pressed)
-    # หมายเหตุ: วงจร Schmitt trigger (74HC14D) ทำให้สัญญาณเป็น active-low
-    # *** ห้าม *** เรียก start_recording()/stop_recording() ที่นี่ เพราะ stop
-    # จะ deinit timer + เขียนไฟล์จาก IRQ context -> ค้าง  เพียงตั้งธงให้ main loop
-    # Do NOT call start/stop here: stop would deinit the timer + write a file
-    # from IRQ context -> hang. Just flag the main loop to act in normal context.
-    if pin.value() == 0:
-        toggle_pending = True
+    now_value = button_1.value()
+    if last_button_state == 1 and now_value == 0:
+        current_time = time.ticks_ms()
+        if time.ticks_diff(current_time, last_button_time) >= DEBOUNCE_MS:
+            last_button_time = current_time
+            toggle_pending = True
+    last_button_state = now_value
 
 # ==============================================================================
 # โปรแกรมหลัก (Main Program)
@@ -897,8 +892,8 @@ print("")
 print("=" * 60)
 print("")
 
-# ตั้งค่า interrupt สำหรับปุ่มกด (Setup button interrupt)
-button_1.irq(trigger=Pin.IRQ_FALLING, handler=button_callback)
+# ปุ่มใช้ polling ใน main loop (ดู poll_button) — ไม่ตั้ง interrupt
+# Button is polled in the main loop (see poll_button) — no IRQ attached.
 
 # ล้างหน้าจอและวาดหัวข้อ (Clear display and draw header)
 # บอร์ดหน่วยความจำตึง: รวม heap ก่อน แล้วล้างจอด้วย chunk เล็ก (hlines=2 -> 1280 B)
@@ -915,6 +910,8 @@ show_time(0, RECORDING_DURATION_S)
 # ==============================================================================
 # Main Loop - อัปเดตหน้าจอ (Main Loop - Update display)
 # ==============================================================================
+display_tick = 0  # ตัวนับสำหรับอัปเดตจอทุก ~200 ms (display throttle)
+
 try:
     while True:
         # ตรวจคำสั่งหยุดจากแอป Student/Instructor (check for an app stop request)
@@ -923,6 +920,9 @@ try:
             if recording:
                 stop_recording()  # ปิด Timer + บันทึกไฟล์ก่อนออก (flush before exit)
             break
+
+        # อ่านปุ่มทุกรอบ (poll the button every pass — 50 ms grid)
+        poll_button()
 
         # ----------------------------------------------------------------------
         # จัดการธงจากปุ่ม (handle button toggle flag) - ทำใน normal context
@@ -956,15 +956,17 @@ try:
             if recording:
                 stop_recording()  # timer.deinit() + save CSV ใน normal context
 
-        # อ่านและแสดงค่าแรงดันแบบ real-time (Read and show voltage in real-time)
-        if not recording:
+        # อ่านและแสดงค่าแรงดันแบบ real-time ทุก ~200 ms (throttled display)
+        display_tick += 1
+        if not recording and display_tick >= 4:
+            display_tick = 0
             voltage_mv = read_voltage_mv()
             show_voltage(voltage_mv)
 
-        # หน่วงเวลาเล็กน้อย (Small delay)
-        # ทำให้ auto-stop เกิดขึ้นภายใน ~200 ms หลังครบ 45 วินาที (acceptable)
-        # Means auto-stop fires within ~200 ms of t=45 (acceptable).
-        time.sleep_ms(200)
+        # หน่วง 50 ms: สั้นพอไม่พลาดการกดปุ่ม (มนุษย์กด >=100 ms) และ auto-stop
+        # ยังเกิดภายใน ~50 ms หลังครบ 45 วินาที
+        # 50 ms grid: short enough to never miss a human press (>=100 ms).
+        time.sleep_ms(50)
 
 except KeyboardInterrupt:
     print("")
@@ -975,9 +977,5 @@ finally:
     if timer:
         timer.deinit()
         print("Timer released")
-
-    # หยุด interrupt (Disable interrupt)
-    button_1.irq(handler=None)
-    print("Button interrupt disabled")
 
     print("Cleanup complete")
