@@ -56,7 +56,7 @@
 │   │ LED/Button  │         │ pH Sensor   │         │ Titration   │  │
 │   │ ADC/PWM     │         │ Pump Flow   │         │ Loop        │  │
 │   │ Display     │         │ OOP ขั้นกลาง │         │ Data Log    │  │
-│   │ OOP พื้นฐาน  │         │ Inheritance │         │ Menu System │  │
+│   │ OOP พื้นฐาน  │         │ Inheritance │         │ MicroPad    │  │
 │   └─────────────┘         └─────────────┘         └─────────────┘  │
 │                                                                     │
 │   ความซับซ้อน: ง่าย ─────────────────────────────────────► ยาก    │
@@ -457,7 +457,7 @@ Thonny เป็น IDE (Integrated Development Environment/สภาพแว�
 | Button 3 | 39 | Input-only, ใช้ external pull-down |
 | **เซ็นเซอร์ (Sensors)** | | |
 | DS18B20 เซ็นเซอร์อุณหภูมิ | 16 | OneWire protocol |
-| pH Sensor (ADC) | 25 | อ่านค่าแรงดันจากหัววัด pH |
+| pH Sensor (ADC) | 32 | อ่านค่าแรงดันจากหัววัด pH (ADC1 — ใช้ขาร่วมกับ POT1, ห้ามใช้ GPIO25) |
 | **Potentiometer (ตัวต้านทานปรับค่า)** | | |
 | POT1 | 32 | ADC input |
 | POT2 | 33 | ADC input |
@@ -515,9 +515,9 @@ Voltage (V) = (ADC value / 4095) x 3.3V
 
 #### เชื่อมโยงกับเคมี: เซ็นเซอร์ pH (Chemistry Connection: pH Sensor)
 
-เซ็นเซอร์ pH ของ TitraLab เชื่อมต่อที่ GPIO25 และส่งออกแรงดันไฟฟ้าตามค่า pH ของสารละลาย โดยอิงตาม**สมการ Nernst**:
+เซ็นเซอร์ pH ของ TitraLab เชื่อมต่อที่ GPIO32 (ADC1) และส่งออกแรงดันไฟฟ้าตามค่า pH ของสารละลาย โดยอิงตาม**สมการ Nernst**:
 
-The TitraLab pH sensor connects to GPIO25 and outputs voltage proportional to the solution's pH, based on the **Nernst equation**:
+The TitraLab pH sensor connects to GPIO32 (ADC1) and outputs voltage proportional to the solution's pH, based on the **Nernst equation**:
 
 ```
 E = E0 - (2.303RT/nF) x pH
@@ -703,8 +703,8 @@ In Week 2, students will apply ADC and PWM fundamentals to control the actual Ti
 ### ADC -> เซ็นเซอร์ pH (ADC -> pH Sensor)
 
 ```
-[สารละลาย]  ->  [เซ็นเซอร์ pH]  ->  [ADC GPIO25]  ->  [คำนวณ pH]
-[Solution]  ->  [pH Sensor]     ->  [ADC GPIO25]  ->  [Calculate pH]
+[สารละลาย]  ->  [เซ็นเซอร์ pH]  ->  [ADC GPIO32]  ->  [คำนวณ pH]
+[Solution]  ->  [pH Sensor]     ->  [ADC GPIO32]  ->  [Calculate pH]
 
 สมการแปลงค่า (Conversion Equation):
 pH = slope x voltage + intercept
@@ -1018,34 +1018,25 @@ In Week 3, students integrate all knowledge to build a **complete automated titr
 
 ```
 Week_3/
-├── main.py                 # จุดเริ่มต้นโปรแกรม
-├── config.py               # ค่าคงที่ระบบ (GPIO pins, etc.)
-├── hardware/               # Hardware abstraction layer
-│   ├── ph_sensor.py        # คลาส PHSensor (ADC จาก Week 1)
-│   ├── pump.py             # คลาส Pump (PWM จาก Week 1)
-│   ├── temp_sensor.py      # คลาส TempSensor (DS18B20)
-│   └── display.py          # คลาส Display (TFT)
-├── core/                   # Business logic
-│   ├── titration.py        # ลูปไทเทรตอัตโนมัติ
-│   ├── calibrator.py       # สอบเทียบ pH และ flow rate
-│   └── data_manager.py     # บันทึกข้อมูลลง SD Card
-├── modes/                  # โหมดการทำงาน (State pattern)
-│   ├── mode_titration.py   # โหมดไทเทรต
-│   └── mode_calibrate_*.py # โหมดสอบเทียบ
-└── ui/                     # User interface
-    └── menu.py             # ระบบเมนู
+├── 01_titration_auto.py    # โปรแกรมหลัก — ลูปไทเทรตอัตโนมัติ + บันทึกข้อมูล
+│                           #   (ห้ามคัดลอกเป็น main.py! เฟิร์มแวร์รัน main.py อัตโนมัติตอนบูต)
+├── titration.py            # โมดูลเคมี — โหลดค่าสอบเทียบ + ตรวจจับจุดสมมูล
+├── experiment.py           # ค่าคงที่การทดลอง (ปริมาตรต่อโดส, ความเข้มข้น ฯลฯ)
+├── USER_MANUAL.md          # คู่มือผู้ใช้
+└── LAB_DIRECTION.md        # คู่มือปฏิบัติการ
 ```
+
+ไดรเวอร์ฮาร์ดแวร์ (ADC / PWM / OneWire) อยู่ในเฟิร์มแวร์ MicroPad ของบอร์ด — เรียกใช้ผ่าน `import scilabpro as slp` ส่วนการแสดงผลหลักอยู่บนแอป MicroPad บนแท็บเล็ตผ่าน BLE (จอ TFT บนบอร์ดแสดง dashboard ประกอบ)
 
 ### การนำความรู้ Week 1 ไปใช้ใน Week 3 (Week 1 Knowledge in Week 3)
 
 | Week 1 (พื้นฐาน) | Week 3 (ระบบเต็มรูปแบบ) |
 |------------------|------------------------|
-| LED Class | `hardware/leds.py` - แสดงสถานะระบบ |
-| Button Class | `hardware/buttons.py` - ควบคุมเมนู/การไทเทรต |
-| ADC Basics | `hardware/ph_sensor.py` - อ่านและแปลงค่า pH |
-| PWM Basics | `hardware/pump.py` - ควบคุมปั๊มอัตโนมัติ |
-| TFT Display | `hardware/display.py` - แสดงผลและกราฟ |
-| OOP (Class/Object) | ทุกโมดูลใช้ OOP - Hardware Abstraction |
+| ADC Basics | `titration.py` - อ่านค่า pH ผ่าน `slp.read_analog('PH')` แล้วแปลง mV เป็น pH ด้วยค่าสอบเทียบ |
+| PWM Basics | `01_titration_auto.py` - สั่งปั๊มจ่ายไทแทรนต์ผ่าน `slp.set_actuator('CONTROL_1', ...)` |
+| DS18B20 | `slp.ds18b20(16)` - อ่านอุณหภูมิระหว่างไทเทรต |
+| TFT Display | คลาส `TitrationUI` ใน `01_titration_auto.py` - dashboard แสดงผลสด |
+| OOP (Class/Object) | คลาส `TitrationUI` และการแยกโมดูล `titration.py` + `experiment.py` |
 
 ---
 

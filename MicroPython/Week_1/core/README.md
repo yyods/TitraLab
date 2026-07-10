@@ -76,7 +76,7 @@ This `core/` folder contains core teaching files for Week 1, designed as a 3-hou
 | Component | GPIO | Description |
 |-----------|------|-------------|
 | Potentiometer | GPIO32 | จำลองสัญญาณ pH (ฝึก) |
-| pH Sensor | GPIO25 | ใช้จริงใน Week 3 |
+| pH Sensor | GPIO32 | ใช้จริงใน Week 3 (ADC1 — ใช้ขาเดียวกับ Potentiometer ทีละอย่าง, ห้ามใช้ GPIO25) |
 
 **เชื่อมโยงเคมี:** pH sensor ส่งแรงดัน analog ตามสมการ Nernst - ต้องใช้ ADC อ่านค่า
 
@@ -312,7 +312,7 @@ LED Green:    GPIO 4   (Output/PWM - 01, 04)
 Button 1-3:   GPIO 34, 35, 39 (Input-only - 02)
 DS18B20:      GPIO 16  (OneWire - 06)
 Potentiometer: GPIO 32 (ADC - 03, 05)
-pH Sensor:    GPIO 25  (ADC - Week 3)
+pH Sensor:    GPIO 32  (ADC1 - Week 3, ใช้ขาเดียวกับ Potentiometer ทีละอย่าง)
 Pump:         GPIO 21  (PWM - 04)
 TFT:          SPI1 (GPIO 14,13,27,15,0 - 07)
 ```

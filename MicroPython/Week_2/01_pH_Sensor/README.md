@@ -205,13 +205,13 @@ E (mV) = m x pH + b
                v
     ┌─────────────────────┐
     │ 5. บันทึกไฟล์        │
-    │    data_calibrate   │
+    │    ph_calibration   │
     │    .txt             │
     └─────────────────────┘
 ```
 
 **ผลลัพธ์:**
-- ไฟล์ `data_calibrate.txt` ที่มี slope, intercept, R-squared, อุณหภูมิ
+- ไฟล์ `/workspace/data/ph_calibration.txt` ที่มี slope, intercept, R-squared, อุณหภูมิ
 - ไฟล์ `calibration_log.txt` รายละเอียดการสอบเทียบ
 
 **เกณฑ์ความสำเร็จ:**
@@ -304,13 +304,13 @@ def linear_regression(x_values, y_values):
 ```
   ┌─────────────────────┐
   │ 01_pH_Sensor/       │     ไฟล์ที่ได้:
-  │ (ปัจจุบัน)           │ --> data_calibrate.txt
+  │ (ปัจจุบัน)           │ --> ph_calibration.txt
   └──────────┬──────────┘
              │
              v
   ┌─────────────────────┐
   │ 02_Pump_Control/    │     สอบเทียบ Flow Rate
-  │ (ถัดไปใน Week 2)    │ --> data_flowrate.txt
+  │ (ถัดไปใน Week 2)    │ --> flow_calibration.txt
   └──────────┬──────────┘
              │
              v
@@ -321,7 +321,7 @@ def linear_regression(x_values, y_values):
 ```
 
 1. **Week 2 ต่อ:** ไปที่ `../02_Pump_Control/` เพื่อสอบเทียบปั๊ม
-2. **Week 3:** ใช้ค่าจาก `data_calibrate.txt` ในระบบไทเทรตอัตโนมัติ
+2. **Week 3:** ใช้ค่าจาก `/workspace/data/ph_calibration.txt` ในระบบไทเทรตอัตโนมัติ
 
 ---
 

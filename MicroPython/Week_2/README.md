@@ -45,8 +45,8 @@
 
 | ผลลัพธ์ | ไฟล์ที่ได้ | เกณฑ์ผ่าน |
 |---------|-----------|-----------|
-| ค่าสอบเทียบ pH | `data_calibrate.txt` | R-squared >= 0.99 |
-| ค่า Flow Rate | `data_flowrate.txt` | %RSD < 5% |
+| ค่าสอบเทียบ pH | `/workspace/data/ph_calibration.txt` | R-squared >= 0.99 |
+| ค่า Flow Rate | `/workspace/data/flow_calibration.txt` | %RSD < 5% |
 
 ---
 
@@ -87,7 +87,7 @@ Week 2 ต่อยอดจากความรู้ที่เรียน�
 
 | Week 1 Content | Week 2 Application |
 |----------------|-------------------|
-| ADC 12-bit (0-4095) | ใช้อ่านค่าจาก pH Sensor ที่ GPIO25 |
+| ADC 12-bit (0-4095) | ใช้อ่านค่าจาก pH Sensor ที่ GPIO32 (ADC1 — ห้ามใช้ GPIO25) |
 | การตั้ง ATTN_11DB | ตั้งค่าย่านวัด 0-3.3V สำหรับ pH probe |
 | การแปลงเป็น mV | ใช้สมการ Nernst คำนวณ pH |
 
@@ -353,7 +353,7 @@ Week_2/
 4. โปรแกรมคำนวณ Linear Regression และแสดงผล
 
 **ผลลัพธ์:**
-- ไฟล์ `data_calibrate.txt`: slope, intercept, R-squared, อุณหภูมิ
+- ไฟล์ `/workspace/data/ph_calibration.txt`: slope, intercept, R-squared, อุณหภูมิ
 - ไฟล์ `calibration_log.txt`: รายละเอียดการสอบเทียบ
 
 **โค้ดสำคัญ - การคำนวณ Linear Regression:**
@@ -404,7 +404,7 @@ def linear_regression(x_values, y_values):
 6. กดปุ่ม 3 บันทึกค่า flow rate ลงไฟล์
 
 **ผลลัพธ์:**
-- ไฟล์ `data_flowrate.txt`: ค่า flow rate เฉลี่ย (mL/s)
+- ไฟล์ `/workspace/data/flow_calibration.txt`: ค่า flow rate เฉลี่ย (mL/s)
 
 **โค้ดสำคัญ - การคำนวณ Flow Rate:**
 
@@ -460,7 +460,7 @@ def record_measurement():
 | อุปกรณ์ | GPIO | ค่าคงที่ใน pins.py | ประเภท | หมายเหตุ |
 |---------|:----:|-------------------|--------|----------|
 | **Sensors (เซ็นเซอร์)** |
-| pH Sensor | 25 | `PH_PIN` | ADC Input | อ่านแรงดัน 0-3.3V จากหัววัด pH |
+| pH Sensor | 32 | `PH_PIN` | ADC Input | อ่านแรงดัน 0-3.3V จากหัววัด pH (ADC1 — ห้ามใช้ GPIO25 เพราะ ADC2 ชนกับ Wi-Fi) |
 | Temperature (DS18B20) | 16 | `DS18B20_PIN` | OneWire | ต้องใช้ pull-up resistor 4.7K |
 | **Actuators (ตัวกระตุ้น)** |
 | Pump | 21 | `PUMP_PIN` | PWM Output | ความถี่ 1000 Hz, 10-bit duty (0-1023) |
@@ -597,10 +597,10 @@ Week 3 นำค่าสอบเทียบจาก Week 2 มาใช้�
 
 | Week 2 | Week 3 |
 |--------|--------|
-| ค่า slope, intercept จาก `data_calibrate.txt` | ใช้ใน pHSensor class เพื่อแปลง mV เป็น pH |
-| ค่า flow_rate จาก `data_flowrate.txt` | ใช้ใน Pump class เพื่อคำนวณปริมาตร |
-| Inheritance concept | ขยายเป็น BaseMode สำหรับ mode ต่างๆ |
-| Composition concept | ขยายเป็น TitrationSystem ที่รวมทุกอุปกรณ์ |
+| ค่า slope, intercept จาก `/workspace/data/ph_calibration.txt` | ใช้ใน `titration.py` เพื่อแปลง mV เป็น pH |
+| ค่า flow_rate จาก `/workspace/data/flow_calibration.txt` | ใช้คำนวณเวลาเปิดปั๊มต่อโดสใน `01_titration_auto.py` |
+| Inheritance concept | พื้นฐานสำหรับอ่านโค้ดคลาสใน Week 3 (เช่น TitrationUI) |
+| Composition concept | การแยกโมดูล `titration.py` + `experiment.py` ที่ `01_titration_auto.py` เรียกใช้ |
 
 ---
 

@@ -199,7 +199,7 @@ extras/
 | ขา GPIO | ค่าคงที่ | คำอธิบาย |
 |---------|---------|----------|
 | GPIO16 | `DS18B20_PIN` | เซ็นเซอร์อุณหภูมิ DS18B20 (OneWire) |
-| GPIO25 | `PH_PIN` | เซ็นเซอร์ pH (ADC input) |
+| GPIO32 | `PH_PIN` | เซ็นเซอร์ pH (ADC1 — ใช้ขาเดียวกับ POT1 ทีละอย่าง, ห้ามใช้ GPIO25) |
 | GPIO32 | `POT1_PIN` | Potentiometer 1 (ADC) |
 | GPIO33 | `POT2_PIN` | Potentiometer 2 (ADC) |
 

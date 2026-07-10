@@ -39,10 +39,10 @@ This folder contains the MicroPython curriculum for the **TitraLab ESP32** board
  |    พื้นฐาน         |       |   การสอบเทียบ      |       |   ระบบเต็มรูปแบบ   |
  |   Fundamentals    |       |    Calibration    |       |    Full System    |
  +-------------------+       +-------------------+       +-------------------+
- | - LED, Button     |       | - pH Sensor Cal.  |       | - 6 Operating     |
- | - ADC, PWM        | ----> | - Flow Rate Cal.  | ----> |   Modes           |
- | - DS18B20, TFT    |       | - Inheritance     |       | - Modular OOP     |
- | - OOP พื้นฐาน      |       | - Composition     |       | - Menu System     |
+ | - LED, Button     |       | - pH Sensor Cal.  |       | - Auto Titration  |
+ | - ADC, PWM        | ----> | - Flow Rate Cal.  | ----> |   (HCl + NaOH)    |
+ | - DS18B20, TFT    |       | - Inheritance     |       | - MicroPad + BLE  |
+ | - OOP พื้นฐาน      |       | - Composition     |       | - Lean 3 Files    |
  +-------------------+       +-------------------+       +-------------------+
         |                           |                           |
         v                           v                           v
@@ -77,13 +77,12 @@ MicroPython/
 |   +-- exercises/       # แบบฝึกหัดพร้อมเฉลย
 |   +-- README.md        # คู่มือ Week 2
 |
-+-- Week_3/              # ระบบไทเทรตอัตโนมัติแบบเต็มรูปแบบ
-|   +-- main.py          # จุดเริ่มต้นโปรแกรม
-|   +-- config.py        # ค่าคงที่และการตั้งค่า GPIO
-|   +-- hardware/        # Hardware Abstraction Layer
-|   +-- core/            # Business Logic Layer
-|   +-- modes/           # Application Mode Layer (6 โหมด)
-|   +-- ui/              # User Interface Layer
++-- Week_3/              # ระบบไทเทรตอัตโนมัติ (บทเรียน Lean สำหรับ MicroPad)
+|   +-- 01_titration_auto.py  # โปรแกรมหลัก (ห้ามคัดลอกเป็น main.py!)
+|   +-- titration.py     # โมดูลเคมี (calibration + ตรวจจับจุดสมมูล)
+|   +-- experiment.py    # ค่าคงที่การทดลอง
+|   +-- USER_MANUAL.md   # คู่มือผู้ใช้
+|   +-- LAB_DIRECTION.md # คู่มือปฏิบัติการ
 |   +-- README.md        # คู่มือ Week 3
 |
 +-- SeniorProject/       # ตัวอย่างโปรเจกต์นิสิตรุ่นพี่
@@ -101,7 +100,7 @@ MicroPython/
 |:------:|----------|-----------|--------|
 | **Week 1** | LED, Button, ADC, PWM, DS18B20, TFT, Buzzer | Class, Object, Constructor, Method | เข้าใจฮาร์ดแวร์ TitraLab |
 | **Week 2** | pH Sensor Calibration, Pump Flow Rate | Inheritance, Composition, @property | ได้ค่าสอบเทียบ (R-squared >= 0.99) |
-| **Week 3** | Full Auto Titration, 6 Operating Modes | Modular Architecture, State Machine | ไทเทรตสำเร็จ + ไฟล์ CSV |
+| **Week 3** | Full Auto Titration ผ่านแอป MicroPad (BLE) | การแบ่งโมดูล (titration.py, experiment.py) | ไทเทรตสำเร็จ + ไฟล์ CSV |
 
 ---
 
@@ -206,7 +205,7 @@ Week_1/README.md  -->  Week_2/README.md  -->  Week_3/README.md
 | **Button 1** | 34 | `BUTTON1` | Input-only | SELECT/ยืนยัน |
 | **Button 2** | 35 | `BUTTON2` | Input-only | UP/เลื่อนขึ้น |
 | **Button 3** | 39 | `BUTTON3` | Input-only | DOWN/เลื่อนลง |
-| **pH Sensor** | 25 | `PH_PIN` | ADC | อ่านแรงดัน 0-3.3V |
+| **pH Sensor** | 32 | `PH_PIN` | ADC1 | อ่านแรงดัน 0-3.3V (ห้ามใช้ GPIO25 — ADC2 ชนกับ Wi-Fi) |
 | **Temperature** | 16 | `DS18B20_PIN` | OneWire | เซ็นเซอร์อุณหภูมิ |
 | **Pump** | 21 | `PUMP_PIN` | PWM | ควบคุมปั๊มไทแทรนต์ |
 | **Buzzer** | 26 | `BUZZER_PIN` | PWM | เสียงแจ้งเตือน |
@@ -276,7 +275,7 @@ Week_1/README.md  -->  Week_2/README.md  -->  Week_3/README.md
 |:------:|------|----------|
 | **Week 1** | [Week_1/README.md](Week_1/README.md) | พื้นฐานฮาร์ดแวร์, GPIO, ADC, PWM, OOP เบื้องต้น |
 | **Week 2** | [Week_2/README.md](Week_2/README.md) | การสอบเทียบ pH และ Flow Rate, OOP ขั้นกลาง |
-| **Week 3** | [Week_3/README.md](Week_3/README.md) | ระบบไทเทรตอัตโนมัติ 6 โหมด, OOP ขั้นสูง |
+| **Week 3** | [Week_3/README.md](Week_3/README.md) | ระบบไทเทรตอัตโนมัติผ่านแอป MicroPad (BLE) |
 
 ---
 
@@ -343,8 +342,8 @@ Week_1/README.md  -->  Week_2/README.md  -->  Week_3/README.md
 
 ### ผลลัพธ์สุดท้าย (Final Deliverables)
 
-- [ ] ไฟล์สอบเทียบ `data_calibrate.txt` (slope, intercept, R-squared)
-- [ ] ไฟล์ Flow Rate `data_flowrate.txt` (mL/s)
+- [ ] ไฟล์สอบเทียบ `/workspace/data/ph_calibration.txt` (slope, intercept, R-squared)
+- [ ] ไฟล์ Flow Rate `/workspace/data/flow_calibration.txt` (mL/s)
 - [ ] ไฟล์ข้อมูลไทเทรต `titration_data_R*.csv`
 - [ ] รายงานการวิเคราะห์จุดสมมูลจาก EquivPoint
 

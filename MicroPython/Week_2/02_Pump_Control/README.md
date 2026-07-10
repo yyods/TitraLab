@@ -166,7 +166,7 @@ Flow Rate (mL/s) = ปริมาตรที่วัดได้ (mL) / เ�
     ┌─────────────────────┐
     │ 7. กดปุ่ม 3 บันทึก   │
     │    ลงไฟล์            │
-    │    data_flowrate.txt│
+    │ flow_calibration.txt│
     └─────────────────────┘
 ```
 
@@ -179,7 +179,7 @@ Flow Rate (mL/s) = ปริมาตรที่วัดได้ (mL) / เ�
 | 3 | 39 | บันทึกลงไฟล์ |
 
 **ผลลัพธ์:**
-- ไฟล์ `data_flowrate.txt` ที่มีค่า flow rate เฉลี่ย (mL/s)
+- ไฟล์ `/workspace/data/flow_calibration.txt` ที่มีค่า flow rate เฉลี่ย (mL/s)
 
 **เกณฑ์ความสำเร็จ:**
 - %RSD < 5%
@@ -311,13 +311,13 @@ pump_pwm.duty(0)     # Stop
 ```
   ┌─────────────────────┐
   │ 01_pH_Sensor/       │
-  │ (เสร็จแล้ว)          │ --> data_calibrate.txt
+  │ (เสร็จแล้ว)          │ --> ph_calibration.txt
   └──────────┬──────────┘
              │
              v
   ┌─────────────────────┐
   │ 02_Pump_Control/    │     ไฟล์ที่ได้:
-  │ (ปัจจุบัน)           │ --> data_flowrate.txt
+  │ (ปัจจุบัน)           │ --> flow_calibration.txt
   └──────────┬──────────┘
              │
              v
@@ -335,7 +335,7 @@ pump_pwm.duty(0)     # Stop
 ```
 
 1. **Week 2 ต่อ:** ไปที่ `../03_OOP_Advanced/` เพื่อเรียนรู้ OOP Concepts
-2. **Week 3:** ใช้ค่าจาก `data_flowrate.txt` ในระบบไทเทรตอัตโนมัติ
+2. **Week 3:** ใช้ค่าจาก `/workspace/data/flow_calibration.txt` ในระบบไทเทรตอัตโนมัติ
 
 ---
 

@@ -374,8 +374,8 @@ OOP concepts จาก Week 2 จะถูกนำไปใช้ใน Week 3:
 
 | สิ่งที่ได้ | ไฟล์/ความรู้ |
 |----------|-------------|
-| ค่าสอบเทียบ pH | `data_calibrate.txt` (slope, intercept, R-squared) |
-| ค่า Flow Rate | `data_flowrate.txt` (mL/s) |
+| ค่าสอบเทียบ pH | `/workspace/data/ph_calibration.txt` (slope, intercept, R-squared) |
+| ค่า Flow Rate | `/workspace/data/flow_calibration.txt` (mL/s) |
 | OOP: Inheritance | สร้าง child class ได้ |
 | OOP: Composition | ใช้ "has-a" relationship |
 | OOP: @property | สร้าง getter/setter พร้อม validation |
