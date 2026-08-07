@@ -3,6 +3,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![MicroPython](https://img.shields.io/badge/MicroPython-ESP32-green.svg)](MicroPython/README.md)
 [![TestFlight Beta](https://img.shields.io/badge/TestFlight-SciLabPro%20MicroPad-0D96F6.svg?logo=apple)](https://testflight.apple.com/join/bMWSYuD3)
+[![Google Play Beta](https://img.shields.io/badge/Google%20Play-SciLabPro%20MicroPad-34A853.svg?logo=googleplay)](https://play.google.com/store/apps/details?id=com.scilabpro.micropad)
 
 <p align="center">
   <img src="imgs/ver1_1_Top.png" alt="บอร์ด TitraLab Ver.1.0 (มุมมองด้านบน) — GPIO header และ DEVICES header (TitraLab Ver.1.0 board, top view)" width="640">
@@ -43,6 +44,27 @@ TitraLab is an educational development board designed by Associate Professor Dr.
 
 > 📌 แอปออกแบบมาใช้งานคู่กับบอร์ด TitraLab Ver. 1.0 — แนะนำให้ใช้ iPad เพื่อประสบการณ์ที่ดีที่สุด
 > (The app is designed to work with TitraLab Ver. 1.0 hardware — an iPad is recommended for the best experience.)
+
+### 🤖 ร่วมทดสอบรุ่นเบต้าบน Android ผ่าน Google Play (Join the Android Beta via Google Play)
+
+| ขั้นตอน | Step |
+|:--------|:-----|
+| 1. เปิด**ลิงก์ลงทะเบียนผู้ทดสอบ**ด้านล่าง แล้วกด **Become a tester** (ใช้บัญชี Google เดียวกับบนแท็บเล็ต) | Open the **tester opt-in link** below and tap **Become a tester** (use the same Google account as on your tablet) |
+| 2. สแกน QR code ด้านล่าง หรือเปิดลิงก์ Google Play บนอุปกรณ์ของคุณ | Scan the QR code below, or open the Google Play link on your device |
+| 3. แตะ **Install** | Tap **Install** |
+
+**ลิงก์ลงทะเบียนผู้ทดสอบ (Tester opt-in link):** <https://play.google.com/apps/testing/com.scilabpro.micropad>
+
+**ลิงก์ Google Play (Google Play link):** <https://play.google.com/store/apps/details?id=com.scilabpro.micropad>
+
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.scilabpro.micropad">
+    <img src="imgs/googleplay_qr.png" alt="QR code สำหรับติดตั้ง SciLabPro MicroPad รุ่นทดสอบจาก Google Play (Scan to install the SciLabPro MicroPad beta from Google Play)" width="240">
+  </a>
+</p>
+
+> 📌 ระหว่างช่วงทดสอบแบบปิด (closed testing) หน้า Google Play จะเปิดได้หลังจากลงทะเบียนเป็นผู้ทดสอบตามขั้นตอนที่ 1 แล้วเท่านั้น
+> (During closed testing, the Google Play page opens only after you have joined as a tester in step 1.)
 >
 > 🔒 นโยบายความเป็นส่วนตัว (Privacy policy): [privacy_policy.md](privacy_policy.md) — แอปทำงานแบบออฟไลน์ ไม่เก็บข้อมูลบนเซิร์ฟเวอร์ (offline-first, no data collected on servers; เอกสารฉบับปัจจุบันเขียนอ้างอิงรุ่น Android / the current policy text covers the Android build)
 
@@ -257,7 +279,7 @@ TitraLab/
 │   ├── agent-spec/              # ข้อกำหนด AI agent สำหรับพัฒนาโปรเจกต์
 │   └── data/                    # ข้อมูลไทเทรตจริงจากชั้นเรียน (ปี 2026)
 │
-├── imgs/                        # ภาพบอร์ด (บน/ล่าง), schematic 5 แผ่น, QR code TestFlight
+├── imgs/                        # ภาพบอร์ด (บน/ล่าง), schematic 5 แผ่น, QR code TestFlight/Google Play
 ├── privacy_policy.md            # นโยบายความเป็นส่วนตัวของแอป SciLabPro MicroPad
 └── LICENSE                      # GNU GPL v3
 ```
